@@ -57,6 +57,9 @@ storage/documents/*
 !storage/audio/.gitkeep
 !storage/uploads/.gitkeep
 !storage/documents/.gitkeep
+backend/storage/
+*.pcm
+recordings_manifest.json
 
 # --- Secrets ---
 # Never commit API keys or secret configuration

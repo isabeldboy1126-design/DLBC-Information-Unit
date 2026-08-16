@@ -1,75 +1,100 @@
-import { useState, useEffect } from 'react'
+import React from 'react'
+import { useAudioCapture } from './hooks/useAudioCapture'
+import { AudioSourceSelector } from './components/AudioSourceSelector'
+import { AudioTestPanel } from './components/AudioTestPanel'
+import { RecordingControls } from './components/RecordingControls'
+import { CompletedRecordingPlayer } from './components/CompletedRecordingPlayer'
+import { ErrorBanner } from './components/ErrorBanner'
 import './App.css'
 
-const API_BASE = 'http://localhost:8000'
-
 function App() {
-  const [backendStatus, setBackendStatus] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    checkBackendHealth()
-  }, [])
-
-  async function checkBackendHealth() {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await fetch(`${API_BASE}/api/health`)
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-      const data = await response.json()
-      setBackendStatus(data)
-    } catch (err) {
-      setError(err.message)
-      setBackendStatus(null)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const {
+    devices,
+    selectedDeviceId,
+    setSelectedDeviceId,
+    permissionState,
+    requestPermission,
+    updateDeviceList,
+    trackSettings,
+    isTesting,
+    startAudioTest,
+    stopAudioTest,
+    isRecording,
+    startRecording,
+    stopRecording,
+    elapsedTime,
+    recordingStats,
+    latestRecording,
+    audioLevel,
+    audioDb,
+    hasAudioSignal,
+    error,
+    clearError,
+  } = useAudioCapture()
 
   return (
-    <div id="app">
-      <header>
-        <h1>DLBC Information Unit App</h1>
-        <p className="subtitle">Phase 0 — System Health Check</p>
+    <div className="app-layout">
+      <header className="app-header">
+        <div className="header-brand">
+          <span className="brand-dot"></span>
+          <div>
+            <h1>DLBC Information Unit App</h1>
+            <p className="app-tagline">
+              Phase 1 &middot; Audio Capture Lab &middot; Lossless PCM/WAV Master Pipeline
+            </p>
+          </div>
+        </div>
       </header>
 
-      <main>
-        <section id="health-check">
-          <h2>Backend Connection</h2>
+      <main className="app-main">
+        <ErrorBanner error={error} onDismiss={clearError} />
 
-          {loading && (
-            <p className="status status--loading">Checking backend connection...</p>
-          )}
+        <div className="dashboard-grid">
+          <div className="grid-left">
+            <AudioSourceSelector
+              devices={devices}
+              selectedDeviceId={selectedDeviceId}
+              onSelectDevice={setSelectedDeviceId}
+              permissionState={permissionState}
+              onRequestPermission={requestPermission}
+              onRefreshDevices={updateDeviceList}
+              trackSettings={trackSettings}
+              disabled={isRecording || isTesting}
+            />
 
-          {error && (
-            <div className="status status--error">
-              <p><strong>Connection failed:</strong> {error}</p>
-              <p className="hint">
-                Make sure the FastAPI backend is running on port 8000.
-              </p>
-              <button type="button" onClick={checkBackendHealth}>
-                Retry
-              </button>
-            </div>
-          )}
+            <AudioTestPanel
+              isTesting={isTesting}
+              onStartTest={startAudioTest}
+              onStopTest={stopAudioTest}
+              isRecording={isRecording}
+              audioLevel={audioLevel}
+              audioDb={audioDb}
+              hasAudioSignal={hasAudioSignal}
+              permissionGranted={permissionState === 'granted'}
+            />
 
-          {backendStatus && (
-            <div className="status status--healthy">
-              <p><strong>Status:</strong> {backendStatus.status}</p>
-              <p><strong>Application:</strong> {backendStatus.application}</p>
-              <p><strong>Version:</strong> {backendStatus.version}</p>
-              <p><strong>Environment:</strong> {backendStatus.environment}</p>
-            </div>
-          )}
-        </section>
+            <RecordingControls
+              isRecording={isRecording}
+              onStartRecording={startRecording}
+              onStopRecording={stopRecording}
+              elapsedTime={elapsedTime}
+              recordingStats={recordingStats}
+              permissionGranted={permissionState === 'granted'}
+              disabled={isTesting}
+            />
+          </div>
+
+          <div className="grid-right">
+            <CompletedRecordingPlayer latestRecording={latestRecording} />
+          </div>
+        </div>
       </main>
 
-      <footer>
-        <p>DLBC Information Unit App &middot; Phase 0 &middot; Project Foundation</p>
+      <footer className="app-footer">
+        <p>
+          Deeper Life Bible Church &middot; Information Unit &middot; Audio Capture Engine v1.0 &middot;
+          Lossless 16-bit PCM Progressive Preservation
+        </p>
       </footer>
     </div>
   )

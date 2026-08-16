@@ -46,6 +46,11 @@ app.add_middleware(
 )
 
 
+from app.audio.router import router as audio_router
+
+app.include_router(audio_router)
+
+
 @app.get("/api/health")
 async def health_check():
     """
