@@ -15,9 +15,20 @@ export function useAudioCapture() {
   const [elapsedTime, setElapsedTime] = useState(0)
   const [recordingStats, setRecordingStats] = useState({ bytes: 0, chunks: 0 })
   const [latestRecording, setLatestRecording] = useState(null)
+  const [latestTranscript, setLatestTranscript] = useState(null)
+  const [latestSession, setLatestSession] = useState(null)
   const [error, setError] = useState(null)
 
-  // Live Audio Metering
+  // Live Transcription State (Phase 3)
+  const [liveTranscript, setLiveTranscript] = useState({
+    status: 'idle', // 'idle' | 'initializing' | 'listening' | 'recognizing' | 'reconnecting' | 'unavailable' | 'completed'
+    statusMessage: '',
+    interimText: '',
+    segments: [],
+  })
+  const [isTranscriptExpanded, setIsTranscriptExpanded] = useState(false)
+
+  // Live Audio Metering (Phase 1 proven RMS calculations)
   const [audioLevel, setAudioLevel] = useState(0) // 0 to 100%
   const [audioDb, setAudioDb] = useState(-100) // dBFS
   const [hasAudioSignal, setHasAudioSignal] = useState(false)
@@ -30,7 +41,7 @@ export function useAudioCapture() {
   const workletNodeRef = useRef(null)
   const animationFrameRef = useRef(null)
 
-  // WebSocket Ref
+  // WebSocket & Timer Refs
   const wsRef = useRef(null)
   const timerIntervalRef = useRef(null)
   const startTimeRef = useRef(0)
@@ -50,7 +61,7 @@ export function useAudioCapture() {
           currentQueryState = status.state
           setPermissionState(status.state)
         } catch (e) {
-          // Permissions API query for microphone not supported in some browsers
+          // Ignore if permission query not supported
         }
       }
 
@@ -98,38 +109,29 @@ export function useAudioCapture() {
                 mediaStreamRef.current = null
               }
             }
-            updateDeviceList()
           }
 
-          if (permStatus.addEventListener) {
-            permStatus.addEventListener('change', handlePermChange)
-          } else {
-            permStatus.onchange = handlePermChange
-          }
+          permStatus.addEventListener('change', handlePermChange)
         } catch (e) {
-          // Unsupported in this browser; fallback to standard getUserMedia handling
+          // Ignore if query not supported
         }
       }
-      await updateDeviceList()
     }
 
     setupPermissionListener()
+    updateDeviceList()
 
-    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
-      const handleDeviceChange = () => {
-        console.log('Audio devices changed (plugged/unplugged). Refreshing...')
-        updateDeviceList()
-      }
-      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange)
-      return () => {
-        navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange)
-        if (permStatus) {
-          if (permStatus.removeEventListener && handlePermChange) {
-            permStatus.removeEventListener('change', handlePermChange)
-          } else {
-            permStatus.onchange = null
-          }
-        }
+    const handleDeviceChange = () => {
+      console.log('Audio hardware change detected. Refreshing inputs...')
+      updateDeviceList()
+    }
+
+    navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange)
+
+    return () => {
+      navigator.mediaDevices?.removeEventListener('devicechange', handleDeviceChange)
+      if (permStatus && handlePermChange) {
+        permStatus.removeEventListener('change', handlePermChange)
       }
     }
   }, [updateDeviceList])
@@ -164,11 +166,12 @@ export function useAudioCapture() {
     }
   }, [updateDeviceList])
 
-  // 3. Initialize Audio Stream & AudioContext
+  // 3. Initialize Audio Stream & AudioContext (Phase 1 master audio capture pipeline)
   const initAudioStream = useCallback(async () => {
     // Release existing stream if any
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((t) => t.stop())
+      mediaStreamRef.current = null
     }
 
     const audioConstraints = {
@@ -186,8 +189,12 @@ export function useAudioCapture() {
       stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
       setPermissionState('granted')
     } catch (err) {
+      console.error('Failed to get user media stream:', err)
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         setPermissionState('denied')
+        setError('Microphone permission was denied. Please allow microphone access in your browser settings.')
+      } else {
+        setError(`Failed to open audio stream: ${err.message}`)
       }
       throw err
     }
@@ -225,7 +232,12 @@ export function useAudioCapture() {
       await ctx.resume()
     }
 
-    // Set up Source & Analyser Node for Live Metering
+    // Set up fresh Source & Analyser Node for Live Metering
+    if (sourceNodeRef.current) {
+      try {
+        sourceNodeRef.current.disconnect()
+      } catch (e) {}
+    }
     const sourceNode = ctx.createMediaStreamSource(stream)
     sourceNodeRef.current = sourceNode
 
@@ -239,7 +251,7 @@ export function useAudioCapture() {
     return { ctx, stream, sourceNode, analyser, settings }
   }, [selectedDeviceId])
 
-  // 4. Metering Loop
+  // 4. Live Audio Level Metering Loop (Phase 1 proven RMS calculation)
   const startMeteringLoop = useCallback(() => {
     const analyser = analyserNodeRef.current
     if (!analyser) return
@@ -247,7 +259,8 @@ export function useAudioCapture() {
     const dataArray = new Float32Array(analyser.fftSize)
 
     const updateMeter = () => {
-      analyser.getFloatTimeDomainData(dataArray)
+      if (!analyserNodeRef.current) return
+      analyserNodeRef.current.getFloatTimeDomainData(dataArray)
 
       // Calculate RMS (Root Mean Square)
       let sumSquares = 0
@@ -260,12 +273,12 @@ export function useAudioCapture() {
       const db = rms > 0 ? 20 * Math.log10(rms) : -100
       const clampedDb = Math.max(-100, Math.min(0, db))
 
-      // Linear level percentage (0 to 100)
-      const levelPercent = Math.min(100, Math.round(rms * 100 * 3.5)) // boost visibility for normal speech
+      // Linear level percentage (0 to 100%) boosted for clear visual feedback
+      const levelPercent = Math.min(100, Math.round(rms * 100 * 3.5))
 
       setAudioDb(Math.round(clampedDb))
       setAudioLevel(levelPercent)
-      setHasAudioSignal(clampedDb > -50) // Signal detected threshold
+      setHasAudioSignal(clampedDb > -50) // Audio signal detection threshold
 
       animationFrameRef.current = requestAnimationFrame(updateMeter)
     }
@@ -314,32 +327,39 @@ export function useAudioCapture() {
     setIsTesting(false)
   }, [isRecording, stopMeteringLoop])
 
-  // 6. Start Real Recording (Progressive Streaming to FastAPI)
-  const startRecording = useCallback(async () => {
+  // 6. Start Real Recording (Progressive PCM Streaming to FastAPI + Live Azure Transcription + Phase 4 Session)
+  const startRecording = useCallback(async (sessionTitle = null) => {
     setError(null)
     setLatestRecording(null)
+    setLatestTranscript(null)
+    setLatestSession(null)
     setRecordingStats({ bytes: 0, chunks: 0 })
+    setLiveTranscript({
+      status: 'initializing',
+      statusMessage: 'Connecting to Azure Speech (en-NG)...',
+      interimText: '',
+      segments: [],
+    })
 
     try {
-      // Initialize audio stream & context
+      // 1. Initialize master audio stream & context
       const { ctx, sourceNode, settings } = await initAudioStream()
       startMeteringLoop()
 
-      // Load AudioWorklet module
+      // 2. Load AudioWorklet module
       try {
         await ctx.audioWorklet.addModule('/pcm-recorder-processor.js')
       } catch (workletLoadErr) {
-        // May already be added
-        console.warn('AudioWorklet module notice:', workletLoadErr.message)
+        console.warn('AudioWorklet notice:', workletLoadErr.message)
       }
 
-      // Open WebSocket connection to FastAPI
+      // 3. Open WebSocket connection to FastAPI
       const ws = new WebSocket(WS_BASE_URL)
       ws.binaryType = 'arraybuffer'
       wsRef.current = ws
 
       ws.onopen = () => {
-        console.log('WebSocket connected. Initializing audio stream session...')
+        console.log('WebSocket connected. Initializing live audio capture session...')
         const actualSampleRate = ctx.sampleRate || settings.sampleRate || 48000
         const label = settings.label || trackSettings?.label || 'Input Device'
 
@@ -349,6 +369,7 @@ export function useAudioCapture() {
             sampleRate: actualSampleRate,
             channels: 1,
             deviceName: label,
+            sessionTitle: sessionTitle ? sessionTitle.trim() : undefined,
           })
         )
 
@@ -385,9 +406,52 @@ export function useAudioCapture() {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data)
-          if (data.status === 'finalized' && data.recording) {
-            console.log('Recording finalized on server:', data.recording)
-            setLatestRecording(data.recording)
+
+          // Live Transcription Event Handlers
+          if (data.type === 'live_transcription_status') {
+            setLiveTranscript((prev) => ({
+              ...prev,
+              status: data.status,
+              statusMessage: data.message || '',
+            }))
+          } else if (data.type === 'live_transcript_interim') {
+            setLiveTranscript((prev) => ({
+              ...prev,
+              interimText: data.text || '',
+            }))
+          } else if (data.type === 'live_transcript_segment') {
+            setLiveTranscript((prev) => ({
+              ...prev,
+              interimText: '',
+              segments: [...prev.segments, data.segment],
+            }))
+          } else if (data.type === 'live_transcript_segment_updated') {
+            setLiveTranscript((prev) => {
+              const updated = [...prev.segments]
+              if (data.index >= 0 && data.index < updated.length) {
+                updated[data.index] = data.segment
+              }
+              return { ...prev, segments: updated }
+            })
+          } else if (data.status === 'finalized') {
+            if (data.recording) {
+              console.log('Recording finalized on server:', data.recording)
+              setLatestRecording(data.recording)
+            }
+            if (data.transcript) {
+              console.log('Transcript finalized on server:', data.transcript)
+              setLatestTranscript(data.transcript)
+              setLiveTranscript((prev) => ({
+                ...prev,
+                status: 'completed',
+                statusMessage: 'Live transcription finalized',
+                segments: data.transcript.segments || prev.segments,
+              }))
+            }
+            if (data.session) {
+              console.log('Session finalized on server:', data.session)
+              setLatestSession(data.session)
+            }
           } else if (data.status === 'error') {
             setError(`Backend stream error: ${data.message}`)
           }
@@ -395,6 +459,7 @@ export function useAudioCapture() {
           console.error('Non-JSON WebSocket message received:', e)
         }
       }
+
 
       ws.onerror = (err) => {
         console.error('WebSocket streaming error:', err)
@@ -415,7 +480,7 @@ export function useAudioCapture() {
       setIsRecording(false)
       stopMeteringLoop()
     }
-  }, [initAudioStream, startMeteringLoop, stopMeteringLoop, trackSettings])
+  }, [initAudioStream, startMeteringLoop, trackSettings])
 
   // 7. Stop Recording
   const stopRecording = useCallback(() => {
@@ -445,7 +510,7 @@ export function useAudioCapture() {
           wsRef.current.close()
           wsRef.current = null
         }
-      }, 500)
+      }, 1000)
     }
 
     // Stop live mic and metering if not in testing mode
@@ -457,6 +522,58 @@ export function useAudioCapture() {
       }
     }
   }, [isTesting, stopMeteringLoop])
+
+  // 8. Toggle Manual Flag during live recording
+  const toggleManualFlag = useCallback((segmentIndex) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          type: 'toggle_flag',
+          segment_idx: segmentIndex,
+        })
+      )
+    } else {
+      // Local optimistic update
+      setLiveTranscript((prev) => {
+        const updated = [...prev.segments]
+        if (segmentIndex >= 0 && segmentIndex < updated.length) {
+          const seg = { ...updated[segmentIndex] }
+          const flags = seg.flags || []
+          const hasManual = flags.some((f) => f.flag_type === 'manual_flag')
+          if (hasManual) {
+            seg.flags = flags.filter((f) => f.flag_type !== 'manual_flag')
+          } else {
+            seg.flags = [
+              ...flags,
+              {
+                flag_id: `flag_man_${Date.now()}`,
+                flag_type: 'manual_flag',
+                confidence: seg.confidence,
+                reason: 'Flagged manually by operator',
+                is_verified: false,
+              },
+            ]
+          }
+          updated[segmentIndex] = seg
+        }
+        return { ...prev, segments: updated }
+      })
+    }
+  }, [])
+
+  // 9. Clear latest recording
+  const clearLatestRecording = useCallback(() => {
+    setLatestRecording(null)
+    setLatestTranscript(null)
+    setRecordingStats({ bytes: 0, chunks: 0 })
+    setElapsedTime(0)
+    setLiveTranscript({
+      status: 'idle',
+      statusMessage: '',
+      interimText: '',
+      segments: [],
+    })
+  }, [])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -474,6 +591,7 @@ export function useAudioCapture() {
   }, [])
 
   return {
+    // Devices & Permissions
     devices,
     selectedDeviceId,
     setSelectedDeviceId,
@@ -481,6 +599,8 @@ export function useAudioCapture() {
     requestPermission,
     updateDeviceList,
     trackSettings,
+
+    // Status
     isTesting,
     startAudioTest,
     stopAudioTest,
@@ -490,9 +610,23 @@ export function useAudioCapture() {
     elapsedTime,
     recordingStats,
     latestRecording,
+    latestTranscript,
+    latestSession,
+    clearLatestRecording,
+
+
+    // Live Metering
     audioLevel,
     audioDb,
     hasAudioSignal,
+
+    // Live Transcription (Phase 3)
+    liveTranscript,
+    isTranscriptExpanded,
+    setIsTranscriptExpanded,
+    toggleManualFlag,
+
+    // Error
     error,
     clearError: () => setError(null),
   }

@@ -234,45 +234,54 @@ The prototype is currently being developed independently by the project owner be
 - Preserve original uploaded file
 
 **Acceptance Criteria:**
-- [ ] User can upload a supported audio file
-- [ ] Invalid formats are rejected with a clear message
-- [ ] Transcription completes and raw transcript is stored
-- [ ] Transcript is displayed with timestamps
-- [ ] Original uploaded file is preserved unchanged
-- [ ] Transcription errors are handled gracefully
+- [x] User can upload a supported audio or video file (MP3, WAV, M4A, AAC, MP4)
+- [x] Multi-provider architecture supports Azure Speech (en-NG), Local Faster-Whisper, and Google Cloud Speech
+- [x] Original uploaded media files are 100% preserved unchanged in storage/uploads/
+- [x] Natural short-phrase continuous recognition segmentation (Speech_SegmentationSilenceTimeoutMs = 400ms)
+- [x] Segment confidence scoring and word-level timestamps extracted and persisted
+- [x] Automated low-confidence flag metadata (<0.60 threshold) and manual flag support
+- [x] Raw transcript text remains strictly immutable (no silent auto-correction)
+- [x] Copy Full Transcript action copies clean continuous text without metadata
+- [x] Click-to-seek audio/video playback from transcript timestamps
 
 **Major Risks:** R02 (transcription errors), R03 (Scripture/name recognition), R05 (provider failure), R08 (cost).
 
-**Unresolved Decision:** Primary transcription provider. Investigate Google Speech-to-Text, faster-whisper, and alternatives.
+**Provider Strategy:** Azure Speech (en-NG) configured as preferred/default; Local Faster-Whisper and Google Cloud Speech available as alternatives.
 
-**Status:** ⚪ Not Started
+**Status:** ✅ Completed & Manually Accepted (2026-08-16)
 
 ---
 
 ### Phase 3 — Live Transcription
 
-**Objective:** Stream live audio from the laptop/USB microphone and display transcript while audio is still arriving.
+**Objective:** Stream live audio from the laptop/USB microphone, record master lossless WAV, and display live expandable transcript with real-time interim hypothesis, phrase segments, automatic & manual flags, and auto-scroll while audio is being captured.
 
 **Dependencies:** Phase 1 (audio capture), Phase 2 (transcription infrastructure).
 
 **High-Level Requirements:**
-- Stream audio from selected input device to transcription service
-- Display transcript incrementally as audio is processed
-- Retain timestamps
-- Simultaneously save the original audio recording
-- Handle interruptions (network drop, device disconnect) without losing captured audio or partial transcript
-- Stop live transcription when recording stops
+- Stream audio from selected input device to Azure Speech via isolated, non-blocking PushAudioInputStream
+- Audio recording path has strict priority over transcription; live audio WAV is safely preserved even if transcription fails or reconnects
+- Display transcript incrementally as audio is processed (interim hypotheses and final phrase segments)
+- Retain timestamps, confidence scores, word-level timing, and automatic low-confidence flags (< 0.60)
+- Support manual flagging of completed segments during the live service
+- Expandable live transcript view for sermon monitoring
+- Auto-scroll follows newest text, with "Return to Live" when user scrolls up
+- Stop live transcription cleanly when recording stops, persisting raw transcript to storage/transcripts/
 
 **Acceptance Criteria:**
-- [ ] Transcript appears progressively while audio is still being captured
-- [ ] Timestamps are retained in the live transcript
-- [ ] Original audio is fully preserved regardless of transcription outcome
-- [ ] Network interruption does not destroy the session or lose already-captured audio
-- [ ] Latency is acceptable for the use case (transcript appears within seconds, not minutes)
+- [x] Transcript appears progressively while audio is still being captured
+- [x] Timestamps, confidence values, and word-level timestamps are retained in the live transcript
+- [x] Original audio WAV is fully preserved regardless of transcription outcome
+- [x] Network or Azure interruption does not stop recording or lose already-captured audio/transcript
+- [x] Operator can manually flag segments during live recording
+- [x] Expand / Collapse live transcript view works smoothly
+- [x] Auto-scroll pauses on upward scroll and resumes on "Return to Live"
+- [x] Stopping recording finalizes both master WAV and raw transcript JSON
+- [x] Latency is acceptable for the use case (transcript appears within seconds, not minutes)
 
 **Major Risks:** R01 (audio quality), R04 (internet failure), R13 (streaming latency).
 
-**Status:** ⚪ Not Started
+**Status:** ✅ Completed & Manually Accepted (2026-08-16)
 
 ---
 
@@ -284,24 +293,26 @@ The prototype is currently being developed independently by the project owner be
 
 **High-Level Requirements:**
 - Define session data model (metadata, audio reference, transcript stages, workflow state)
-- Store sessions in SQLite database
-- Store audio files and documents in local file storage
-- Create, read, update session records
-- Session list / history view
-- Session detail view showing current workflow state
-- Ensure each processing stage is stored separately (raw transcript, verified transcript, etc.)
-- Basic error recovery (interrupted sessions can be resumed)
+- Store sessions in SQLite database (`storage/app.db`) with WAL mode
+- Store audio files and documents in local file storage (`storage/audio/`, `storage/transcripts/`, `storage/uploads/`)
+- Create, read, update session records (non-destructive title editing, metadata updates)
+- Session list / history view with filters, badges, durations, and flag counts
+- Session detail view showing current workflow state, audio player, and raw transcript
+- Ensure each processing stage is stored separately (raw transcript immutable, preserved on disk and database)
+- Basic error recovery: startup scanner reconstructs unfinalized sessions from surviving `.pcm` to playable `.wav` without modifying the original recovery source
 
 **Acceptance Criteria:**
-- [ ] Sessions are persisted across application restarts
-- [ ] Session list displays all sessions with key metadata
-- [ ] Opening a session shows its current state and all completed stages
-- [ ] Audio, transcript, and processing stages are stored separately and retrievable
-- [ ] A session interrupted mid-processing can be resumed without data loss
+- [x] Sessions are persisted across application restarts in SQLite database (`storage/app.db`)
+- [x] Session list displays all sessions with key metadata (title, duration, status, artifacts, flags)
+- [x] Opening a session shows its current state and all completed stages
+- [x] Audio, transcript, and processing stages are stored separately and retrievable
+- [x] A session interrupted mid-processing can be recovered without data loss (proven with startup recovery scanner and PCM-to-WAV reconstruction)
+- [x] Historical files indexed non-destructively without modifying or renaming original assets
 
 **Major Risks:** R07 (data loss), A6 (SQLite adequacy).
 
-**Status:** ⚪ Not Started
+**Status:** 🟡 Implementation Complete — Ready for Manual Acceptance Testing
+
 
 ---
 

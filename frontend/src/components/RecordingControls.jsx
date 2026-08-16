@@ -8,6 +8,8 @@ export function RecordingControls({
   recordingStats,
   permissionGranted,
   disabled,
+  sessionTitle,
+  setSessionTitle,
 }) {
   // Format seconds into HH:MM:SS
   const formatTime = (totalSeconds) => {
@@ -43,6 +45,27 @@ export function RecordingControls({
       </div>
 
       <div className="card-body">
+        {/* Session Title Input (Optional) */}
+        {!isRecording && (
+          <div className="form-group session-title-group">
+            <label htmlFor="session-title-input">
+              <strong>Session Title (Optional):</strong>
+            </label>
+            <input
+              type="text"
+              id="session-title-input"
+              className="form-control"
+              placeholder="e.g. Sunday Morning Service, Bible Study, Pastor's Message..."
+              value={sessionTitle || ''}
+              onChange={(e) => setSessionTitle && setSessionTitle(e.target.value)}
+              disabled={disabled}
+            />
+            <small className="hint-text">
+              Leave blank to automatically use date & time (can be edited later).
+            </small>
+          </div>
+        )}
+
         <div className="recording-status-box">
           <div className="timer-display" id="elapsed-timer">
             {formatTime(elapsedTime)}
@@ -69,7 +92,7 @@ export function RecordingControls({
             <button
               type="button"
               className="btn btn--record btn--large"
-              onClick={onStartRecording}
+              onClick={() => onStartRecording(sessionTitle)}
               disabled={!permissionGranted || disabled}
               id="btn-start-recording"
             >
@@ -90,3 +113,4 @@ export function RecordingControls({
     </div>
   )
 }
+

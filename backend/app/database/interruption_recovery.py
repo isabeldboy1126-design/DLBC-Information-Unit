@@ -1,0 +1,161 @@
+"""
+Crash and Interruption Recovery Manager (Phase 4)
+
+Scans for unfinalized sessions on application startup, recovers orphaned PCM files
+into playable WAV files safely, and marks surviving sessions as 'interrupted' with detailed notes.
+"""
+
+import json
+import os
+import time
+import wave
+from typing import Dict, List, Optional
+
+from app.audio.wav_writer import finalize_pcm_to_wav
+from app.database.connection import get_db_connection
+from app.database.session_repo import session_repo
+
+
+async def recover_interrupted_sessions():
+    """
+    Executes upon application startup to inspect any sessions left in 'recording' or 'processing'
+    states due to unexpected crashes, browser closures, or power interruptions.
+    """
+    await session_repo.init_db()
+
+    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    backend_dir = os.path.dirname(app_dir)
+    project_root = os.path.dirname(backend_dir)
+    storage_audio_dir = os.path.join(project_root, "storage", "audio")
+
+    async with get_db_connection() as conn:
+        # Find any sessions that were left in active recording or processing state
+        cursor = await conn.execute(
+            """
+            SELECT * FROM sessions
+            WHERE status IN ('recording', 'processing')
+            """
+        )
+        interrupted_rows = await cursor.fetchall()
+
+        for row in interrupted_rows:
+            session_id = row["session_id"]
+            recording_id = row["recording_id"] or session_id
+            print(f"[Recovery] Detected unfinalized session: {session_id} (Recording ID: {recording_id})")
+
+            # 1. Inspect audio recovery
+            wav_path = os.path.join(storage_audio_dir, f"{recording_id}.wav")
+            pcm_path = os.path.join(storage_audio_dir, f"active_{recording_id}.pcm")
+
+            audio_recovered = False
+            audio_dur = 0.0
+            audio_size = 0
+            audio_path = None
+            recovery_notes = []
+
+            # Check if canonical WAV already exists
+            if os.path.exists(wav_path) and os.path.getsize(wav_path) > 44:
+                try:
+                    with wave.open(wav_path, "rb") as wf:
+                        nframes = wf.getnframes()
+                        fr = wf.getframerate()
+                        audio_dur = round(nframes / float(fr), 2)
+                        audio_size = os.path.getsize(wav_path)
+                        audio_path = wav_path
+                        audio_recovered = True
+                        recovery_notes.append(f"Master WAV was intact ({audio_dur}s).")
+                except Exception as e:
+                    recovery_notes.append(f"Existing WAV unreadable ({e}).")
+
+            # If no valid WAV exists, check for surviving orphaned PCM
+            if not audio_recovered and os.path.exists(pcm_path) and os.path.getsize(pcm_path) > 0:
+                pcm_size = os.path.getsize(pcm_path)
+                print(f"[Recovery] Attempting safe audio recovery from surviving PCM: {pcm_path} ({pcm_size} bytes)")
+                
+                # Use known default format (48000 Hz, Mono, 16-bit)
+                sample_rate = 48000
+                channels = 1
+                meta = json.loads(row["metadata_json"] or "{}")
+                if "sample_rate" in meta:
+                    sample_rate = meta["sample_rate"]
+                if "channels" in meta:
+                    channels = meta["channels"]
+
+                recovered_wav_path = os.path.join(storage_audio_dir, f"{recording_id}.wav")
+                try:
+                    wav_info = finalize_pcm_to_wav(
+                        pcm_file_path=pcm_path,
+                        wav_file_path=recovered_wav_path,
+                        sample_rate=sample_rate,
+                        num_channels=channels,
+                    )
+                    # Verify recovered WAV before updating state
+                    if os.path.exists(recovered_wav_path) and os.path.getsize(recovered_wav_path) > 44:
+                        with wave.open(recovered_wav_path, "rb") as wf:
+                            audio_dur = round(wf.getnframes() / float(wf.getframerate()), 2)
+                            audio_size = os.path.getsize(recovered_wav_path)
+                            audio_path = recovered_wav_path
+                            audio_recovered = True
+                            recovery_notes.append(f"Successfully recovered {audio_dur}s audio from progressive PCM.")
+                            # Safe to remove temporary PCM once WAV verification passes
+                            try:
+                                os.remove(pcm_path)
+                            except Exception:
+                                pass
+                except Exception as rec_err:
+                    print(f"[Recovery Error] Failed to reconstruct WAV from PCM: {rec_err}")
+                    recovery_notes.append(f"PCM recovery error: {rec_err}. Source PCM preserved.")
+
+            # 2. Inspect surviving transcript segments
+            seg_cursor = await conn.execute(
+                "SELECT COUNT(*), MAX(end_time) FROM session_segments WHERE session_id = ?",
+                (session_id,),
+            )
+            seg_row = await seg_cursor.fetchone()
+            seg_count = seg_row[0] or 0
+            transcript_dur = seg_row[1] or 0.0
+
+            if seg_count > 0:
+                recovery_notes.append(f"Retained {seg_count} live transcript segments ({transcript_dur}s).")
+
+            # Determine final recovery status
+            if audio_recovered and seg_count > 0:
+                new_status = "interrupted"
+            elif audio_recovered and seg_count == 0:
+                new_status = "interrupted"
+            elif not audio_recovered and seg_count > 0:
+                new_status = "partial_transcript"
+            else:
+                new_status = "interrupted"
+
+            total_dur = max(audio_dur, transcript_dur)
+            notes_str = " | ".join(recovery_notes) or "Session interrupted before normal stop."
+
+            # Update session record
+            await conn.execute(
+                """
+                UPDATE sessions
+                SET status = ?,
+                    is_interrupted = 1,
+                    duration_seconds = ?,
+                    audio_file_path = COALESCE(?, audio_file_path),
+                    audio_file_size = CASE WHEN ? > 0 THEN ? ELSE audio_file_size END,
+                    audio_duration_seconds = CASE WHEN ? > 0 THEN ? ELSE audio_duration_seconds END,
+                    recovery_notes = ?
+                WHERE session_id = ?
+                """,
+                (
+                    new_status,
+                    total_dur,
+                    audio_path,
+                    audio_size,
+                    audio_size,
+                    audio_dur,
+                    audio_dur,
+                    notes_str,
+                    session_id,
+                ),
+            )
+            print(f"[Recovery] Session {session_id} recovered: status={new_status}, audio={audio_dur}s, notes={notes_str}")
+
+        await conn.commit()

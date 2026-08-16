@@ -54,15 +54,25 @@ npm-debug.log*
 storage/audio/*
 storage/uploads/*
 storage/documents/*
+storage/transcripts/*
 !storage/audio/.gitkeep
 !storage/uploads/.gitkeep
 !storage/documents/.gitkeep
+!storage/transcripts/.gitkeep
 backend/storage/
 *.pcm
 recordings_manifest.json
+transcripts_manifest.json
 
 # --- Secrets ---
 # Never commit API keys or secret configuration
 secrets/
 *.key
 *.pem
+
+# --- AI Models & Local Cache ---
+models/
+.cache/
+huggingface/
+storage/models/
+

@@ -6,6 +6,7 @@ Provides:
 - REST endpoints for listing, retrieving (with Range support for in-browser seeking), and downloading WAV recordings
 """
 
+import asyncio
 import json
 import os
 from typing import Optional
@@ -19,6 +20,8 @@ from app.audio.stream_manager import (
     save_manifest,
     stream_manager,
 )
+from app.database.session_repo import session_repo
+from app.transcription.live_transcription import LiveTranscriptionSession
 
 router = APIRouter(prefix="/api/audio", tags=["Audio Capture"])
 
@@ -26,24 +29,34 @@ router = APIRouter(prefix="/api/audio", tags=["Audio Capture"])
 @router.websocket("/stream")
 async def audio_stream_websocket(websocket: WebSocket):
     """
-    WebSocket endpoint for progressive audio capture.
+    WebSocket endpoint for progressive audio capture & live transcription (Phase 4 Session).
 
     Protocol:
     1. Client connects.
     2. Client sends initial JSON message:
-       {"type": "init", "sampleRate": 48000, "channels": 1, "deviceName": "Realtek Microphone"}
+       {"type": "init", "sampleRate": 48000, "channels": 1, "deviceName": "Microphone", "sessionId": "...", "sessionTitle": "..."}
     3. Server replies with JSON:
-       {"status": "ready", "recordingId": "..."}
+       {"status": "ready", "recordingId": "...", "sessionId": "..."}
     4. Client progressively streams binary messages containing raw LINEAR16 Int16 PCM chunks.
-       Server appends each chunk directly to disk.
-    5. Client sends termination message:
+       Server appends each chunk directly to disk (primary capture path) and feeds a copy
+       to the non-blocking LiveTranscription worker.
+    5. Server pushes real-time events:
+       - live_transcript_interim
+       - live_transcript_segment
+       - live_transcription_status
+    6. Client can send manual flag control:
+       {"type": "toggle_flag", "segment_idx": 3}
+    7. Client sends termination message:
        {"type": "stop"}
-       Server finalizes the WAV file and returns completion payload:
-       {"status": "finalized", "recording": {...}}
-    6. If client disconnects unexpectedly, server auto-finalizes whatever audio was received.
+       Server finalizes the WAV file, raw transcript, and SQLite session, then returns completion payload:
+       {"status": "finalized", "recording": {...}, "transcript": {...}, "session": {...}}
+    8. If client disconnects unexpectedly, server auto-finalizes whatever audio, transcript, and session state were received.
     """
     await websocket.accept()
     current_session = None
+    current_session_id = None
+    live_transcription: Optional[LiveTranscriptionSession] = None
+    loop = asyncio.get_event_loop()
 
     try:
         while True:
@@ -63,28 +76,95 @@ async def audio_stream_websocket(websocket: WebSocket):
                     sample_rate = int(payload.get("sampleRate", 48000))
                     channels = int(payload.get("channels", 1))
                     device_name = str(payload.get("deviceName", "Default Microphone"))
+                    custom_session_id = payload.get("sessionId")
+                    session_title = payload.get("sessionTitle")
 
                     current_session = stream_manager.create_session(
                         sample_rate=sample_rate,
                         channels=channels,
                         device_name=device_name,
                     )
+                    current_session_id = custom_session_id or f"session_{current_session.session_id}"
+
+                    # Initialize durable session in SQLite
+                    try:
+                        await session_repo.create_session(
+                            session_id=current_session_id,
+                            title=session_title,
+                            recording_id=current_session.session_id,
+                            status="recording",
+                            provider_name="azure_speech",
+                            language_code="en-NG",
+                            start_time=current_session.start_time,
+                            metadata={
+                                "sample_rate": sample_rate,
+                                "channels": channels,
+                                "device_name": device_name,
+                            },
+                        )
+                    except Exception as s_err:
+                        print(f"Notice: Failed to initialize SQLite session: {s_err}")
+
+                    # Initialize isolated live transcription session
+                    try:
+                        live_transcription = LiveTranscriptionSession(
+                            recording_id=current_session.session_id,
+                            session_id=current_session_id,
+                            sample_rate=sample_rate,
+                            channels=channels,
+                            language_code="en-NG",
+                            ws_send_callback=websocket.send_json,
+                            event_loop=loop,
+                        )
+                        live_transcription.start()
+                    except Exception as lt_err:
+                        print(f"Notice: Failed to initialize live transcription: {lt_err}")
+                        live_transcription = None
 
                     await websocket.send_json({
                         "status": "ready",
                         "recordingId": current_session.session_id,
+                        "sessionId": current_session_id,
                         "sampleRate": sample_rate,
                         "channels": channels,
                     })
 
+                elif msg_type == "toggle_flag":
+                    if live_transcription:
+                        seg_idx = int(payload.get("segment_idx", -1))
+                        live_transcription.toggle_manual_flag(seg_idx)
+
                 elif msg_type == "stop":
                     if current_session:
                         summary = stream_manager.finalize_session(current_session.session_id)
+                        transcript_summary = None
+                        if live_transcription:
+                            try:
+                                transcript_summary = live_transcription.finalize(wav_summary=summary)
+                            except Exception as trans_err:
+                                print(f"Notice: Live transcription finalize error: {trans_err}")
+
+                        # Finalize SQLite Session record
+                        final_session = None
+                        if current_session_id:
+                            try:
+                                final_session = await session_repo.finalize_session(
+                                    session_id=current_session_id,
+                                    audio_summary=summary,
+                                    transcript_summary=transcript_summary,
+                                )
+                            except Exception as db_err:
+                                print(f"Notice: Error finalizing session in DB: {db_err}")
+
                         await websocket.send_json({
                             "status": "finalized",
                             "recording": summary,
+                            "transcript": transcript_summary,
+                            "session": final_session,
                         })
                         current_session = None
+                        current_session_id = None
+                        live_transcription = None
                         break
                     else:
                         await websocket.send_json({"status": "error", "message": "No active session to stop"})
@@ -96,7 +176,13 @@ async def audio_stream_websocket(websocket: WebSocket):
             elif "bytes" in message:
                 pcm_data = message["bytes"]
                 if current_session and pcm_data:
+                    # 1. Immediate primary disk append (NEVER blocked)
                     current_session.append_chunk(pcm_data)
+
+                    # 2. Non-blocking push to live transcription worker
+                    if live_transcription:
+                        live_transcription.push_pcm(pcm_data)
+
                     # Periodically send progress or ack
                     if current_session.chunk_count % 20 == 0:
                         await websocket.send_json({
@@ -106,14 +192,46 @@ async def audio_stream_websocket(websocket: WebSocket):
                         })
 
     except WebSocketDisconnect:
-        # If the browser closes or crashes abruptly, auto-finalize to save captured audio!
+        # If the browser closes or crashes abruptly, auto-finalize to save captured audio and transcript!
         if current_session:
             print(f"Client disconnected abruptly. Auto-finalizing audio session: {current_session.session_id}")
-            stream_manager.finalize_session(current_session.session_id)
+            summary = stream_manager.finalize_session(current_session.session_id)
+            transcript_summary = None
+            if live_transcription:
+                try:
+                    transcript_summary = live_transcription.finalize(wav_summary=summary)
+                except Exception:
+                    pass
+            if current_session_id:
+                try:
+                    await session_repo.finalize_session(
+                        session_id=current_session_id,
+                        audio_summary=summary,
+                        transcript_summary=transcript_summary,
+                    )
+                except Exception:
+                    pass
     except Exception as e:
         print(f"WebSocket audio streaming error: {e}")
         if current_session:
-            stream_manager.finalize_session(current_session.session_id)
+            summary = stream_manager.finalize_session(current_session.session_id)
+            transcript_summary = None
+            if live_transcription:
+                try:
+                    transcript_summary = live_transcription.finalize(wav_summary=summary)
+                except Exception:
+                    pass
+            if current_session_id:
+                try:
+                    await session_repo.finalize_session(
+                        session_id=current_session_id,
+                        audio_summary=summary,
+                        transcript_summary=transcript_summary,
+                    )
+                except Exception:
+                    pass
+
+
 
 
 @router.get("/recordings")

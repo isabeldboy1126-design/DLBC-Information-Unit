@@ -16,11 +16,22 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv()
 
 
+from app.database.session_repo import session_repo
+from app.database.interruption_recovery import recover_interrupted_sessions
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown events."""
     # Startup
     print("DLBC Information Unit App backend starting...")
+    try:
+        await session_repo.init_db()
+        await session_repo.index_existing_storage_files()
+        await recover_interrupted_sessions()
+        print("SQLite Database and Session persistence initialized.")
+    except Exception as e:
+        print(f"Database startup initialization error: {e}")
+
     yield
     # Shutdown
     print("DLBC Information Unit App backend shutting down...")
@@ -47,8 +58,13 @@ app.add_middleware(
 
 
 from app.audio.router import router as audio_router
+from app.transcription.router import router as transcription_router
+from app.sessions.router import router as sessions_router
 
 app.include_router(audio_router)
+app.include_router(transcription_router)
+app.include_router(sessions_router)
+
 
 
 @app.get("/api/health")
