@@ -95,6 +95,7 @@ The prototype is currently being developed independently by the project owner be
 | C5 | All original source material must be preserved |
 | C6 | Humans must remain in control of critical review stages in V1 |
 | C7 | No major architectural changes without justification and approval |
+| C8 | **AI development quota is limited.** Development must be planned and executed efficiently enough to deliver the complete working V1 within available model usage limits. Quota efficiency must not compromise correctness, security, data integrity, or required acceptance testing. |
 
 ---
 

@@ -75,6 +75,28 @@ This document defines the permanent operating rules for any AI coding agent work
 23. **Make changes incrementally so problems can be isolated.** Small, testable steps are preferable to large, tangled changes.
 24. **Maintain clean version-control checkpoints.** Each milestone or significant sub-task should be a distinct, committable unit of work.
 
+### AI Quota and Resource Efficiency
+
+AI/model quota is limited and must be treated as a finite project resource. Agents must use available quota deliberately and efficiently so that the project can reach a complete working V1 within the available usage limits.
+
+Follow these rules:
+
+1. Avoid unnecessary full-project re-analysis when the relevant context is already documented.
+2. Read only the files and sections necessary for the current task whenever possible.
+3. Do not repeatedly rewrite unchanged files.
+4. Avoid excessive documentation that does not directly help implementation, testing, architecture, or future maintenance.
+5. Do not implement speculative features outside the current milestone.
+6. Prefer small, targeted, testable changes over large unnecessary rewrites.
+7. Reuse existing project context, decisions, architecture, and code rather than rediscovering them.
+8. Do not repeatedly ask for approval on trivial implementation details already resolved by `PROJECT_SCOPE.md`, `PROJECT_PLAN.md`, or `AGENTS.md`.
+9. Use deeper or more expensive reasoning only for high-impact architecture decisions, security issues, difficult debugging, or problems where simpler reasoning has failed.
+10. Routine implementation, small fixes, straightforward tests, and repetitive development work should use the least expensive capable model available.
+11. Do not perform redundant tests merely to consume another verification cycle. Test sufficiently to prove the acceptance criteria.
+12. Before beginning a task, identify the smallest useful unit of work that can be implemented and verified efficiently.
+13. Do not sacrifice correctness, security, data integrity, or required testing merely to save quota.
+
+> **Use AI quota to finish the product, not to repeatedly rethink already-settled decisions.**
+
 ---
 
 ## 8. Communication
