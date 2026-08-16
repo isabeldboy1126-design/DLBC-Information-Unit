@@ -1,0 +1,9 @@
+/*
+ * DLBC Information Unit App — Global Styles
+ *
+ * Minimal reset. Component-specific styles are in component CSS files.
+ */
+
+body {
+  margin: 0;
+}

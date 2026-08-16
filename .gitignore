@@ -1,0 +1,65 @@
+# ========================
+# DLBC Information Unit App
+# ========================
+
+# --- Python / FastAPI Backend ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+.eggs/
+venv/
+.venv/
+env/
+.env
+.env.local
+.env.*.local
+
+# --- Node / React + Vite Frontend ---
+node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Logs ---
+*.log
+npm-debug.log*
+
+# --- Database ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Storage (local audio, documents) ---
+# The storage/ directory structure is tracked, but actual
+# audio files and generated documents are not committed.
+storage/audio/*
+storage/uploads/*
+storage/documents/*
+!storage/audio/.gitkeep
+!storage/uploads/.gitkeep
+!storage/documents/.gitkeep
+
+# --- Secrets ---
+# Never commit API keys or secret configuration
+secrets/
+*.key
+*.pem

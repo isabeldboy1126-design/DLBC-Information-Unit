@@ -1,0 +1,108 @@
+/*
+ * DLBC Information Unit App — Phase 0 Styles
+ *
+ * Minimal functional styling for the health-check page.
+ * Visual polish and brand integration come in Phase 10.
+ */
+
+:root {
+  font-family: system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  color: #1a1a1a;
+  background-color: #fbfbfc;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+#app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+main {
+  flex: 1;
+}
+
+#health-check h2 {
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+}
+
+.status {
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+.status--loading {
+  color: #555;
+  background: #f5f5f5;
+}
+
+.status--healthy {
+  background: #f0faf0;
+  border-color: #4caf50;
+}
+
+.status--healthy p {
+  margin-bottom: 0.25rem;
+}
+
+.status--error {
+  background: #fef0f0;
+  border-color: #e74c3c;
+}
+
+.status--error p {
+  margin-bottom: 0.5rem;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #338fe0;
+  background: #338fe0;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+button:hover {
+  background: #2a7bc8;
+}
+
+footer {
+  text-align: center;
+  padding-top: 2rem;
+  color: #999;
+  font-size: 0.8rem;
+}
