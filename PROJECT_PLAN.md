@@ -447,11 +447,11 @@ The prototype is currently being developed independently by the project owner be
 
 ### Phase 10 — UI Integration and Polish
 
-**Objective:** Apply the final visual design system (aligned with DLBC brand direction) without breaking established functionality.
+**Objective:** Integrate the approved Google Stitch visual design system (aligned with DLBC brand direction) without breaking established functionality.
 
 **Dependencies:** Phase 9 (complete UX structure exists).
 
-**Clarification:** Phase 10 applies the visual design system and brand identity. Functional test interfaces created during Phases 1–8 are expected to be plain; polish comes here.
+**Clarification:** Phase 10 applies the Google Stitch design system and visual polish. Functional test interfaces created during Phases 1–8 are expected to be clean, modular, and usable but unpolished; final visual integration comes here.
 
 **High-Level Requirements:**
 - Consistent visual design system (typography, colours aligned with DLBC brand palette, spacing, components)

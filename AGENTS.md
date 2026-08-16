@@ -121,6 +121,7 @@ Follow these rules:
 32. **Session integrity is paramount.** A failure at any processing stage must not silently destroy the session or any previously completed stage within it.
 33. **Knowledge management must be user-facing.** Updating Editor and Proofreader knowledge must not require modifying source code.
 34. **Preserve audio quality (lossless-first).** The transcription pipeline should preserve audio quality and avoid introducing lossy compression before transcription whenever technically practical. For uploaded files that are already lossy (e.g., MP3), preserve the original file unchanged — do not claim that converting to a lossless format restores lost quality.
+35. **UI Strategy and Google Stitch Integration.** Google Stitch is being used separately to design the final UI/UX. During functional development phases (Phases 1–8), build clean, usable, logically structured functional UI without over-engineering styling or consuming excessive quota on visual polish. Keep React components modular and decouple state, API communication, and workflow behavior from styling so that functional behavior survives the later Stitch UI integration without requiring backend or core frontend rewrites.
 
 ---
 
