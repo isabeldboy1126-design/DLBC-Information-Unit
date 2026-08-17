@@ -1,0 +1,121 @@
+"""
+Phase 5: Verification REST API Router
+
+Provides endpoints for the human verification workflow — reviewing flagged
+transcript segments, confirming or correcting them, and finalising the
+Verified Transcript.
+
+Does NOT modify Raw Transcript or session.status.
+"""
+
+from typing import Optional
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from app.database.session_repo import session_repo
+
+router = APIRouter(prefix="/api/sessions", tags=["Verification"])
+
+
+class ResolveItemRequest(BaseModel):
+    verified_text: str
+    action: str  # 'confirmed' | 'corrected'
+    correction_note: Optional[str] = None
+
+
+class AddItemRequest(BaseModel):
+    segment_index: int
+
+
+@router.post("/{session_id}/verification/start")
+async def start_verification(session_id: str):
+    """
+    Initialises verification by gathering flagged segments into verification items.
+    Only segments with low confidence or manual flags become verification items.
+    """
+    result = await session_repo.init_verification(session_id)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.get("/{session_id}/verification")
+async def get_verification(session_id: str):
+    """
+    Returns current verification state: status, progress, and all verification items.
+    """
+    result = await session_repo.get_verification_state(session_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@router.patch("/{session_id}/verification/{segment_index}")
+async def resolve_item(session_id: str, segment_index: int, payload: ResolveItemRequest):
+    """
+    Confirms or corrects a single verification item.
+    action='confirmed' retains original wording; action='corrected' saves edited text.
+    """
+    result = await session_repo.resolve_verification_item(
+        session_id=session_id,
+        segment_index=segment_index,
+        verified_text=payload.verified_text,
+        action=payload.action,
+        correction_note=payload.correction_note,
+    )
+    if result and "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.post("/{session_id}/verification/add-item")
+async def add_manual_item(session_id: str, payload: AddItemRequest):
+    """
+    Allows the reviewer to manually flag an unflagged segment for verification review.
+    """
+    result = await session_repo.add_manual_verification_item(
+        session_id=session_id,
+        segment_index=payload.segment_index,
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.post("/{session_id}/verification/finalise")
+async def finalise_verification(session_id: str):
+    """
+    Finalises verification: all items must be resolved. Constructs the complete
+    Verified Transcript by overlaying corrections onto the full raw segment sequence.
+    Saves to SQLite and storage/verified_transcripts/.
+    Does NOT change session.status.
+    """
+    result = await session_repo.finalise_verification(session_id)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.post("/{session_id}/verification/confirm-all-remaining")
+async def confirm_all_remaining(session_id: str):
+    """
+    Bulk-confirms all remaining unresolved (pending) verification items using
+    their original transcript wording. Preserves existing corrections and already-confirmed items.
+    """
+    result = await session_repo.confirm_all_remaining(session_id)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.post("/{session_id}/verification/confirm-raw")
+async def confirm_raw_as_verified(session_id: str):
+    """
+    Zero-flag shortcut: confirms the entire raw transcript as verified with
+    one explicit human action. No individual verification items are created.
+    """
+    result = await session_repo.confirm_raw_as_verified(session_id)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+

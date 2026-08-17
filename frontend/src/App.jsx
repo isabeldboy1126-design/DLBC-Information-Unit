@@ -136,6 +136,14 @@ function App() {
                 session={sessionsHook.activeSession}
                 onBack={sessionsHook.closeActiveSession}
                 onUpdateTitle={sessionsHook.updateSessionTitle}
+                verificationState={sessionsHook.verificationState}
+                onStartVerification={sessionsHook.startVerification}
+                onLoadVerificationState={sessionsHook.loadVerificationState}
+                onResolveVerificationItem={sessionsHook.resolveVerificationItem}
+                onAddVerificationItem={sessionsHook.addVerificationItem}
+                onConfirmAllRemaining={sessionsHook.confirmAllRemaining}
+                onFinaliseVerification={sessionsHook.finaliseVerification}
+                onConfirmRawAsVerified={sessionsHook.confirmRawAsVerified}
               />
             )}
           </div>

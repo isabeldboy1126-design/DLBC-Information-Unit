@@ -55,14 +55,19 @@ storage/audio/*
 storage/uploads/*
 storage/documents/*
 storage/transcripts/*
+storage/verified_transcripts/*
+storage/reports/*
 !storage/audio/.gitkeep
 !storage/uploads/.gitkeep
 !storage/documents/.gitkeep
 !storage/transcripts/.gitkeep
+!storage/verified_transcripts/.gitkeep
+!storage/reports/.gitkeep
 backend/storage/
 *.pcm
 recordings_manifest.json
 transcripts_manifest.json
+verified_transcripts_manifest.json
 
 # --- Secrets ---
 # Never commit API keys or secret configuration

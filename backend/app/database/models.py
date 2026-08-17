@@ -1,5 +1,8 @@
 """
-Database models and DDL schema definitions for Phase 4 Session Persistence.
+Database models and DDL schema definitions for Phases 4–5.
+
+Phase 4: sessions, session_segments
+Phase 5: verification_items + session verification columns
 """
 
 INIT_SCHEMA_SQL = """
@@ -47,4 +50,34 @@ CREATE TABLE IF NOT EXISTS session_segments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_segments_session ON session_segments(session_id, segment_index ASC);
+
+-- Phase 5: Verification items (stores ONLY flagged segments that require human review)
+CREATE TABLE IF NOT EXISTS verification_items (
+    item_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    segment_index INTEGER NOT NULL,
+    original_text TEXT NOT NULL,
+    verified_text TEXT NOT NULL,
+    start_time REAL NOT NULL,
+    end_time REAL NOT NULL,
+    original_confidence REAL,
+    action TEXT NOT NULL DEFAULT 'pending',
+    correction_note TEXT,
+    verified_at TEXT,
+    flag_reasons TEXT,
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_verification_session
+    ON verification_items(session_id, segment_index ASC);
 """
+
+# Phase 5 migration: add verification columns to sessions table.
+# Uses individual ALTER statements so each can safely fail if column already exists.
+PHASE5_MIGRATION_COLUMNS = [
+    "ALTER TABLE sessions ADD COLUMN verification_status TEXT DEFAULT 'not_started'",
+    "ALTER TABLE sessions ADD COLUMN verification_items_total INTEGER DEFAULT 0",
+    "ALTER TABLE sessions ADD COLUMN verification_items_resolved INTEGER DEFAULT 0",
+    "ALTER TABLE sessions ADD COLUMN verified_text TEXT",
+    "ALTER TABLE sessions ADD COLUMN verified_at TEXT",
+]

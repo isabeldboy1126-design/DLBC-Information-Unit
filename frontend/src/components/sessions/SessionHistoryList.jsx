@@ -45,10 +45,16 @@ export function SessionHistoryList({
       (s.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (s.session_id || '').toLowerCase().includes(searchTerm.toLowerCase())
 
-    const matchesStatus =
-      statusFilter === 'all' ||
-      s.status === statusFilter ||
-      (statusFilter === 'interrupted' && s.is_interrupted)
+    let matchesStatus = statusFilter === 'all'
+    if (!matchesStatus) {
+      if (statusFilter === 'verified') {
+        matchesStatus = s.verification_status === 'complete'
+      } else if (statusFilter === 'interrupted') {
+        matchesStatus = !!s.is_interrupted
+      } else {
+        matchesStatus = s.status === statusFilter
+      }
+    }
 
     return matchesSearch && matchesStatus
   })
@@ -113,6 +119,7 @@ export function SessionHistoryList({
               <option value="interrupted">Interrupted</option>
               <option value="audio_only">Audio Only</option>
               <option value="partial_transcript">Partial Transcript</option>
+              <option value="verified">Verified</option>
             </select>
           </div>
         </div>
@@ -135,7 +142,15 @@ export function SessionHistoryList({
                     <h4 className="session-title">{s.title || 'Untitled Session'}</h4>
                     <span className="session-date-sub">{formatDate(s.date_created)}</span>
                   </div>
-                  <div className="session-badges-block">{getStatusBadge(s)}</div>
+                  <div className="session-badges-block">
+                    {getStatusBadge(s)}
+                    {s.verification_status === 'complete' && (
+                      <span className="badge badge--verified">✅ Verified</span>
+                    )}
+                    {s.verification_status === 'in_progress' && (
+                      <span className="badge badge--warning">🔄 Verifying</span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="session-card-details">
@@ -157,6 +172,9 @@ export function SessionHistoryList({
                         <span className="artifact-tag tag--flag" title={`${s.flag_count} items flagged for verification`}>
                           ⚠️ {s.flag_count} {s.flag_count === 1 ? 'Flag' : 'Flags'}
                         </span>
+                      )}
+                      {s.verification_status === 'complete' && (
+                        <span className="artifact-tag tag--verified">✓ Verified Transcript</span>
                       )}
                     </span>
                   </div>

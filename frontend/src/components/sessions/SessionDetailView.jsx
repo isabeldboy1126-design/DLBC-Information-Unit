@@ -1,7 +1,21 @@
 import React, { useState, useRef } from 'react'
 import { RawTranscriptViewer } from '../transcription/RawTranscriptViewer'
+import { VerificationWorkflow } from '../verification/VerificationWorkflow'
 
-export function SessionDetailView({ session, onBack, onUpdateTitle }) {
+export function SessionDetailView({
+  session,
+  onBack,
+  onUpdateTitle,
+  // Phase 5: Verification props
+  verificationState,
+  onStartVerification,
+  onLoadVerificationState,
+  onResolveVerificationItem,
+  onAddVerificationItem,
+  onConfirmAllRemaining,
+  onFinaliseVerification,
+  onConfirmRawAsVerified,
+}) {
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [editedTitle, setEditedTitle] = useState(session?.title || '')
   const [isSavingTitle, setIsSavingTitle] = useState(false)
@@ -68,6 +82,11 @@ export function SessionDetailView({ session, onBack, onUpdateTitle }) {
       mediaElementRef.current.play().catch(() => {})
     }
   }
+
+  // Verification status
+  const vStatus = session.verification_status || 'not_started'
+  const hasTranscript = !!(session.raw_text && session.raw_text.trim())
+  const hasAudio = !!(session.audio_file_path || session.recording_id)
 
   return (
     <div className="session-detail-container">
@@ -140,6 +159,34 @@ export function SessionDetailView({ session, onBack, onUpdateTitle }) {
         </div>
 
         <div className="card-body">
+          {/* Workflow Stage Indicator */}
+          <div className="workflow-stage-indicator">
+            <div className={`workflow-stage ${hasAudio ? 'stage--done' : 'stage--pending'}`}>
+              🔊 Audio {hasAudio ? '✅' : '⏳'}
+            </div>
+            <span className="workflow-arrow">→</span>
+            <div className={`workflow-stage ${hasTranscript ? 'stage--done' : 'stage--pending'}`}>
+              📝 Raw Transcript {hasTranscript ? '✅' : '⏳'}
+            </div>
+            <span className="workflow-arrow">→</span>
+            <div
+              className={`workflow-stage ${
+                vStatus === 'complete'
+                  ? 'stage--done'
+                  : vStatus === 'in_progress'
+                  ? 'stage--active'
+                  : 'stage--pending'
+              }`}
+            >
+              ✓ Verification{' '}
+              {vStatus === 'complete' ? '✅' : vStatus === 'in_progress' ? '🔄' : '⏳'}
+            </div>
+            <span className="workflow-arrow">→</span>
+            <div className="workflow-stage stage--future">
+              📄 Editor <span className="stage-future-label">Phase 6</span>
+            </div>
+          </div>
+
           {/* Metadata Grid */}
           <div className="session-detail-meta-grid">
             <div className="meta-card">
@@ -166,9 +213,23 @@ export function SessionDetailView({ session, onBack, onUpdateTitle }) {
             </div>
 
             <div className="meta-card">
-              <span className="meta-label">Verification Flags</span>
-              <span className={`meta-val ${session.flag_count > 0 ? 'text--warning' : ''}`}>
-                {session.flag_count > 0 ? `⚠️ ${session.flag_count} Items Flagged` : '✓ 0 Flags'}
+              <span className="meta-label">Verification Status</span>
+              <span
+                className={`meta-val ${
+                  vStatus === 'complete'
+                    ? 'text--success'
+                    : vStatus === 'in_progress'
+                    ? 'text--warning'
+                    : ''
+                }`}
+              >
+                {vStatus === 'complete'
+                  ? '✅ Verified'
+                  : vStatus === 'in_progress'
+                  ? `🔄 In Progress (${session.verification_items_resolved || 0}/${session.verification_items_total || 0})`
+                  : session.flag_count > 0
+                  ? `⚠️ ${session.flag_count} Items Flagged`
+                  : '✓ 0 Flags'}
               </span>
             </div>
           </div>
@@ -180,15 +241,24 @@ export function SessionDetailView({ session, onBack, onUpdateTitle }) {
               <p>{session.recovery_notes || 'This session ended unexpectedly and was safely recovered on application restart.'}</p>
             </div>
           ) : null}
-
-          {/* Phase 5 Notice */}
-          {session.flag_count > 0 && (
-            <div className="phase5-verification-notice">
-              <span>⚠️ <strong>{session.flag_count} items</strong> need editorial verification in Phase 5. Original audio timestamps and flag metadata have been preserved.</span>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Phase 5: Verification Workflow */}
+      {hasTranscript && (
+        <VerificationWorkflow
+          session={session}
+          verificationState={verificationState}
+          onStartVerification={onStartVerification}
+          onLoadVerificationState={onLoadVerificationState}
+          onResolveItem={onResolveVerificationItem}
+          onAddItem={onAddVerificationItem}
+          onConfirmAllRemaining={onConfirmAllRemaining}
+          onFinalise={onFinaliseVerification}
+          onConfirmRawAsVerified={onConfirmRawAsVerified}
+          onPlaySegment={handleJumpToTime}
+        />
+      )}
 
       {/* Embedded Raw Transcript & Audio Player */}
       <RawTranscriptViewer

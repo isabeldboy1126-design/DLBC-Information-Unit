@@ -1,8 +1,8 @@
 """
-Session Repository Layer (Phase 4)
+Session Repository Layer (Phases 4–5)
 
-Provides asynchronous CRUD, progressive persistence, and non-destructive historical
-indexing for church message sessions in SQLite.
+Provides asynchronous CRUD, progressive persistence, non-destructive historical
+indexing, and Phase 5 human verification workflow for church message sessions in SQLite.
 """
 
 import json
@@ -12,7 +12,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from app.database.connection import DB_PATH, get_db_connection
-from app.database.models import INIT_SCHEMA_SQL
+from app.database.models import INIT_SCHEMA_SQL, PHASE5_MIGRATION_COLUMNS
 
 
 class SessionRepository:
@@ -23,6 +23,12 @@ class SessionRepository:
         """Initializes the database schema if not already initialized."""
         async with get_db_connection() as conn:
             await conn.executescript(INIT_SCHEMA_SQL)
+            # Phase 5 migration: add verification columns (safe if already exist)
+            for alter_sql in PHASE5_MIGRATION_COLUMNS:
+                try:
+                    await conn.execute(alter_sql)
+                except Exception:
+                    pass  # Column already exists
             await conn.commit()
         self._initialized = True
 
@@ -329,7 +335,9 @@ class SessionRepository:
                 SELECT session_id, title, date_created, duration_seconds, status,
                        recording_id, audio_filename, audio_file_size, audio_duration_seconds,
                        transcript_id, provider_name, language_code, segment_count,
-                       flag_count, is_interrupted, recovery_notes
+                       flag_count, is_interrupted, recovery_notes,
+                       verification_status, verification_items_total,
+                       verification_items_resolved, verified_at
                 FROM sessions
                 ORDER BY date_created DESC
                 """
@@ -544,6 +552,567 @@ class SessionRepository:
 
             await conn.commit()
 
+    # =========================================================================
+    # Phase 5: Human Verification Workflow
+    # =========================================================================
+
+    async def init_verification(self, session_id: str) -> Dict[str, Any]:
+        """
+        Initialises verification for a session by gathering flagged segments
+        into verification_items. Only segments with is_low_confidence=1 or
+        non-empty flags become verification items. Unflagged segments are NOT
+        added — they automatically retain raw wording in the Verified Transcript.
+
+        A segment with multiple flags becomes ONE verification item with all
+        flag reasons preserved in flag_reasons JSON.
+        """
+        await self.init_db()
+        async with get_db_connection() as conn:
+            # Check session exists
+            cursor = await conn.execute(
+                "SELECT session_id, verification_status FROM sessions WHERE session_id = ?",
+                (session_id,),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return {"error": "Session not found"}
+
+            # If already in_progress or complete, return current state
+            if row["verification_status"] in ("in_progress", "complete"):
+                return await self.get_verification_state(session_id)
+
+            # Gather flagged segments
+            seg_cursor = await conn.execute(
+                """
+                SELECT segment_index, start_time, end_time, text, confidence,
+                       is_low_confidence, flags_json
+                FROM session_segments
+                WHERE session_id = ?
+                  AND (is_low_confidence = 1
+                       OR (flags_json IS NOT NULL AND flags_json != '[]' AND flags_json != ''))
+                ORDER BY segment_index ASC
+                """,
+                (session_id,),
+            )
+            flagged_rows = await seg_cursor.fetchall()
+
+            items_total = len(flagged_rows)
+
+            # Create verification items for each flagged segment
+            for seg in flagged_rows:
+                item_id = f"vi_{session_id}_{seg['segment_index']}_{uuid.uuid4().hex[:6]}"
+                flags = json.loads(seg["flags_json"] or "[]")
+                flag_reasons = []
+                if seg["is_low_confidence"]:
+                    flag_reasons.append({
+                        "type": "low_confidence",
+                        "confidence": seg["confidence"],
+                    })
+                for f in flags:
+                    flag_reasons.append(f)
+
+                await conn.execute(
+                    """
+                    INSERT OR IGNORE INTO verification_items (
+                        item_id, session_id, segment_index, original_text, verified_text,
+                        start_time, end_time, original_confidence, action,
+                        correction_note, verified_at, flag_reasons
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, ?)
+                    """,
+                    (
+                        item_id,
+                        session_id,
+                        seg["segment_index"],
+                        seg["text"],
+                        seg["text"],  # pre-populate verified_text with original
+                        seg["start_time"],
+                        seg["end_time"],
+                        seg["confidence"],
+                        json.dumps(flag_reasons),
+                    ),
+                )
+
+            # Update session verification state
+            new_status = "in_progress" if items_total > 0 else "not_started"
+            await conn.execute(
+                """
+                UPDATE sessions
+                SET verification_status = ?,
+                    verification_items_total = ?,
+                    verification_items_resolved = 0
+                WHERE session_id = ?
+                """,
+                (new_status, items_total, session_id),
+            )
+            await conn.commit()
+
+        return await self.get_verification_state(session_id)
+
+    async def get_verification_state(self, session_id: str) -> Dict[str, Any]:
+        """
+        Returns the current verification state for a session, including
+        verification status, progress counts, and all verification items.
+        """
+        await self.init_db()
+        async with get_db_connection() as conn:
+            cursor = await conn.execute(
+                """
+                SELECT session_id, verification_status, verification_items_total,
+                       verification_items_resolved, verified_at, flag_count, segment_count
+                FROM sessions WHERE session_id = ?
+                """,
+                (session_id,),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return {"error": "Session not found"}
+
+            # Get all verification items
+            vi_cursor = await conn.execute(
+                """
+                SELECT item_id, segment_index, original_text, verified_text,
+                       start_time, end_time, original_confidence, action,
+                       correction_note, verified_at, flag_reasons
+                FROM verification_items
+                WHERE session_id = ?
+                ORDER BY segment_index ASC
+                """,
+                (session_id,),
+            )
+            vi_rows = await vi_cursor.fetchall()
+            items = []
+            for vi in vi_rows:
+                item = dict(vi)
+                item["flag_reasons"] = json.loads(item["flag_reasons"] or "[]")
+                items.append(item)
+
+            return {
+                "session_id": session_id,
+                "verification_status": row["verification_status"],
+                "items_total": row["verification_items_total"],
+                "items_resolved": row["verification_items_resolved"],
+                "flag_count": row["flag_count"],
+                "segment_count": row["segment_count"],
+                "verified_at": row["verified_at"],
+                "items": items,
+            }
+
+    async def resolve_verification_item(
+        self,
+        session_id: str,
+        segment_index: int,
+        verified_text: str,
+        action: str,
+        correction_note: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Resolves a single verification item by confirming or correcting it.
+        action must be 'confirmed' or 'corrected'.
+        """
+        if action not in ("confirmed", "corrected"):
+            return {"error": "action must be 'confirmed' or 'corrected'"}
+
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+        async with get_db_connection() as conn:
+            # Check item exists
+            cursor = await conn.execute(
+                """
+                SELECT item_id, action as current_action
+                FROM verification_items
+                WHERE session_id = ? AND segment_index = ?
+                """,
+                (session_id, segment_index),
+            )
+            item_row = await cursor.fetchone()
+            if not item_row:
+                return {"error": f"Verification item not found for segment {segment_index}"}
+
+            was_pending = item_row["current_action"] == "pending"
+
+            await conn.execute(
+                """
+                UPDATE verification_items
+                SET verified_text = ?,
+                    action = ?,
+                    correction_note = ?,
+                    verified_at = ?
+                WHERE session_id = ? AND segment_index = ?
+                """,
+                (verified_text, action, correction_note, now_iso, session_id, segment_index),
+            )
+
+            # Recompute resolved count
+            resolved_cursor = await conn.execute(
+                """
+                SELECT COUNT(*) as cnt FROM verification_items
+                WHERE session_id = ? AND action != 'pending'
+                """,
+                (session_id,),
+            )
+            resolved_row = await resolved_cursor.fetchone()
+            resolved_count = resolved_row["cnt"]
+
+            await conn.execute(
+                """
+                UPDATE sessions
+                SET verification_items_resolved = ?
+                WHERE session_id = ?
+                """,
+                (resolved_count, session_id),
+            )
+            await conn.commit()
+
+        return await self.get_verification_state(session_id)
+
+    async def confirm_all_remaining(self, session_id: str) -> Dict[str, Any]:
+        """
+        Bulk verification improvement:
+        Finds all unresolved (action='pending') verification items for the session
+        and marks each as 'confirmed' (using original_text wording).
+        Preserves existing human corrections and already-confirmed items unchanged.
+        Updates verification progress and SQLite persistence immediately.
+        """
+        await self.init_db()
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+        async with get_db_connection() as conn:
+            # Check session exists
+            cursor = await conn.execute(
+                "SELECT session_id FROM sessions WHERE session_id = ?",
+                (session_id,),
+            )
+            if not await cursor.fetchone():
+                return {"error": "Session not found"}
+
+            # Update ONLY pending items to 'confirmed', setting verified_text = original_text
+            await conn.execute(
+                """
+                UPDATE verification_items
+                SET verified_text = original_text,
+                    action = 'confirmed',
+                    correction_note = NULL,
+                    verified_at = ?
+                WHERE session_id = ? AND action = 'pending'
+                """,
+                (now_iso, session_id),
+            )
+
+            # Recompute resolved count
+            resolved_cursor = await conn.execute(
+                """
+                SELECT COUNT(*) as cnt FROM verification_items
+                WHERE session_id = ? AND action != 'pending'
+                """,
+                (session_id,),
+            )
+            resolved_row = await resolved_cursor.fetchone()
+            resolved_count = resolved_row["cnt"]
+
+            await conn.execute(
+                """
+                UPDATE sessions
+                SET verification_items_resolved = ?
+                WHERE session_id = ?
+                """,
+                (resolved_count, session_id),
+            )
+            await conn.commit()
+
+        return await self.get_verification_state(session_id)
+
+    async def add_manual_verification_item(
+        self, session_id: str, segment_index: int
+    ) -> Dict[str, Any]:
+        """
+        Allows the reviewer to manually flag an unflagged segment for review.
+        Creates a new verification_items record with action='pending'.
+        """
+        await self.init_db()
+        async with get_db_connection() as conn:
+            # Check item doesn't already exist for this segment
+            cursor = await conn.execute(
+                "SELECT item_id FROM verification_items WHERE session_id = ? AND segment_index = ?",
+                (session_id, segment_index),
+            )
+            if await cursor.fetchone():
+                return {"error": f"Verification item already exists for segment {segment_index}"}
+
+            # Get the raw segment data
+            seg_cursor = await conn.execute(
+                """
+                SELECT segment_index, start_time, end_time, text, confidence
+                FROM session_segments
+                WHERE session_id = ? AND segment_index = ?
+                """,
+                (session_id, segment_index),
+            )
+            seg = await seg_cursor.fetchone()
+            if not seg:
+                return {"error": f"Segment {segment_index} not found in session"}
+
+            item_id = f"vi_{session_id}_{segment_index}_{uuid.uuid4().hex[:6]}"
+            flag_reasons = [{"type": "manual_verification", "added_by": "reviewer"}]
+
+            await conn.execute(
+                """
+                INSERT INTO verification_items (
+                    item_id, session_id, segment_index, original_text, verified_text,
+                    start_time, end_time, original_confidence, action,
+                    correction_note, verified_at, flag_reasons
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, ?)
+                """,
+                (
+                    item_id,
+                    session_id,
+                    segment_index,
+                    seg["text"],
+                    seg["text"],
+                    seg["start_time"],
+                    seg["end_time"],
+                    seg["confidence"],
+                    json.dumps(flag_reasons),
+                ),
+            )
+
+            # Increment total count
+            await conn.execute(
+                """
+                UPDATE sessions
+                SET verification_items_total = verification_items_total + 1,
+                    verification_status = 'in_progress'
+                WHERE session_id = ?
+                """,
+                (session_id,),
+            )
+            await conn.commit()
+
+        return await self.get_verification_state(session_id)
+
+    async def finalise_verification(self, session_id: str) -> Dict[str, Any]:
+        """
+        Finalises verification: checks all items are resolved, then constructs
+        the complete Verified Transcript by overlaying corrections onto the
+        full raw segment sequence. Saves to SQLite and storage/verified_transcripts/.
+
+        Does NOT change session.status. Only sets verification_status = 'complete'.
+        """
+        await self.init_db()
+        async with get_db_connection() as conn:
+            # Check verification state
+            cursor = await conn.execute(
+                """
+                SELECT verification_status, verification_items_total,
+                       verification_items_resolved
+                FROM sessions WHERE session_id = ?
+                """,
+                (session_id,),
+            )
+            sess = await cursor.fetchone()
+            if not sess:
+                return {"error": "Session not found"}
+
+            if sess["verification_items_total"] > 0 and \
+               sess["verification_items_resolved"] < sess["verification_items_total"]:
+                unresolved = sess["verification_items_total"] - sess["verification_items_resolved"]
+                return {
+                    "error": f"Cannot finalise: {unresolved} verification item(s) still pending."
+                }
+
+            # Get all verification corrections keyed by segment_index
+            vi_cursor = await conn.execute(
+                """
+                SELECT segment_index, verified_text, action
+                FROM verification_items
+                WHERE session_id = ? AND action = 'corrected'
+                """,
+                (session_id,),
+            )
+            corrections = {}
+            async for vi in vi_cursor:
+                corrections[vi["segment_index"]] = vi["verified_text"]
+
+            # Get ALL raw segments in order
+            seg_cursor = await conn.execute(
+                """
+                SELECT segment_index, start_time, end_time, text, confidence
+                FROM session_segments
+                WHERE session_id = ?
+                ORDER BY segment_index ASC
+                """,
+                (session_id,),
+            )
+            all_segments = await seg_cursor.fetchall()
+
+            # Build complete Verified Transcript
+            verified_segments = []
+            for seg in all_segments:
+                idx = seg["segment_index"]
+                if idx in corrections:
+                    final_text = corrections[idx]
+                    source = "corrected"
+                else:
+                    final_text = seg["text"]
+                    source = "raw"
+
+                verified_segments.append({
+                    "segment_index": idx,
+                    "start_time": seg["start_time"],
+                    "end_time": seg["end_time"],
+                    "text": final_text,
+                    "source": source,
+                    "original_confidence": seg["confidence"],
+                })
+
+            verified_full_text = " ".join(
+                s["text"].strip() for s in verified_segments if s["text"].strip()
+            )
+            now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+            # Get verification item count for the JSON
+            vi_count_cursor = await conn.execute(
+                "SELECT COUNT(*) as cnt FROM verification_items WHERE session_id = ?",
+                (session_id,),
+            )
+            vi_count = (await vi_count_cursor.fetchone())["cnt"]
+
+            # Save to sessions table
+            await conn.execute(
+                """
+                UPDATE sessions
+                SET verification_status = 'complete',
+                    verified_text = ?,
+                    verified_at = ?
+                WHERE session_id = ?
+                """,
+                (verified_full_text, now_iso, session_id),
+            )
+            await conn.commit()
+
+        # Save to storage/verified_transcripts/ JSON file
+        verified_data = {
+            "session_id": session_id,
+            "verified_at": now_iso,
+            "total_segments": len(verified_segments),
+            "verification_items_reviewed": vi_count,
+            "segments": verified_segments,
+            "verified_text": verified_full_text,
+        }
+        self._save_verified_transcript_file(session_id, verified_data)
+
+        return {
+            "status": "complete",
+            "session_id": session_id,
+            "verified_at": now_iso,
+            "total_segments": len(verified_segments),
+            "verification_items_reviewed": vi_count,
+            "verified_text": verified_full_text,
+        }
+
+    async def confirm_raw_as_verified(self, session_id: str) -> Dict[str, Any]:
+        """
+        For zero-flag sessions: creates the Verified Transcript directly from
+        all raw segments with one explicit human confirmation action.
+        No individual verification items are created.
+        """
+        await self.init_db()
+        async with get_db_connection() as conn:
+            # Verify this session actually has zero verification items
+            cursor = await conn.execute(
+                """
+                SELECT verification_status, verification_items_total
+                FROM sessions WHERE session_id = ?
+                """,
+                (session_id,),
+            )
+            sess = await cursor.fetchone()
+            if not sess:
+                return {"error": "Session not found"}
+
+            if sess["verification_status"] == "complete":
+                return {"error": "Verification already complete for this session."}
+
+            # Check no pending items exist
+            vi_cursor = await conn.execute(
+                "SELECT COUNT(*) as cnt FROM verification_items WHERE session_id = ? AND action = 'pending'",
+                (session_id,),
+            )
+            pending = (await vi_cursor.fetchone())["cnt"]
+            if pending > 0:
+                return {"error": f"Cannot confirm raw as verified: {pending} pending verification items exist."}
+
+            # Get all raw segments
+            seg_cursor = await conn.execute(
+                """
+                SELECT segment_index, start_time, end_time, text, confidence
+                FROM session_segments
+                WHERE session_id = ?
+                ORDER BY segment_index ASC
+                """,
+                (session_id,),
+            )
+            all_segments = await seg_cursor.fetchall()
+
+            verified_segments = []
+            for seg in all_segments:
+                verified_segments.append({
+                    "segment_index": seg["segment_index"],
+                    "start_time": seg["start_time"],
+                    "end_time": seg["end_time"],
+                    "text": seg["text"],
+                    "source": "raw",
+                    "original_confidence": seg["confidence"],
+                })
+
+            verified_full_text = " ".join(
+                s["text"].strip() for s in verified_segments if s["text"].strip()
+            )
+            now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+            await conn.execute(
+                """
+                UPDATE sessions
+                SET verification_status = 'complete',
+                    verified_text = ?,
+                    verified_at = ?
+                WHERE session_id = ?
+                """,
+                (verified_full_text, now_iso, session_id),
+            )
+            await conn.commit()
+
+        # Save JSON file
+        verified_data = {
+            "session_id": session_id,
+            "verified_at": now_iso,
+            "total_segments": len(verified_segments),
+            "verification_items_reviewed": 0,
+            "segments": verified_segments,
+            "verified_text": verified_full_text,
+        }
+        self._save_verified_transcript_file(session_id, verified_data)
+
+        return {
+            "status": "complete",
+            "session_id": session_id,
+            "verified_at": now_iso,
+            "total_segments": len(verified_segments),
+            "verification_items_reviewed": 0,
+            "verified_text": verified_full_text,
+        }
+
+    def _save_verified_transcript_file(self, session_id: str, data: Dict[str, Any]):
+        """Saves verified transcript JSON to storage/verified_transcripts/."""
+        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        backend_dir = os.path.dirname(app_dir)
+        project_root = os.path.dirname(backend_dir)
+        verified_dir = os.path.join(project_root, "storage", "verified_transcripts")
+        os.makedirs(verified_dir, exist_ok=True)
+        file_path = os.path.join(verified_dir, f"{session_id}.json")
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
 
 # Singleton instance
 session_repo = SessionRepository()
+

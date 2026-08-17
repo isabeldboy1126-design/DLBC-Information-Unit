@@ -8,6 +8,9 @@ export function useSessions() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
 
+  // Phase 5: Verification state
+  const [verificationState, setVerificationState] = useState(null)
+
   // Fetch all saved sessions
   const fetchSessions = useCallback(async () => {
     setIsLoading(true)
@@ -89,6 +92,215 @@ export function useSessions() {
 
   const closeActiveSession = useCallback(() => {
     setActiveSession(null)
+    setVerificationState(null)
+  }, [])
+
+  // =========================================================================
+  // Phase 5: Verification methods
+  // =========================================================================
+
+  // Start verification — gathers flagged items
+  const startVerification = useCallback(async (sessionId) => {
+    setError(null)
+    try {
+      const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}/verification/start`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || `Failed to start verification: ${res.status}`)
+      }
+      const data = await res.json()
+      setVerificationState(data)
+      // Update active session verification_status
+      setActiveSession((prev) =>
+        prev && prev.session_id === sessionId
+          ? { ...prev, verification_status: data.verification_status }
+          : prev
+      )
+      return data
+    } catch (err) {
+      console.error('Error starting verification:', err)
+      setError(err.message)
+      return null
+    }
+  }, [])
+
+  // Load current verification state
+  const loadVerificationState = useCallback(async (sessionId) => {
+    setError(null)
+    try {
+      const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}/verification`)
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || `Failed to load verification: ${res.status}`)
+      }
+      const data = await res.json()
+      setVerificationState(data)
+      return data
+    } catch (err) {
+      console.error('Error loading verification state:', err)
+      setError(err.message)
+      return null
+    }
+  }, [])
+
+  // Resolve a single verification item (confirm or correct)
+  const resolveVerificationItem = useCallback(async (sessionId, segmentIndex, payload) => {
+    setError(null)
+    try {
+      const res = await fetch(
+        `${API_BASE}/${encodeURIComponent(sessionId)}/verification/${segmentIndex}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      )
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || `Failed to resolve item: ${res.status}`)
+      }
+      const data = await res.json()
+      setVerificationState(data)
+      return data
+    } catch (err) {
+      console.error('Error resolving verification item:', err)
+      setError(err.message)
+      return null
+    }
+  }, [])
+
+  // Add a manual verification item for an unflagged segment
+  const addVerificationItem = useCallback(async (sessionId, segmentIndex) => {
+    setError(null)
+    try {
+      const res = await fetch(
+        `${API_BASE}/${encodeURIComponent(sessionId)}/verification/add-item`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ segment_index: segmentIndex }),
+        }
+      )
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || `Failed to add verification item: ${res.status}`)
+      }
+      const data = await res.json()
+      setVerificationState(data)
+      return data
+    } catch (err) {
+      console.error('Error adding verification item:', err)
+      setError(err.message)
+      return null
+    }
+  }, [])
+
+  // Finalise verification — creates the Verified Transcript
+  const finaliseVerification = useCallback(async (sessionId) => {
+    setError(null)
+    try {
+      const res = await fetch(
+        `${API_BASE}/${encodeURIComponent(sessionId)}/verification/finalise`,
+        { method: 'POST' }
+      )
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || `Failed to finalise verification: ${res.status}`)
+      }
+      const data = await res.json()
+      setVerificationState((prev) => ({
+        ...prev,
+        verification_status: 'complete',
+        verified_at: data.verified_at,
+      }))
+      // Update active session
+      setActiveSession((prev) =>
+        prev && prev.session_id === sessionId
+          ? {
+              ...prev,
+              verification_status: 'complete',
+              verified_text: data.verified_text,
+              verified_at: data.verified_at,
+            }
+          : prev
+      )
+      return data
+    } catch (err) {
+      console.error('Error finalising verification:', err)
+      setError(err.message)
+      return null
+    }
+  }, [])
+
+  // Bulk-confirm all remaining unresolved verification items
+  const confirmAllRemaining = useCallback(async (sessionId) => {
+    setError(null)
+    try {
+      const res = await fetch(
+        `${API_BASE}/${encodeURIComponent(sessionId)}/verification/confirm-all-remaining`,
+        { method: 'POST' }
+      )
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || `Failed to confirm remaining items: ${res.status}`)
+      }
+      const data = await res.json()
+      setVerificationState(data)
+      // Update session verification counts in activeSession if loaded
+      setActiveSession((prev) =>
+        prev && prev.session_id === sessionId
+          ? {
+              ...prev,
+              verification_items_resolved: data.items_resolved,
+            }
+          : prev
+      )
+      return data
+    } catch (err) {
+      console.error('Error confirming all remaining items:', err)
+      setError(err.message)
+      return null
+    }
+  }, [])
+
+  // Confirm raw transcript as verified (zero-flag shortcut)
+  const confirmRawAsVerified = useCallback(async (sessionId) => {
+    setError(null)
+    try {
+      const res = await fetch(
+        `${API_BASE}/${encodeURIComponent(sessionId)}/verification/confirm-raw`,
+        { method: 'POST' }
+      )
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || `Failed to confirm raw as verified: ${res.status}`)
+      }
+      const data = await res.json()
+      setVerificationState({
+        verification_status: 'complete',
+        items_total: 0,
+        items_resolved: 0,
+        verified_at: data.verified_at,
+        items: [],
+      })
+      setActiveSession((prev) =>
+        prev && prev.session_id === sessionId
+          ? {
+              ...prev,
+              verification_status: 'complete',
+              verified_text: data.verified_text,
+              verified_at: data.verified_at,
+            }
+          : prev
+      )
+      return data
+    } catch (err) {
+      console.error('Error confirming raw as verified:', err)
+      setError(err.message)
+      return null
+    }
   }, [])
 
   useEffect(() => {
@@ -106,5 +318,14 @@ export function useSessions() {
     updateSessionTitle,
     deleteSession,
     closeActiveSession,
+    // Phase 5: Verification
+    verificationState,
+    startVerification,
+    loadVerificationState,
+    resolveVerificationItem,
+    addVerificationItem,
+    confirmAllRemaining,
+    finaliseVerification,
+    confirmRawAsVerified,
   }
 }

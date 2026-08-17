@@ -1773,4 +1773,420 @@ body {
 }
 
 
+/* =========================================================
+   Phase 5: Verification Workflow Styles
+   ========================================================= */
+
+/* Workflow Stage Indicator */
+.workflow-stage-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-primary-light);
+  border-radius: var(--radius-md);
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.workflow-stage {
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: #e8e8ec;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.workflow-stage.stage--done {
+  background: #d4f5e0;
+  color: #1a6b3a;
+}
+
+.workflow-stage.stage--active {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #f0c36d;
+}
+
+.workflow-stage.stage--pending {
+  background: #e8e8ec;
+  color: #888;
+}
+
+.workflow-stage.stage--future {
+  background: #f5f5f7;
+  color: #aaa;
+  font-style: italic;
+}
+
+.stage-future-label {
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+
+.workflow-arrow {
+  color: var(--color-text-muted);
+  font-weight: 300;
+  font-size: 1rem;
+}
+
+/* text colour utilities */
+.text--success { color: #1a6b3a; }
+.text--warning { color: #856404; }
+
+/* Verification Card */
+.verification-card {
+  margin-bottom: 1.5rem;
+}
+
+.verification-not-started {
+  padding: 1.5rem;
+}
+
+.verification-summary-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: #fff8e1;
+  border: 1px solid #f0c36d;
+  border-radius: var(--radius-md);
+  margin-bottom: 1.25rem;
+}
+
+.verification-summary-banner.verification-no-flags {
+  background: #d4f5e0;
+  border-color: #a3d9b1;
+}
+
+.verification-flag-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.verification-summary-banner p {
+  margin: 0.35rem 0 0;
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+
+.verification-zero-flag-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Progress Bar */
+.verification-progress {
+  margin-bottom: 1rem;
+}
+
+.verification-progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+  font-size: 0.88rem;
+}
+
+.verification-progress-pct {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.verification-progress-bar-track {
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.verification-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-success));
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* Toolbar */
+.verification-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Add segment dialog & Bulk confirm dialog */
+.verification-add-dialog,
+.verification-bulk-confirm-dialog {
+  padding: 1.15rem;
+  background: #fff8e1;
+  border: 1px solid #f0c36d;
+  border-radius: var(--radius-md);
+  margin-bottom: 1rem;
+}
+
+.verification-bulk-confirm-dialog h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: #856404;
+}
+
+.verification-bulk-confirm-dialog p {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--color-text-main);
+  line-height: 1.45;
+}
+
+.verification-add-dialog {
+  background: var(--color-primary-light);
+  border-color: var(--color-border);
+}
+
+.verification-add-dialog label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.verification-add-dialog select {
+  margin-bottom: 0.75rem;
+  max-width: 100%;
+}
+
+/* Verification Items List */
+.verification-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.verification-empty-filter {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Individual Verification Item Row */
+.verification-item-row {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  background: var(--color-card-bg);
+  transition: border-color 0.2s ease;
+}
+
+.verification-item-row:hover {
+  border-color: var(--color-primary);
+}
+
+.vi-row--pending {
+  border-left: 4px solid var(--color-warning);
+}
+
+.vi-row--confirmed {
+  border-left: 4px solid var(--color-success);
+  background: #f8fdf9;
+}
+
+.vi-row--corrected {
+  border-left: 4px solid var(--color-primary);
+  background: #f5f9fd;
+}
+
+.vi-row-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.vi-status-badge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  background: #f0f0f0;
+  color: #666;
+}
+
+.vi-row--pending .vi-status-badge {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.vi-row--confirmed .vi-status-badge {
+  background: #d4f5e0;
+  color: #1a6b3a;
+}
+
+.vi-row--corrected .vi-status-badge {
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}
+
+.vi-flag-reasons {
+  font-size: 0.8rem;
+  color: var(--color-danger);
+  margin-bottom: 0.5rem;
+}
+
+.vi-original-text,
+.vi-corrected-text {
+  margin-bottom: 0.5rem;
+}
+
+.vi-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.2rem;
+}
+
+.vi-text-display {
+  display: block;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  padding: 0.4rem 0.6rem;
+  background: #f7f8fa;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-main);
+}
+
+.vi-text-corrected {
+  background: #eef5fd;
+  border: 1px solid #c8dcf0;
+}
+
+.vi-correction-note {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin-top: 0.25rem;
+}
+
+/* Edit area */
+.vi-edit-area {
+  margin-top: 0.5rem;
+}
+
+.vi-edit-textarea {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+  line-height: 1.5;
+  margin-bottom: 0.4rem;
+  min-height: 50px;
+}
+
+.vi-edit-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(51, 143, 224, 0.15);
+}
+
+.vi-note-input {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.5rem;
+  color: var(--color-text-muted);
+}
+
+.vi-note-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.vi-action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.vi-resolved-actions {
+  margin-top: 0.4rem;
+}
+
+/* Finalise Section */
+.verification-finalise-section {
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.btn--large {
+  padding: 0.7rem 1.5rem;
+  font-size: 1rem;
+}
+
+.verification-finalise-blocked {
+  padding: 0.75rem;
+  background: #fff8e1;
+  border: 1px solid #f0c36d;
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+  color: #856404;
+  text-align: center;
+}
+
+/* Verified Transcript Complete */
+.verification-complete-card {
+  border-left: 4px solid var(--color-success);
+}
+
+.verification-complete-info {
+  margin-bottom: 1rem;
+}
+
+.verification-complete-info p {
+  margin: 0.25rem 0;
+  font-size: 0.88rem;
+}
+
+.verified-transcript-box {
+  max-height: 500px;
+  overflow-y: auto;
+  border: 1px solid #d4f5e0;
+  background: #fafdf8;
+}
+
+.verification-notice {
+  background: #f0faf3;
+  border-color: #a3d9b1;
+}
+
+/* Badge variations */
+.badge--verified {
+  background: #d4f5e0;
+  color: #1a6b3a;
+  font-weight: 600;
+}
+
+.artifact-tag.tag--verified {
+  background: #d4f5e0;
+  color: #1a6b3a;
+  border-color: #a3d9b1;
+}
 
