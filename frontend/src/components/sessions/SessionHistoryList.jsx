@@ -150,6 +150,12 @@ export function SessionHistoryList({
                     {s.verification_status === 'in_progress' && (
                       <span className="badge badge--warning">🔄 Verifying</span>
                     )}
+                    {s.reporting_status === 'reports_ready' && (
+                      <span className="badge badge--primary">⚡ Reports Ready</span>
+                    )}
+                    {s.reporting_status === 'partial' && (
+                      <span className="badge badge--warning">⚡ Report Draft</span>
+                    )}
                   </div>
                 </div>
 
@@ -161,20 +167,23 @@ export function SessionHistoryList({
 
                   <div className="session-stat">
                     <span className="stat-label">Artifacts:</span>
-                    <span className="stat-artifacts">
+                    <span className="session-artifacts">
                       {(s.audio_filename || s.audio_file_size > 0) && (
                         <span className="artifact-tag tag--audio">✓ Audio</span>
                       )}
                       {(s.transcript_id || s.segment_count > 0) && (
                         <span className="artifact-tag tag--transcript">✓ Raw Transcript</span>
                       )}
-                      {s.flag_count > 0 && (
+                      {s.verification_status === 'complete' && (
+                        <span className="artifact-tag tag--verified">✓ Verified</span>
+                      )}
+                      {s.reporting_status === 'reports_ready' && (
+                        <span className="artifact-tag tag--reported">✓ Reports (A & B)</span>
+                      )}
+                      {s.flag_count > 0 && s.verification_status !== 'complete' && (
                         <span className="artifact-tag tag--flag" title={`${s.flag_count} items flagged for verification`}>
                           ⚠️ {s.flag_count} {s.flag_count === 1 ? 'Flag' : 'Flags'}
                         </span>
-                      )}
-                      {s.verification_status === 'complete' && (
-                        <span className="artifact-tag tag--verified">✓ Verified Transcript</span>
                       )}
                     </span>
                   </div>

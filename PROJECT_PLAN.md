@@ -332,33 +332,72 @@ The prototype is currently being developed independently by the project owner be
 - Produce a verified transcript (stored separately from raw transcript)
 
 **Acceptance Criteria:**
-- [ ] Flagged items are identified automatically after transcription
-- [ ] User can manually flag additional items
-- [ ] Each flagged item shows transcript context and timestamp
-- [ ] Audio replay starts at the correct position for the flagged item
-- [ ] User can edit the transcript at flagged positions
-- [ ] User can confirm a flagged item without changes
-- [ ] Verified transcript is saved as a separate record from the raw transcript
+- [x] Flagged items are identified automatically after transcription
+- [x] User can manually flag additional items
+- [x] Each flagged item shows transcript context and timestamp
+- [x] Audio replay starts at the correct position for the flagged item
+- [x] User can edit the transcript at flagged positions
+- [x] User can confirm a flagged item without changes
+- [x] Verified transcript is saved as a separate record from the raw transcript
 
 **Major Risks:** R02, R03 (transcription/recognition errors), R12 (audio replay precision).
 
-**Status:** ⚪ Not Started
+**Status:** ✅ Completed (2026-08-16)
 
 ---
 
-### Phase 6 — AI Editor
+### Phase 6 — AI Reporting System
 
-**Objective:** Integrate AI editing with Editor knowledge management and human review.
+**Objective:** Produce two independent Information Unit report drafts (Reporter A: Main Message & Structure, Reporter B: Detail & Omission Watch) from the human-verified transcript before the Editor stage.
 
-**Dependencies:** Phase 5 (verified transcript), Phase 4 (session persistence).
+**Dependencies:** Phase 5 (verified transcript exists), Phase 4 (session persistence).
+
+**High-Level Requirements:**
+- Two independent AI reporting agents running from the same Verified Transcript:
+  - **Reporter A (Main Message & Structure):** Focuses on central message, major points, flow, important statements, primary scriptures, and structured outline.
+  - **Reporter B (Detail & Omission Watch):** Focuses on supporting points, names, numbers, facts, illustrations, quotations, and specific details that a high-level summary might condense away.
+- Protected backend rules (14 immutable guardrails enforcing factual accuracy, strict transcript authority, non-fabrication, and reporting neutrality).
+- Versioned and editable Reporting Standards (`reporting_standards` SQLite table: General Guidelines, Role A instructions, Role B instructions, Church Terminology/Glossary, Approved Reference Examples).
+- Derivative Report Draft persistence in SQLite (`reports` table) with structured metadata, scriptures, key points, warnings, and model telemetry.
+- Service abstraction layer with official `google-genai` SDK (`GeminiReportingProvider` using `gemini-2.5-flash`).
+- Graceful detection of unconfigured API key (`AI Reporting is not configured`).
+- Frontend Reporting Workspace with dual-card layout, markdown copy action, independent regeneration/retry, and modal standards manager.
+- Workflow transition: `Verified Transcript → Continue to Reporting`.
+
+**Acceptance Criteria:**
+- [x] Dual independent reporting agents (Reporter A and Reporter B) operating on the Verified Transcript without cross-contamination
+- [x] Protected backend rules enforce non-fabrication and transcript authority
+- [x] User-editable, versioned Reporting Standards (`v1`, `v2`, etc.) with role guidelines, glossary, and examples
+- [x] Gemini provider abstraction (`google-genai` with `gemini-2.5-flash`) with graceful missing-key safety
+- [x] Independent report persistence in SQLite linked to session
+- [x] Seamless workflow transition: Verified Transcript -> Continue to Reporting
+- [x] Session reporting status tracking (`not_started`, `generating`, `partial`, `reports_ready`)
+
+**Manual Acceptance Testing Results (2026-08-17):**
+- Gemini API key detected and verified via live backend connection.
+- Reporting Standards v1 seeded automatically and editable via modal UI with version incrementing.
+- Live sermon test (*The Power of Persistent Prayer — Luke 18:1-8*) generated both Reporter A and Reporter B drafts independently.
+- Reporter A captured central themes, 3 main points, and primary scriptures cleanly.
+- Reporter B captured detailed verse citations, narrative nuances of the parable, and specific preacher illustrations.
+- Reports persisted independently in SQLite and session status transitioned to `reports_ready`.
+
+**Status:** ✅ Completed (2026-08-17)
+
+---
+
+### Phase 7 — AI Editor
+
+**Objective:** Compare and reconcile the two independent report drafts (Reporter A and Reporter B) against the Verified Transcript to produce a unified, coherent edited report with human editorial review.
+
+**Dependencies:** Phase 6 (Reporter A and Reporter B drafts exist).
 
 **High-Level Requirements:**
 - Editor knowledge management UI (upload guidelines, rules, terminology, examples)
 - Store and retrieve Editor knowledge
-- Send verified transcript + Editor knowledge to AI provider via backend
-- Receive edited report
+- Send Reporter A draft + Reporter B draft + Verified Transcript + Editor knowledge to AI provider via backend
+- Receive compiled edited report highlighting synthesis choices
 - Display edited report for human Editor review
-- Side-by-side or comparison view: verified transcript vs. edited report
+- Side-by-side or comparison view: report drafts vs. edited report
 - Human can correct the edited report
 - Human approves or rejects the edited report
 - "Automatically Continue to Proofreading" setting (OFF by default)
@@ -366,27 +405,25 @@ The prototype is currently being developed independently by the project owner be
 
 **Acceptance Criteria:**
 - [ ] Editor knowledge can be uploaded, viewed, updated, and removed via the UI
-- [ ] Verified transcript is sent to the AI Editor and an edited report is returned
-- [ ] Edited report is displayed alongside the verified transcript for comparison
+- [ ] Reporter A and Reporter B drafts are compiled into a unified edited report
+- [ ] Edited report is displayed alongside the drafts/transcript for comparison
 - [ ] Human can make corrections to the edited report
 - [ ] Human can approve the edited report
 - [ ] Approved edited report is stored as a separate stage
 - [ ] Auto-continue to proofreading defaults to OFF
-- [ ] AI Editor does not proceed without a verified transcript
+- [ ] AI Editor does not proceed without verified transcript and report drafts
 
 **Major Risks:** R06 (AI altering meaning), R05 (provider failure), R08 (cost), R10 (premature automation).
-
-**Unresolved Decision:** Primary AI provider for editing. Gemini API is the current intended first provider, but `EditorService` must remain provider-abstracted.
 
 **Status:** ⚪ Not Started
 
 ---
 
-### Phase 7 — AI Proofreader
+### Phase 8 — AI Proofreader
 
 **Objective:** Implement separate proofreading logic with warnings and human review.
 
-**Dependencies:** Phase 6 (edited report exists).
+**Dependencies:** Phase 7 (edited report exists).
 
 **High-Level Requirements:**
 - Proofreader knowledge management UI (upload guidelines, rules, examples)
@@ -415,11 +452,11 @@ The prototype is currently being developed independently by the project owner be
 
 ---
 
-### Phase 8 — Final Document
+### Phase 9 — Final Document
 
 **Objective:** Human final review and basic document generation.
 
-**Dependencies:** Phase 7 (proofread report exists).
+**Dependencies:** Phase 8 (proofread report exists).
 
 **High-Level Requirements:**
 - Human final review of the proofread report
@@ -433,7 +470,7 @@ The prototype is currently being developed independently by the project owner be
 - [ ] Human can approve the final version
 - [ ] A document is generated in at least one distributable format
 - [ ] Final approved report is stored separately
-- [ ] The complete chain (audio → raw transcript → verified → edited → proofread → final) is intact and navigable
+- [ ] The complete chain (audio → raw transcript → verified → reported → edited → proofread → final) is intact and navigable
 
 **Major Risks:** Minimal at this stage if previous phases are solid.
 
@@ -443,11 +480,11 @@ The prototype is currently being developed independently by the project owner be
 
 ---
 
-### Phase 9 — Complete Application UX
+### Phase 10 — Complete Application UX
 
 **Objective:** Integrate all workflow stages into a cohesive application experience with dashboard, navigation, session workflow, history, and settings.
 
-**Dependencies:** Phases 1–8 (all core functionality exists).
+**Dependencies:** Phases 1–9 (all core functionality exists).
 
 **Clarification:** Earlier technical phases (1–8) may and should create minimal functional interfaces required to test their features (e.g., audio selector, transcript display, review interface). Phase 9 is where these functional interfaces are integrated into the complete application UX. These test interfaces do not need visual polish before Phase 9.
 
@@ -472,13 +509,13 @@ The prototype is currently being developed independently by the project owner be
 
 ---
 
-### Phase 10 — UI Integration and Polish
+### Phase 11 — UI Integration and Polish
 
 **Objective:** Integrate the approved Google Stitch visual design system (aligned with DLBC brand direction) without breaking established functionality.
 
-**Dependencies:** Phase 9 (complete UX structure exists).
+**Dependencies:** Phase 10 (complete UX structure exists).
 
-**Clarification:** Phase 10 applies the Google Stitch design system and visual polish. Functional test interfaces created during Phases 1–8 are expected to be clean, modular, and usable but unpolished; final visual integration comes here.
+**Clarification:** Phase 11 applies the Google Stitch design system and visual polish. Functional test interfaces created during Phases 1–9 are expected to be clean, modular, and usable but unpolished; final visual integration comes here.
 
 **High-Level Requirements:**
 - Consistent visual design system (typography, colours aligned with DLBC brand palette, spacing, components)
@@ -500,11 +537,11 @@ The prototype is currently being developed independently by the project owner be
 
 ---
 
-### Phase 11 — Real-World Testing
+### Phase 12 — Real-World Testing
 
 **Objective:** Compare system performance against actual church recordings and eventually conduct approved live tests.
 
-**Dependencies:** Phases 1–10 (complete, polished application).
+**Dependencies:** Phases 1–11 (complete, polished application).
 
 **High-Level Requirements:**
 - Test with multiple real church recordings of varying quality

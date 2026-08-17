@@ -70,10 +70,53 @@ CREATE TABLE IF NOT EXISTS verification_items (
 
 CREATE INDEX IF NOT EXISTS idx_verification_session
     ON verification_items(session_id, segment_index ASC);
+
+-- Phase 6: Versioned Reporting Standards (editable guidelines, glossary, examples)
+CREATE TABLE IF NOT EXISTS reporting_standards (
+    id TEXT PRIMARY KEY,
+    version INTEGER NOT NULL UNIQUE,
+    version_label TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 0,
+    general_guidelines TEXT NOT NULL,
+    reporter_a_instructions TEXT NOT NULL,
+    reporter_b_instructions TEXT NOT NULL,
+    terminology TEXT NOT NULL,
+    examples TEXT NOT NULL,
+    notes TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_standards_version ON reporting_standards(version DESC);
+CREATE INDEX IF NOT EXISTS idx_standards_active ON reporting_standards(is_active);
+
+-- Phase 6: Generated Reports (Reporter A and Reporter B outputs)
+CREATE TABLE IF NOT EXISTS reports (
+    report_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    transcript_id TEXT,
+    reporter_role TEXT NOT NULL, -- 'reporter_a' | 'reporter_b'
+    standard_version INTEGER NOT NULL,
+    standard_version_label TEXT NOT NULL,
+    status TEXT NOT NULL, -- 'generating' | 'ready' | 'failed'
+    report_title TEXT,
+    report_text TEXT,
+    key_points_json TEXT,
+    scriptures_json TEXT,
+    warnings_json TEXT,
+    evidence_metadata_json TEXT,
+    model_name TEXT,
+    error_message TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_reports_session_role ON reports(session_id, reporter_role, is_active);
+CREATE INDEX IF NOT EXISTS idx_reports_created ON reports(created_at DESC);
 """
 
 # Phase 5 migration: add verification columns to sessions table.
-# Uses individual ALTER statements so each can safely fail if column already exists.
 PHASE5_MIGRATION_COLUMNS = [
     "ALTER TABLE sessions ADD COLUMN verification_status TEXT DEFAULT 'not_started'",
     "ALTER TABLE sessions ADD COLUMN verification_items_total INTEGER DEFAULT 0",
@@ -81,3 +124,11 @@ PHASE5_MIGRATION_COLUMNS = [
     "ALTER TABLE sessions ADD COLUMN verified_text TEXT",
     "ALTER TABLE sessions ADD COLUMN verified_at TEXT",
 ]
+
+# Phase 6 migration: add reporting workflow columns to sessions table.
+PHASE6_MIGRATION_COLUMNS = [
+    "ALTER TABLE sessions ADD COLUMN reporting_status TEXT DEFAULT 'not_started'",
+    "ALTER TABLE sessions ADD COLUMN reporting_completed_at TEXT",
+    "ALTER TABLE sessions ADD COLUMN reporting_standard_version INTEGER",
+]
+

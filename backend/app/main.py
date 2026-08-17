@@ -61,11 +61,13 @@ from app.audio.router import router as audio_router
 from app.transcription.router import router as transcription_router
 from app.sessions.router import router as sessions_router
 from app.verification.router import router as verification_router
+from app.reporting.router import router as reporting_router
 
 app.include_router(audio_router)
 app.include_router(transcription_router)
 app.include_router(sessions_router)
 app.include_router(verification_router)
+app.include_router(reporting_router)
 
 
 

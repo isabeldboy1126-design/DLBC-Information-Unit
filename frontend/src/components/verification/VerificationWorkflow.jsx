@@ -18,6 +18,7 @@ export function VerificationWorkflow({
   onFinalise,
   onConfirmRawAsVerified,
   onPlaySegment,
+  onNavigateToReporting,
 }) {
   const [filter, setFilter] = useState('all') // 'all' | 'pending' | 'resolved'
   const [showAddSegment, setShowAddSegment] = useState(false)
@@ -169,6 +170,17 @@ export function VerificationWorkflow({
             >
               {copiedVerified ? '✓ Copied Verified Transcript!' : '📋 Copy Full Verified Transcript'}
             </button>
+
+            {onNavigateToReporting && (
+              <button
+                type="button"
+                className="btn btn--primary btn--small"
+                onClick={onNavigateToReporting}
+                id="btn-continue-to-reporting"
+              >
+                Continue to Reporting →
+              </button>
+            )}
           </div>
 
           <div className="transcript-content-box verified-transcript-box">
@@ -184,6 +196,22 @@ export function VerificationWorkflow({
               The original Raw Transcript remains unchanged.
             </p>
           </div>
+
+          {onNavigateToReporting && (
+            <div className="verification-next-action-bar">
+              <div className="next-action-text">
+                <strong>Next Workflow Step:</strong> Generate independent Information Unit report drafts (Reporter A & Reporter B) from this Verified Transcript.
+              </div>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={onNavigateToReporting}
+                id="btn-continue-to-reporting-bottom"
+              >
+                Continue to Reporting →
+              </button>
+            </div>
+          )}
         </div>
       </div>
     )

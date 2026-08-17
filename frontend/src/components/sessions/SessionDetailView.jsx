@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { RawTranscriptViewer } from '../transcription/RawTranscriptViewer'
 import { VerificationWorkflow } from '../verification/VerificationWorkflow'
+import { ReportingView } from '../reporting/ReportingView'
 
 export function SessionDetailView({
   session,
@@ -16,12 +17,24 @@ export function SessionDetailView({
   onFinaliseVerification,
   onConfirmRawAsVerified,
 }) {
+  const [activeView, setActiveView] = useState('overview') // 'overview' | 'reporting'
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [editedTitle, setEditedTitle] = useState(session?.title || '')
   const [isSavingTitle, setIsSavingTitle] = useState(false)
   const mediaElementRef = useRef(null)
 
   if (!session) return null
+
+  // If user is currently in Reporting view, render ReportingView
+  if (activeView === 'reporting') {
+    return (
+      <ReportingView
+        session={session}
+        onBack={() => setActiveView('overview')}
+        onNavigateToEditing={() => alert('Editing stage will be implemented in Phase 7.')}
+      />
+    )
+  }
 
   const formatSeconds = (totalSeconds) => {
     if (!totalSeconds && totalSeconds !== 0) return '00:00'
@@ -83,10 +96,12 @@ export function SessionDetailView({
     }
   }
 
-  // Verification status
+  // Verification & Reporting status
   const vStatus = session.verification_status || 'not_started'
+  const rStatus = session.reporting_status || 'not_started'
   const hasTranscript = !!(session.raw_text && session.raw_text.trim())
   const hasAudio = !!(session.audio_file_path || session.recording_id)
+  const isVerified = vStatus === 'complete'
 
   return (
     <div className="session-detail-container">
@@ -96,7 +111,19 @@ export function SessionDetailView({
           ← Back to Sessions History
         </button>
 
-        <span className="session-id-pill">ID: {session.session_id}</span>
+        <div className="top-nav-right-actions">
+          {isVerified && (
+            <button
+              type="button"
+              className="btn btn--primary btn--small"
+              onClick={() => setActiveView('reporting')}
+              id="btn-open-reporting-top"
+            >
+              ⚡ Open Reporting Workspace →
+            </button>
+          )}
+          <span className="session-id-pill">ID: {session.session_id}</span>
+        </div>
       </div>
 
       <div className="card session-detail-card">
@@ -162,16 +189,16 @@ export function SessionDetailView({
           {/* Workflow Stage Indicator */}
           <div className="workflow-stage-indicator">
             <div className={`workflow-stage ${hasAudio ? 'stage--done' : 'stage--pending'}`}>
-              🔊 Audio {hasAudio ? '✅' : '⏳'}
+              🔊 Audio {hasAudio ? '✓' : '⏳'}
             </div>
             <span className="workflow-arrow">→</span>
             <div className={`workflow-stage ${hasTranscript ? 'stage--done' : 'stage--pending'}`}>
-              📝 Raw Transcript {hasTranscript ? '✅' : '⏳'}
+              📝 Raw Transcript {hasTranscript ? '✓' : '⏳'}
             </div>
             <span className="workflow-arrow">→</span>
             <div
               className={`workflow-stage ${
-                vStatus === 'complete'
+                isVerified
                   ? 'stage--done'
                   : vStatus === 'in_progress'
                   ? 'stage--active'
@@ -179,11 +206,47 @@ export function SessionDetailView({
               }`}
             >
               ✓ Verification{' '}
-              {vStatus === 'complete' ? '✅' : vStatus === 'in_progress' ? '🔄' : '⏳'}
+              {isVerified ? '✓' : vStatus === 'in_progress' ? '🔄' : '⏳'}
+            </div>
+            <span className="workflow-arrow">→</span>
+            <div className={`workflow-stage ${isVerified ? 'stage--done' : 'stage--pending'}`}>
+              📜 Verified Transcript {isVerified ? '✓' : '⏳'}
+            </div>
+            <span className="workflow-arrow">→</span>
+            <div
+              className={`workflow-stage ${
+                rStatus === 'reports_ready'
+                  ? 'stage--done'
+                  : rStatus === 'generating'
+                  ? 'stage--active'
+                  : isVerified
+                  ? 'stage--ready'
+                  : 'stage--pending'
+              }`}
+              onClick={() => isVerified && setActiveView('reporting')}
+              style={{ cursor: isVerified ? 'pointer' : 'default' }}
+              title={isVerified ? 'Click to open Reporting Workspace' : 'Requires Verified Transcript'}
+            >
+              ⚡ Reporting{' '}
+              {rStatus === 'reports_ready'
+                ? '✓'
+                : rStatus === 'generating'
+                ? '🔄'
+                : isVerified
+                ? '●'
+                : '⏳'}
             </div>
             <span className="workflow-arrow">→</span>
             <div className="workflow-stage stage--future">
-              📄 Editor <span className="stage-future-label">Phase 6</span>
+              📄 Editing ○
+            </div>
+            <span className="workflow-arrow">→</span>
+            <div className="workflow-stage stage--future">
+              🔍 Proofreading ○
+            </div>
+            <span className="workflow-arrow">→</span>
+            <div className="workflow-stage stage--future">
+              🏆 Final Report ○
             </div>
           </div>
 
@@ -257,6 +320,7 @@ export function SessionDetailView({
           onFinalise={onFinaliseVerification}
           onConfirmRawAsVerified={onConfirmRawAsVerified}
           onPlaySegment={handleJumpToTime}
+          onNavigateToReporting={() => setActiveView('reporting')}
         />
       )}
 
