@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react'
 import { RawTranscriptViewer } from '../transcription/RawTranscriptViewer'
 import { VerificationWorkflow } from '../verification/VerificationWorkflow'
 import { ReportingView } from '../reporting/ReportingView'
+import { EditingView } from '../editing/EditingView'
 
 export function SessionDetailView({
   session,
@@ -17,11 +18,28 @@ export function SessionDetailView({
   onFinaliseVerification,
   onConfirmRawAsVerified,
 }) {
-  const [activeView, setActiveView] = useState('overview') // 'overview' | 'reporting'
+  const getDefaultView = () => {
+    const eStatus = session?.editing_status || 'not_started'
+    const rStatus = session?.reporting_status || 'not_started'
+    if (eStatus === 'complete' || eStatus === 'draft_ready' || eStatus === 'in_review') {
+      return 'editing'
+    }
+    if (rStatus === 'reports_ready') {
+      return 'editing'
+    }
+    return 'overview'
+  }
+
+  const [activeView, setActiveView] = useState(getDefaultView)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [editedTitle, setEditedTitle] = useState(session?.title || '')
   const [isSavingTitle, setIsSavingTitle] = useState(false)
   const mediaElementRef = useRef(null)
+
+  // Synchronize activeView when opening a new session
+  React.useEffect(() => {
+    setActiveView(getDefaultView())
+  }, [session?.session_id])
 
   if (!session) return null
 
@@ -31,7 +49,18 @@ export function SessionDetailView({
       <ReportingView
         session={session}
         onBack={() => setActiveView('overview')}
-        onNavigateToEditing={() => alert('Editing stage will be implemented in Phase 7.')}
+        onNavigateToEditing={() => setActiveView('editing')}
+      />
+    )
+  }
+
+  // If user is currently in Editing view, render EditingView
+  if (activeView === 'editing') {
+    return (
+      <EditingView
+        session={session}
+        onBack={() => setActiveView('overview')}
+        onNavigateToProofreading={() => alert('Proofreading stage will be implemented in Phase 8.')}
       />
     )
   }
@@ -97,11 +126,12 @@ export function SessionDetailView({
   }
 
   // Verification & Reporting status
-  const vStatus = session.verification_status || 'not_started'
-  const rStatus = session.reporting_status || 'not_started'
-  const hasTranscript = !!(session.raw_text && session.raw_text.trim())
-  const hasAudio = !!(session.audio_file_path || session.recording_id)
-  const isVerified = vStatus === 'complete'
+  const vStatus = session?.verification_status || 'not_started'
+  const isVerified = vStatus === 'completed' || !!session?.verified_at || !!session?.verified_text
+  const rStatus = session?.reporting_status || 'not_started'
+  const eStatus = session?.editing_status || 'not_started'
+  const hasAudio = session?.audio_filename || session?.recording_id
+  const hasTranscript = session?.transcript_id || (session?.segment_count && session.segment_count > 0)
 
   return (
     <div className="session-detail-container">
@@ -112,7 +142,16 @@ export function SessionDetailView({
         </button>
 
         <div className="top-nav-right-actions">
-          {isVerified && (
+          {rStatus === 'reports_ready' ? (
+            <button
+              type="button"
+              className="btn btn--primary btn--small"
+              onClick={() => setActiveView('editing')}
+              id="btn-open-editing-top"
+            >
+              ⚡ Open Editing Workspace →
+            </button>
+          ) : isVerified ? (
             <button
               type="button"
               className="btn btn--primary btn--small"
@@ -121,7 +160,7 @@ export function SessionDetailView({
             >
               ⚡ Open Reporting Workspace →
             </button>
-          )}
+          ) : null}
           <span className="session-id-pill">ID: {session.session_id}</span>
         </div>
       </div>
@@ -237,8 +276,30 @@ export function SessionDetailView({
                 : '⏳'}
             </div>
             <span className="workflow-arrow">→</span>
-            <div className="workflow-stage stage--future">
-              📄 Editing ○
+            <div
+              className={`workflow-stage ${
+                eStatus === 'complete'
+                  ? 'stage--done'
+                  : eStatus === 'generating' || eStatus === 'draft_ready' || eStatus === 'in_review'
+                  ? 'stage--active'
+                  : rStatus === 'reports_ready'
+                  ? 'stage--ready'
+                  : 'stage--future'
+              }`}
+              onClick={() => rStatus === 'reports_ready' && setActiveView('editing')}
+              style={{ cursor: rStatus === 'reports_ready' ? 'pointer' : 'default' }}
+              title={rStatus === 'reports_ready' ? 'Click to open Editing Workspace' : 'Requires Reporting stage completion'}
+            >
+              📄 Editing{' '}
+              {eStatus === 'complete'
+                ? '✓'
+                : eStatus === 'generating'
+                ? '🔄'
+                : eStatus === 'draft_ready' || eStatus === 'in_review'
+                ? '●'
+                : rStatus === 'reports_ready'
+                ? '⚡'
+                : '○'}
             </div>
             <span className="workflow-arrow">→</span>
             <div className="workflow-stage stage--future">
@@ -306,6 +367,24 @@ export function SessionDetailView({
           ) : null}
         </div>
       </div>
+
+      {/* If Reports are Ready, show prominent callout to open Editing Workspace */}
+      {rStatus === 'reports_ready' && (
+        <div className="reports-ready-banner" style={{ margin: '1rem 0' }}>
+          <div className="banner-text">
+            <h4>⚡ Reporting Drafts Complete &amp; Ready for Editing</h4>
+            <p>Reporter A (Structure) and Reporter B (Details) have generated independent drafts from the Verified Transcript.</p>
+          </div>
+          <button
+            type="button"
+            className="btn btn--primary btn--large"
+            onClick={() => setActiveView('editing')}
+            id="btn-open-editing-overview"
+          >
+            ⚡ Open Editing Workspace →
+          </button>
+        </div>
+      )}
 
       {/* Phase 5: Verification Workflow */}
       {hasTranscript && (

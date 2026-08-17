@@ -12,7 +12,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from app.database.connection import DB_PATH, get_db_connection
-from app.database.models import INIT_SCHEMA_SQL, PHASE5_MIGRATION_COLUMNS, PHASE6_MIGRATION_COLUMNS
+from app.database.models import INIT_SCHEMA_SQL, PHASE5_MIGRATION_COLUMNS, PHASE6_MIGRATION_COLUMNS, PHASE7_MIGRATION_COLUMNS
 
 
 class SessionRepository:
@@ -31,6 +31,12 @@ class SessionRepository:
                     pass  # Column already exists
             # Phase 6 migration: add reporting columns (safe if already exist)
             for alter_sql in PHASE6_MIGRATION_COLUMNS:
+                try:
+                    await conn.execute(alter_sql)
+                except Exception:
+                    pass  # Column already exists
+            # Phase 7 migration: add editing columns (safe if already exist)
+            for alter_sql in PHASE7_MIGRATION_COLUMNS:
                 try:
                     await conn.execute(alter_sql)
                 except Exception:
@@ -345,7 +351,9 @@ class SessionRepository:
                        verification_status, verification_items_total,
                        verification_items_resolved, verified_at,
                        reporting_status, reporting_completed_at,
-                       reporting_standard_version
+                       reporting_standard_version,
+                       editing_status, editing_completed_at,
+                       editing_standard_version
                 FROM sessions
                 ORDER BY date_created DESC
                 """

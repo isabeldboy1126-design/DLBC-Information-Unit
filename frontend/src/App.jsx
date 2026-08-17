@@ -62,7 +62,7 @@ function App() {
           <div>
             <h1>DLBC Information Unit App</h1>
             <p className="app-tagline">
-              Phase 1–4 &middot; Church Service Sessions, Live Audio Capture &amp; Azure Transcription Pipeline
+              Church Service Sessions &middot; Transcription, Verification, AI Reporting &amp; AI Editing Pipeline
             </p>
           </div>
         </div>
@@ -76,7 +76,7 @@ function App() {
               onClick={() => handleTabChange('sessions')}
               id="tab-sessions-history"
             >
-              📋 Church Service Sessions (Phase 4)
+              📋 Church Service Sessions
             </button>
             <button
               type="button"

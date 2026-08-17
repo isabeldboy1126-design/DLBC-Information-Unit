@@ -114,6 +114,49 @@ CREATE TABLE IF NOT EXISTS reports (
 
 CREATE INDEX IF NOT EXISTS idx_reports_session_role ON reports(session_id, reporter_role, is_active);
 CREATE INDEX IF NOT EXISTS idx_reports_created ON reports(created_at DESC);
+
+-- Phase 7: Versioned Editor Standards (editable compilation guidelines, glossary, examples)
+CREATE TABLE IF NOT EXISTS editor_standards (
+    id TEXT PRIMARY KEY,
+    version INTEGER NOT NULL UNIQUE,
+    version_label TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 0,
+    general_guidelines TEXT NOT NULL,
+    compilation_guidance TEXT NOT NULL,
+    terminology TEXT NOT NULL,
+    approved_examples TEXT NOT NULL,
+    notes TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_editor_standards_version ON editor_standards(version DESC);
+CREATE INDEX IF NOT EXISTS idx_editor_standards_active ON editor_standards(is_active);
+
+-- Phase 7: Edited Report Revisions (AI generated & human edited drafts)
+CREATE TABLE IF NOT EXISTS edited_reports (
+    revision_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    transcript_id TEXT,
+    reporter_a_id TEXT,
+    reporter_b_id TEXT,
+    standard_version INTEGER NOT NULL,
+    standard_version_label TEXT NOT NULL,
+    revision_number INTEGER NOT NULL,
+    revision_source TEXT NOT NULL, -- 'ai_generated' | 'human_edited' | 'ai_regenerated'
+    report_title TEXT,
+    report_text TEXT NOT NULL,
+    review_notes_json TEXT,
+    source_uncertainties_json TEXT,
+    model_name TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_edited_reports_session ON edited_reports(session_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_edited_reports_rev ON edited_reports(session_id, revision_number DESC);
+CREATE INDEX IF NOT EXISTS idx_edited_reports_created ON edited_reports(created_at DESC);
 """
 
 # Phase 5 migration: add verification columns to sessions table.
@@ -131,4 +174,12 @@ PHASE6_MIGRATION_COLUMNS = [
     "ALTER TABLE sessions ADD COLUMN reporting_completed_at TEXT",
     "ALTER TABLE sessions ADD COLUMN reporting_standard_version INTEGER",
 ]
+
+# Phase 7 migration: add editing workflow columns to sessions table.
+PHASE7_MIGRATION_COLUMNS = [
+    "ALTER TABLE sessions ADD COLUMN editing_status TEXT DEFAULT 'not_started'",
+    "ALTER TABLE sessions ADD COLUMN editing_completed_at TEXT",
+    "ALTER TABLE sessions ADD COLUMN editing_standard_version INTEGER",
+]
+
 

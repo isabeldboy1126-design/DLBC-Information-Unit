@@ -156,6 +156,12 @@ export function SessionHistoryList({
                     {s.reporting_status === 'partial' && (
                       <span className="badge badge--warning">⚡ Report Draft</span>
                     )}
+                    {s.editing_status === 'complete' && (
+                      <span className="badge badge--success">✓ Editing Complete</span>
+                    )}
+                    {(s.editing_status === 'draft_ready' || s.editing_status === 'in_review') && (
+                      <span className="badge badge--primary">📝 In Editing</span>
+                    )}
                   </div>
                 </div>
 
@@ -180,6 +186,9 @@ export function SessionHistoryList({
                       {s.reporting_status === 'reports_ready' && (
                         <span className="artifact-tag tag--reported">✓ Reports (A & B)</span>
                       )}
+                      {(s.editing_status === 'complete' || s.editing_status === 'draft_ready' || s.editing_status === 'in_review') && (
+                        <span className="artifact-tag tag--edited">✓ Edited Report</span>
+                      )}
                       {s.flag_count > 0 && s.verification_status !== 'complete' && (
                         <span className="artifact-tag tag--flag" title={`${s.flag_count} items flagged for verification`}>
                           ⚠️ {s.flag_count} {s.flag_count === 1 ? 'Flag' : 'Flags'}
@@ -201,7 +210,15 @@ export function SessionHistoryList({
                     className="btn btn--primary btn--small"
                     onClick={() => onOpenSession(s.session_id)}
                   >
-                    Open Session →
+                    {s.editing_status === 'complete'
+                      ? 'Ready for Proofreading →'
+                      : s.editing_status === 'draft_ready' || s.editing_status === 'in_review'
+                      ? 'Continue Editing →'
+                      : s.reporting_status === 'reports_ready'
+                      ? 'Continue to Editing →'
+                      : s.verification_status === 'complete'
+                      ? 'Continue to Reporting →'
+                      : 'Open Session →'}
                   </button>
 
                   <button
