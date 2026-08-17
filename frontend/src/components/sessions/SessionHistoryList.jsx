@@ -156,7 +156,13 @@ export function SessionHistoryList({
                     {s.reporting_status === 'partial' && (
                       <span className="badge badge--warning">⚡ Report Draft</span>
                     )}
-                    {s.editing_status === 'complete' && (
+                    {s.proofreading_status === 'complete' && (
+                      <span className="badge badge--success">✓ Proofreading Complete</span>
+                    )}
+                    {(s.proofreading_status === 'ready_for_review' || s.proofreading_status === 'generating') && (
+                      <span className="badge badge--primary">🔍 In Proofreading</span>
+                    )}
+                    {s.editing_status === 'complete' && s.proofreading_status !== 'complete' && s.proofreading_status !== 'ready_for_review' && (
                       <span className="badge badge--success">✓ Editing Complete</span>
                     )}
                     {(s.editing_status === 'draft_ready' || s.editing_status === 'in_review') && (
@@ -189,6 +195,9 @@ export function SessionHistoryList({
                       {(s.editing_status === 'complete' || s.editing_status === 'draft_ready' || s.editing_status === 'in_review') && (
                         <span className="artifact-tag tag--edited">✓ Edited Report</span>
                       )}
+                      {(s.proofreading_status === 'complete' || s.proofreading_status === 'ready_for_review') && (
+                        <span className="artifact-tag tag--verified">✓ Proofread</span>
+                      )}
                       {s.flag_count > 0 && s.verification_status !== 'complete' && (
                         <span className="artifact-tag tag--flag" title={`${s.flag_count} items flagged for verification`}>
                           ⚠️ {s.flag_count} {s.flag_count === 1 ? 'Flag' : 'Flags'}
@@ -210,7 +219,11 @@ export function SessionHistoryList({
                     className="btn btn--primary btn--small"
                     onClick={() => onOpenSession(s.session_id)}
                   >
-                    {s.editing_status === 'complete'
+                    {s.proofreading_status === 'complete'
+                      ? 'Ready for Final Report →'
+                      : s.proofreading_status === 'ready_for_review'
+                      ? 'Review Proofreading →'
+                      : s.editing_status === 'complete'
                       ? 'Ready for Proofreading →'
                       : s.editing_status === 'draft_ready' || s.editing_status === 'in_review'
                       ? 'Continue Editing →'

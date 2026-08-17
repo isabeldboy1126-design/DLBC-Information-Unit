@@ -392,61 +392,55 @@ The prototype is currently being developed independently by the project owner be
 **Dependencies:** Phase 6 (Reporter A and Reporter B drafts exist).
 
 **High-Level Requirements:**
-- Editor knowledge management UI (upload guidelines, rules, terminology, examples)
-- Store and retrieve Editor knowledge
-- Send Reporter A draft + Reporter B draft + Verified Transcript + Editor knowledge to AI provider via backend
-- Receive compiled edited report highlighting synthesis choices
-- Display edited report for human Editor review
-- Side-by-side or comparison view: report drafts vs. edited report
-- Human can correct the edited report
-- Human approves or rejects the edited report
-- "Automatically Continue to Proofreading" setting (OFF by default)
-- Provider abstraction (EditorService)
+- Editor knowledge management UI (guidelines, compilation rules, church terminology, approved examples)
+- Store and retrieve versioned Editor standards in SQLite
+- Send Reporter A draft + Reporter B draft + Verified Transcript + Editor standard to Gemini via backend
+- Receive compiled edited report highlighting synthesis choices and review notes
+- Display edited report for human Editor review with tabbed source drawer (Reporter A, Reporter B, Verified Transcript)
+- Human can correct the edited report and save new revisions
+- Human approves the edited report and advances session to Proofreading
+- Provider abstraction (EditingProvider, GeminiEditingProvider)
 
 **Acceptance Criteria:**
-- [ ] Editor knowledge can be uploaded, viewed, updated, and removed via the UI
-- [ ] Reporter A and Reporter B drafts are compiled into a unified edited report
-- [ ] Edited report is displayed alongside the drafts/transcript for comparison
-- [ ] Human can make corrections to the edited report
-- [ ] Human can approve the edited report
-- [ ] Approved edited report is stored as a separate stage
-- [ ] Auto-continue to proofreading defaults to OFF
-- [ ] AI Editor does not proceed without verified transcript and report drafts
+- [x] Editor knowledge can be viewed, updated, versioned, and activated via the UI
+- [x] Reporter A and Reporter B drafts are compiled into a unified edited report
+- [x] Edited report is displayed alongside the drafts/transcript for comparison
+- [x] Human can make corrections to the edited report and save revisions
+- [x] Human can approve the edited report
+- [x] Approved edited report is stored as a separate stage with durable revision history
+- [x] AI Editor does not proceed without verified transcript and report drafts
 
-**Major Risks:** R06 (AI altering meaning), R05 (provider failure), R08 (cost), R10 (premature automation).
-
-**Status:** ⚪ Not Started
+**Status:** ✅ Completed (2026-08-17)
 
 ---
 
 ### Phase 8 — AI Proofreader
 
-**Objective:** Implement separate proofreading logic with warnings and human review.
+**Objective:** Conservative final language-quality check on the human-reviewed Edited Report to catch spelling, grammar, punctuation, and Scripture formatting slips with human review.
 
 **Dependencies:** Phase 7 (edited report exists).
 
 **High-Level Requirements:**
-- Proofreader knowledge management UI (upload guidelines, rules, examples)
-- Store and retrieve Proofreader knowledge
-- Send edited report + Proofreader knowledge to AI provider via backend
-- Receive proofread output with identified issues
-- Display proofread report with highlighted changes/warnings
-- Identify possible meaning changes
-- Identify suspicious differences between verified transcript and edited report
-- Human can accept/reject individual proofreading suggestions
-- Human approves final proofread version
-- Provider abstraction (ProofreaderService)
+- Proofreader knowledge management UI (guidelines, church terminology, Scripture citation formatting rules)
+- Store and retrieve versioned Proofreading standards in SQLite
+- Send Edited Report + Proofreader standard to Gemini via backend
+- Receive structured proofread output (`proofread_title`, `proofread_text`, `changes` list, `review_notes`)
+- 16 Protected Backend Guardrails enforcing zero meaning changes, non-fabrication, and non-overwriting
+- Display proofread report alongside structured diff/changes breakdown
+- Human can manually adjust proofread text or accept proofread version
+- Human approves proofread version to prepare session for Final Report (Phase 9)
+- Provider abstraction (ProofreadingProvider, GeminiProofreadingProvider)
 
 **Acceptance Criteria:**
-- [ ] Proofreader knowledge can be managed via the UI
-- [ ] Proofread output is returned with identifiable changes
-- [ ] Changes/warnings are displayed to the human reviewer
-- [ ] Possible meaning changes are flagged
-- [ ] Human can accept or reject suggestions
-- [ ] Proofread report is stored as a separate stage from the edited report
-- [ ] Proofreader is logically separate from the Editor (separate service, separate knowledge)
+- [x] Proofreader knowledge can be managed and versioned via the UI
+- [x] Proofread output is returned with identifiable structured changes
+- [x] Changes and review notes are displayed to the human reviewer
+- [x] Human can make manual adjustments and save revisions
+- [x] Human can accept the proofread version
+- [x] Proofread report is stored as a separate stage from the edited report
+- [x] Proofreader is logically separate from the Editor (separate service, separate knowledge)
 
-**Major Risks:** R06 (meaning changes), R05 (provider failure).
+**Status:** ✅ Completed (2026-08-17)
 
 **Status:** ⚪ Not Started
 

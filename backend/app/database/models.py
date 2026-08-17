@@ -157,6 +157,47 @@ CREATE TABLE IF NOT EXISTS edited_reports (
 CREATE INDEX IF NOT EXISTS idx_edited_reports_session ON edited_reports(session_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_edited_reports_rev ON edited_reports(session_id, revision_number DESC);
 CREATE INDEX IF NOT EXISTS idx_edited_reports_created ON edited_reports(created_at DESC);
+
+-- Phase 8: Versioned Proofreading Standards (capitalization, punctuation, scriptures, terminology)
+CREATE TABLE IF NOT EXISTS proofreading_standards (
+    id TEXT PRIMARY KEY,
+    version INTEGER NOT NULL UNIQUE,
+    version_label TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 0,
+    guidelines TEXT NOT NULL,
+    terminology TEXT NOT NULL,
+    formatting_rules TEXT NOT NULL,
+    notes TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_proofreading_standards_version ON proofreading_standards(version DESC);
+CREATE INDEX IF NOT EXISTS idx_proofreading_standards_active ON proofreading_standards(is_active);
+
+-- Phase 8: Proofread Report Revisions (conservative AI check & human accepted/adjusted versions)
+CREATE TABLE IF NOT EXISTS proofread_reports (
+    revision_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    edited_report_revision_id TEXT,
+    standard_version INTEGER NOT NULL,
+    standard_version_label TEXT NOT NULL,
+    revision_number INTEGER NOT NULL,
+    revision_source TEXT NOT NULL, -- 'ai_proofread' | 'human_reviewed'
+    proofread_title TEXT,
+    proofread_text TEXT NOT NULL,
+    changes_json TEXT,
+    review_notes_json TEXT,
+    model_name TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    is_accepted INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_proofread_reports_session ON proofread_reports(session_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_proofread_reports_rev ON proofread_reports(session_id, revision_number DESC);
+CREATE INDEX IF NOT EXISTS idx_proofread_reports_created ON proofread_reports(created_at DESC);
 """
 
 # Phase 5 migration: add verification columns to sessions table.
@@ -180,6 +221,14 @@ PHASE7_MIGRATION_COLUMNS = [
     "ALTER TABLE sessions ADD COLUMN editing_status TEXT DEFAULT 'not_started'",
     "ALTER TABLE sessions ADD COLUMN editing_completed_at TEXT",
     "ALTER TABLE sessions ADD COLUMN editing_standard_version INTEGER",
+]
+
+# Phase 8 migration: add proofreading workflow columns to sessions table.
+PHASE8_MIGRATION_COLUMNS = [
+    "ALTER TABLE sessions ADD COLUMN proofreading_status TEXT DEFAULT 'not_started'",
+    "ALTER TABLE sessions ADD COLUMN proofreading_completed_at TEXT",
+    "ALTER TABLE sessions ADD COLUMN proofreading_standard_version INTEGER",
+    "ALTER TABLE sessions ADD COLUMN accepted_proofread_revision_id TEXT",
 ]
 
 

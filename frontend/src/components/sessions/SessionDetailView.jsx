@@ -3,6 +3,7 @@ import { RawTranscriptViewer } from '../transcription/RawTranscriptViewer'
 import { VerificationWorkflow } from '../verification/VerificationWorkflow'
 import { ReportingView } from '../reporting/ReportingView'
 import { EditingView } from '../editing/EditingView'
+import { ProofreadingView } from '../proofreading/ProofreadingView'
 
 export function SessionDetailView({
   session,
@@ -19,9 +20,17 @@ export function SessionDetailView({
   onConfirmRawAsVerified,
 }) {
   const getDefaultView = () => {
+    const pStatus = session?.proofreading_status || 'not_started'
     const eStatus = session?.editing_status || 'not_started'
     const rStatus = session?.reporting_status || 'not_started'
-    if (eStatus === 'complete' || eStatus === 'draft_ready' || eStatus === 'in_review') {
+
+    if (pStatus === 'complete' || pStatus === 'ready_for_review' || pStatus === 'generating') {
+      return 'proofreading'
+    }
+    if (eStatus === 'complete') {
+      return 'proofreading'
+    }
+    if (eStatus === 'draft_ready' || eStatus === 'in_review' || eStatus === 'generating') {
       return 'editing'
     }
     if (rStatus === 'reports_ready') {
@@ -60,7 +69,18 @@ export function SessionDetailView({
       <EditingView
         session={session}
         onBack={() => setActiveView('overview')}
-        onNavigateToProofreading={() => alert('Proofreading stage will be implemented in Phase 8.')}
+        onNavigateToProofreading={() => setActiveView('proofreading')}
+      />
+    )
+  }
+
+  // If user is currently in Proofreading view, render ProofreadingView
+  if (activeView === 'proofreading') {
+    return (
+      <ProofreadingView
+        session={session}
+        onBack={() => setActiveView('overview')}
+        onNavigateToFinalReport={() => alert('Final Report stage will be implemented in Phase 9.')}
       />
     )
   }
@@ -125,11 +145,12 @@ export function SessionDetailView({
     }
   }
 
-  // Verification & Reporting status
+  // Verification, Reporting, Editing & Proofreading status
   const vStatus = session?.verification_status || 'not_started'
   const isVerified = vStatus === 'completed' || !!session?.verified_at || !!session?.verified_text
   const rStatus = session?.reporting_status || 'not_started'
   const eStatus = session?.editing_status || 'not_started'
+  const pStatus = session?.proofreading_status || 'not_started'
   const hasAudio = session?.audio_filename || session?.recording_id
   const hasTranscript = session?.transcript_id || (session?.segment_count && session.segment_count > 0)
 
@@ -142,7 +163,25 @@ export function SessionDetailView({
         </button>
 
         <div className="top-nav-right-actions">
-          {rStatus === 'reports_ready' ? (
+          {pStatus === 'complete' ? (
+            <button
+              type="button"
+              className="btn btn--success btn--small"
+              onClick={() => setActiveView('proofreading')}
+              id="btn-open-proofreading-top"
+            >
+              ✓ Proofreading Complete →
+            </button>
+          ) : eStatus === 'complete' ? (
+            <button
+              type="button"
+              className="btn btn--primary btn--small"
+              onClick={() => setActiveView('proofreading')}
+              id="btn-open-proofreading-top"
+            >
+              🔍 Open Proofreading Workspace →
+            </button>
+          ) : rStatus === 'reports_ready' ? (
             <button
               type="button"
               className="btn btn--primary btn--small"
@@ -302,8 +341,30 @@ export function SessionDetailView({
                 : '○'}
             </div>
             <span className="workflow-arrow">→</span>
-            <div className="workflow-stage stage--future">
-              🔍 Proofreading ○
+            <div
+              className={`workflow-stage ${
+                pStatus === 'complete'
+                  ? 'stage--done'
+                  : pStatus === 'generating' || pStatus === 'ready_for_review'
+                  ? 'stage--active'
+                  : eStatus === 'complete'
+                  ? 'stage--ready'
+                  : 'stage--future'
+              }`}
+              onClick={() => eStatus === 'complete' && setActiveView('proofreading')}
+              style={{ cursor: eStatus === 'complete' ? 'pointer' : 'default' }}
+              title={eStatus === 'complete' ? 'Click to open Proofreading Workspace' : 'Requires Editing stage completion'}
+            >
+              🔍 Proofreading{' '}
+              {pStatus === 'complete'
+                ? '✓'
+                : pStatus === 'generating'
+                ? '🔄'
+                : pStatus === 'ready_for_review'
+                ? '●'
+                : eStatus === 'complete'
+                ? '⚡'
+                : '○'}
             </div>
             <span className="workflow-arrow">→</span>
             <div className="workflow-stage stage--future">
@@ -368,8 +429,38 @@ export function SessionDetailView({
         </div>
       </div>
 
-      {/* If Reports are Ready, show prominent callout to open Editing Workspace */}
-      {rStatus === 'reports_ready' && (
+      {/* If Proofreading is Complete, show prominent callout for Final Report */}
+      {pStatus === 'complete' ? (
+        <div className="reports-ready-banner" style={{ margin: '1rem 0', borderColor: 'var(--color-success, #22c55e)' }}>
+          <div className="banner-text">
+            <h4>✓ Proofreading Complete &amp; Ready for Final Report</h4>
+            <p>The report has been verified, edited, and proofread. It is now ready for final review and document export.</p>
+          </div>
+          <button
+            type="button"
+            className="btn btn--success btn--large"
+            onClick={() => setActiveView('proofreading')}
+            id="btn-open-proofreading-overview"
+          >
+            ✓ View Proofread Report →
+          </button>
+        </div>
+      ) : eStatus === 'complete' ? (
+        <div className="reports-ready-banner" style={{ margin: '1rem 0' }}>
+          <div className="banner-text">
+            <h4>🔍 Edited Report Ready for AI Proofreading</h4>
+            <p>The human-approved Edited Report is compiled and ready for conservative AI proofreading and Scripture checking.</p>
+          </div>
+          <button
+            type="button"
+            className="btn btn--primary btn--large"
+            onClick={() => setActiveView('proofreading')}
+            id="btn-open-proofreading-overview"
+          >
+            🔍 Open Proofreading Workspace →
+          </button>
+        </div>
+      ) : rStatus === 'reports_ready' ? (
         <div className="reports-ready-banner" style={{ margin: '1rem 0' }}>
           <div className="banner-text">
             <h4>⚡ Reporting Drafts Complete &amp; Ready for Editing</h4>
@@ -384,7 +475,7 @@ export function SessionDetailView({
             ⚡ Open Editing Workspace →
           </button>
         </div>
-      )}
+      ) : null}
 
       {/* Phase 5: Verification Workflow */}
       {hasTranscript && (
