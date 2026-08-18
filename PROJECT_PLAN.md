@@ -442,35 +442,35 @@ The prototype is currently being developed independently by the project owner be
 
 **Status:** ✅ Completed (2026-08-17)
 
-**Status:** ⚪ Not Started
-
 ---
 
-### Phase 9 — Final Document
+### Phase 9 — Final Report & Downloadable Document
 
-**Objective:** Human final review and basic document generation.
+**Objective:** Produce an immutable Final Report derived deterministically from the human-approved Proofread Report and generate a professional, editable Microsoft Word (.docx) document for external distribution. Also enable exporting the Phase 7 Edited Report as .docx.
 
 **Dependencies:** Phase 8 (proofread report exists).
 
+**Scope Note:** Google Drive, Google Docs, OAuth, and cloud collaboration are deferred to a future enhancement. Document generation is deterministic code-based via `python-docx` without AI modification of approved wording.
+
 **High-Level Requirements:**
-- Human final review of the proofread report
-- Human can make final corrections
-- Human approves the final report
-- Generate a distributable document from the approved report
-- Store the final approved report as the last stage
+- Finalize human-approved Proofread Report as an immutable Final Report stage in SQLite
+- Deterministic DocumentService with clean typography, 1-inch margins, metadata header card, and markdown-to-DOCX conversion
+- Word (.docx) export for Final Document with human-readable filenames (`[Message Title] - [Date].docx`)
+- Word (.docx) export for Phase 7 Edited Report directly from Editing Workspace without altering workflow status
+- Safety check for unsaved edits before exporting
+- Post-finalization human adjustments preserved as separate revisions
+- Complete chain preserved: Audio → Raw Transcript → Verified Transcript → Reporter A & B → Edited Report → Proofread Report → Final Report → Downloadable DOCX
 
 **Acceptance Criteria:**
-- [ ] Human can review and correct the proofread report
-- [ ] Human can approve the final version
-- [ ] A document is generated in at least one distributable format
-- [ ] Final approved report is stored separately
-- [ ] The complete chain (audio → raw transcript → verified → reported → edited → proofread → final) is intact and navigable
+- [x] Human can finalize the approved proofread report
+- [x] Final report is stored as a separate immutable stage with revision history
+- [x] DocumentService deterministically generates valid, editable `.docx` files
+- [x] Downloadable filenames are human-readable (no UUIDs or audio hashes)
+- [x] Phase 7 Edited Report can be exported as `.docx` independently
+- [x] Unsaved edits are safeguarded against silent loss
+- [x] Complete stage chain (Audio → Raw → Verified → Reported → Edited → Proofread → Final) is intact and navigable
 
-**Major Risks:** Minimal at this stage if previous phases are solid.
-
-**Unresolved Decision:** Output format(s) — DOCX, PDF, plain text, or multiple. To be decided before implementation.
-
-**Status:** ⚪ Not Started
+**Status:** ✅ Completed (2026-08-17)
 
 ---
 

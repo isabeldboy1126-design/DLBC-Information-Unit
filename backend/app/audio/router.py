@@ -57,6 +57,14 @@ async def audio_stream_websocket(websocket: WebSocket):
     current_session_id = None
     live_transcription: Optional[LiveTranscriptionSession] = None
     loop = asyncio.get_event_loop()
+    ws_lock = asyncio.Lock()
+
+    async def safe_send_json(payload: dict):
+        try:
+            async with ws_lock:
+                await websocket.send_json(payload)
+        except Exception as ws_err:
+            pass
 
     try:
         while True:
@@ -67,7 +75,7 @@ async def audio_stream_websocket(websocket: WebSocket):
                 try:
                     payload = json.loads(message["text"])
                 except Exception:
-                    await websocket.send_json({"status": "error", "message": "Invalid JSON control payload"})
+                    await safe_send_json({"status": "error", "message": "Invalid JSON control payload"})
                     continue
 
                 msg_type = payload.get("type")
@@ -113,7 +121,7 @@ async def audio_stream_websocket(websocket: WebSocket):
                             sample_rate=sample_rate,
                             channels=channels,
                             language_code="en-NG",
-                            ws_send_callback=websocket.send_json,
+                            ws_send_callback=safe_send_json,
                             event_loop=loop,
                         )
                         live_transcription.start()
@@ -121,7 +129,7 @@ async def audio_stream_websocket(websocket: WebSocket):
                         print(f"Notice: Failed to initialize live transcription: {lt_err}")
                         live_transcription = None
 
-                    await websocket.send_json({
+                    await safe_send_json({
                         "status": "ready",
                         "recordingId": current_session.session_id,
                         "sessionId": current_session_id,
@@ -156,7 +164,7 @@ async def audio_stream_websocket(websocket: WebSocket):
                             except Exception as db_err:
                                 print(f"Notice: Error finalizing session in DB: {db_err}")
 
-                        await websocket.send_json({
+                        await safe_send_json({
                             "status": "finalized",
                             "recording": summary,
                             "transcript": transcript_summary,
@@ -167,10 +175,10 @@ async def audio_stream_websocket(websocket: WebSocket):
                         live_transcription = None
                         break
                     else:
-                        await websocket.send_json({"status": "error", "message": "No active session to stop"})
+                        await safe_send_json({"status": "error", "message": "No active session to stop"})
 
                 elif msg_type == "ping":
-                    await websocket.send_json({"type": "pong"})
+                    await safe_send_json({"type": "pong"})
 
             # Handle binary PCM chunks
             elif "bytes" in message:
@@ -185,11 +193,12 @@ async def audio_stream_websocket(websocket: WebSocket):
 
                     # Periodically send progress or ack
                     if current_session.chunk_count % 20 == 0:
-                        await websocket.send_json({
+                        await safe_send_json({
                             "type": "progress",
                             "totalBytes": current_session.total_bytes,
                             "chunkCount": current_session.chunk_count,
                         })
+
 
     except WebSocketDisconnect:
         # If the browser closes or crashes abruptly, auto-finalize to save captured audio and transcript!

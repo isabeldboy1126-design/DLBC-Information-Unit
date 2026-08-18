@@ -334,3 +334,44 @@ async def complete_editing(session_id: str):
         "editing_completed_at": updated_session.get("editing_completed_at"),
         "message": "Editing completed successfully. Ready for Proofreading.",
     }
+
+
+@router.get("/sessions/{session_id}/export-docx")
+async def export_edited_report_docx(session_id: str):
+    """
+    Exports the CURRENT SAVED Edited Report as a downloadable Microsoft Word (.docx) file.
+    Does NOT mark editing complete or alter workflow status.
+    """
+    from fastapi.responses import StreamingResponse
+    from app.services.document_service import document_service
+
+    session = await session_repo.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found.")
+
+    active_rev = await editing_repo.get_active_edited_report(session_id)
+    if not active_rev or not active_rev.get("report_text"):
+        raise HTTPException(
+            status_code=400,
+            detail="No saved Edited Report found to export. Please compile or save an edited draft first.",
+        )
+
+    title = active_rev.get("report_title") or session.get("title", "Edited Message Report")
+    programme = session.get("metadata", {}).get("programme") or session.get("programme")
+    date_str = session.get("date_created") or session.get("created_at")
+
+    filename = document_service.generate_filename(title, programme, date_str, suffix="Edited Draft")
+    docx_stream = document_service.generate_edited_report_docx(
+        report_title=title,
+        report_text=active_rev["report_text"],
+        session_metadata=session,
+    )
+
+    return StreamingResponse(
+        docx_stream,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-cache",
+        },
+    )

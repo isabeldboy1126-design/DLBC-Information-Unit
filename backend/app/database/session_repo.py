@@ -18,6 +18,7 @@ from app.database.models import (
     PHASE6_MIGRATION_COLUMNS,
     PHASE7_MIGRATION_COLUMNS,
     PHASE8_MIGRATION_COLUMNS,
+    PHASE9_MIGRATION_COLUMNS,
 )
 
 
@@ -49,6 +50,12 @@ class SessionRepository:
                     pass  # Column already exists
             # Phase 8 migration: add proofreading columns (safe if already exist)
             for alter_sql in PHASE8_MIGRATION_COLUMNS:
+                try:
+                    await conn.execute(alter_sql)
+                except Exception:
+                    pass  # Column already exists
+            # Phase 9 migration: add final report columns (safe if already exist)
+            for alter_sql in PHASE9_MIGRATION_COLUMNS:
                 try:
                     await conn.execute(alter_sql)
                 except Exception:
@@ -367,7 +374,8 @@ class SessionRepository:
                        editing_status, editing_completed_at,
                        editing_standard_version,
                        proofreading_status, proofreading_completed_at,
-                       proofreading_standard_version, accepted_proofread_revision_id
+                       proofreading_standard_version, accepted_proofread_revision_id,
+                       final_report_status, final_report_completed_at, final_report_id
                 FROM sessions
                 ORDER BY date_created DESC
                 """

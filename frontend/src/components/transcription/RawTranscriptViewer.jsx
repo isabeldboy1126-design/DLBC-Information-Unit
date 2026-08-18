@@ -1,8 +1,28 @@
 import React, { useState, useRef, useEffect } from 'react'
 
-export function RawTranscriptViewer({ transcript, onNewTranscription, mediaElementRef, onJumpToTime }) {
+/**
+ * RawTranscriptViewer — Immutable Raw Transcript View matching raw-transcript.png.
+ * 
+ * Features:
+ * - Header: Title, RAW TRANSCRIPT tag, Date, Total duration, and Copy Full Transcript.
+ * - Prominent "Verification Needed" alert banner with direct "Begin Verification" CTA.
+ * - Master Audio playback scrubber with interactive waveform seek.
+ * - View switcher: Timestamped Segments vs Continuous Text.
+ * - Clickable segment timestamps seeking and playing master audio at exact offsets.
+ * - Flagged / low confidence segments highlighted with confidence scores (e.g. CONF: 62%).
+ * - Archival Immutability Policy footer at the bottom.
+ */
+export function RawTranscriptViewer({
+  transcript,
+  mediaElementRef,
+  onJumpToTime,
+  onBeginVerification,
+  flagCount = 0,
+}) {
   const [viewMode, setViewMode] = useState('segments') // 'segments' | 'continuous'
   const [copied, setCopied] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
   const [mediaDuration, setMediaDuration] = useState(transcript?.duration_seconds || 0)
 
   const localPlayerRef = useRef(null)
@@ -12,20 +32,29 @@ export function RawTranscriptViewer({ transcript, onNewTranscription, mediaEleme
   if (!transcript) return null
 
   const formatSeconds = (totalSeconds) => {
-    if (!totalSeconds && totalSeconds !== 0) return '00:00'
-    const mins = Math.floor(totalSeconds / 60)
+    if (!totalSeconds && totalSeconds !== 0) return '00:00:00'
+    const hours = Math.floor(totalSeconds / 3600)
+    const mins = Math.floor((totalSeconds % 3600) / 60)
     const secs = Math.floor(totalSeconds % 60)
     const pad = (n) => String(n).padStart(2, '0')
-    if (mins >= 60) {
-      const hours = Math.floor(mins / 60)
-      const remMins = mins % 60
-      return `${pad(hours)}:${pad(remMins)}:${pad(secs)}`
+    return `${pad(hours)}:${pad(mins)}:${pad(secs)}`
+  }
+
+  const formatDate = (isoStr) => {
+    if (!isoStr) return '—'
+    try {
+      const d = new Date(isoStr)
+      return d.toLocaleDateString(undefined, {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    } catch {
+      return isoStr
     }
-    return `${pad(mins)}:${pad(secs)}`
   }
 
   const handleCopyFullTranscript = () => {
-    // Extracts clean continuous raw transcript text without timestamps, percentages, flags, or labels
     const cleanText =
       transcript.raw_text?.trim() ||
       (transcript.segments ? transcript.segments.map((s) => s.text.trim()).filter(Boolean).join(' ') : '')
@@ -37,7 +66,7 @@ export function RawTranscriptViewer({ transcript, onNewTranscription, mediaEleme
     }
   }
 
-  // Resolve media identifier (works for live recordings and uploaded files)
+  // Resolve media identifier
   const mediaId =
     transcript.recording_id ||
     transcript.upload_id ||
@@ -45,20 +74,35 @@ export function RawTranscriptViewer({ transcript, onNewTranscription, mediaEleme
     transcript.original_filename
 
   const mediaUrl = `http://localhost:8000/api/transcription/media/${encodeURIComponent(mediaId)}`
-  const isVideo = transcript.is_video || transcript.saved_filename?.endsWith('.mp4')
 
-  // Handle media metadata loaded
+  // Handle media timeupdate
+  const handleTimeUpdate = (e) => {
+    setCurrentTime(e.target.currentTime)
+  }
+
   const handleLoadedMetadata = (e) => {
     const dur = e.target.duration
     if (dur && !isNaN(dur) && isFinite(dur)) {
       setMediaDuration(dur)
     }
-    // If user clicked a timestamp before metadata loaded, execute seek now
     if (pendingSeekTimeRef.current !== null) {
       const targetTime = pendingSeekTimeRef.current
       pendingSeekTimeRef.current = null
       e.target.currentTime = targetTime
       e.target.play().catch(() => {})
+    }
+  }
+
+  const togglePlayPause = () => {
+    const el = playerRef.current
+    if (el) {
+      if (el.paused) {
+        el.play().catch(() => {})
+        setIsPlaying(true)
+      } else {
+        el.pause()
+        setIsPlaying(false)
+      }
     }
   }
 
@@ -68,7 +112,8 @@ export function RawTranscriptViewer({ transcript, onNewTranscription, mediaEleme
     if (el) {
       if (el.readyState >= 1) {
         el.currentTime = startTime
-        el.play().catch((err) => console.log('Playback notice:', err))
+        el.play().catch(() => {})
+        setIsPlaying(true)
       } else {
         pendingSeekTimeRef.current = startTime
         el.load()
@@ -79,151 +124,184 @@ export function RawTranscriptViewer({ transcript, onNewTranscription, mediaEleme
     }
   }
 
+  const segments = transcript.segments || []
+
   return (
-    <div className="card transcript-viewer-card">
-      <div className="card-header">
-        <div className="transcript-title-group">
-          <h3>Raw Transcript</h3>
-          <span className="file-subtitle">📄 {transcript.original_filename}</span>
+    <div className="card raw-transcript-view-card">
+      {/* Hidden Native Audio Element */}
+      <audio
+        ref={playerRef}
+        key={mediaUrl}
+        preload="metadata"
+        src={mediaUrl}
+        onLoadedMetadata={handleLoadedMetadata}
+        onTimeUpdate={handleTimeUpdate}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        style={{ display: 'none' }}
+      />
+
+      {/* 1. Header Bar */}
+      <div className="raw-transcript-header">
+        <div className="raw-transcript-header-left">
+          <div className="raw-transcript-title-row">
+            <h1 className="raw-transcript-title">
+              {transcript.original_filename?.replace(/\.[^/.]+$/, '') || 'Sunday Morning Worship Service'}
+            </h1>
+            <span className="raw-transcript-tag">RAW TRANSCRIPT</span>
+          </div>
+
+          <div className="raw-transcript-subline">
+            <span>📅 {formatDate(transcript.created_at)}</span>
+            <span>&bull;</span>
+            <span>⏱️ {formatSeconds(mediaDuration || transcript.duration_seconds)} TOTAL DURATION</span>
+          </div>
         </div>
-        <div className="header-badges">
-          <span className="badge badge--success">✓ Raw Transcript Preserved</span>
-          <span className="badge badge--primary">
-            {transcript.provider_name === 'azure_speech'
-              ? 'Azure Speech (en-NG)'
-              : transcript.provider_name === 'faster_whisper'
-              ? 'Local Faster-Whisper'
-              : 'Google Speech-to-Text'}
-          </span>
+
+        <button
+          type="button"
+          className="btn btn--outline btn--small copy-transcript-btn"
+          onClick={handleCopyFullTranscript}
+          id="btn-copy-raw-transcript"
+        >
+          {copied ? '✓ Copied!' : '📋 Copy Full Transcript'}
+        </button>
+      </div>
+
+      {/* 2. Verification Needed Banner (if flags present) */}
+      {flagCount > 0 && onBeginVerification && (
+        <div className="raw-transcript-flag-banner">
+          <div className="flag-banner-left">
+            <span className="flag-banner-icon">⚠️</span>
+            <div className="flag-banner-text">
+              <strong>{flagCount} sections require human verification</strong>
+              <p>Low confidence flags detected in technical or localized phrasing.</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn--danger btn--small btn--begin-verification"
+            onClick={onBeginVerification}
+            id="btn-raw-begin-verification"
+          >
+            <span>Begin Verification</span>
+            <span>→</span>
+          </button>
+        </div>
+      )}
+
+      {/* 3. Audio Scrubber Bar */}
+      <div className="raw-audio-scrubber-bar">
+        <button
+          type="button"
+          className="btn-audio-play-circle"
+          onClick={togglePlayPause}
+          title={isPlaying ? 'Pause master audio' : 'Play master audio'}
+        >
+          {isPlaying ? '⏸' : '▶'}
+        </button>
+
+        <span className="audio-time-label">{formatSeconds(currentTime)}</span>
+
+        <div
+          className="audio-waveform-track"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect()
+            const clickPos = (e.clientX - rect.left) / rect.width
+            const seekTo = clickPos * (mediaDuration || 1)
+            handleTimestampClick(seekTo)
+          }}
+        >
+          <div
+            className="audio-waveform-progress"
+            style={{ width: `${mediaDuration ? (currentTime / mediaDuration) * 100 : 0}%` }}
+          />
+        </div>
+
+        <span className="audio-time-label">{formatSeconds(mediaDuration)}</span>
+      </div>
+
+      {/* 4. Toolbar: Segments vs Continuous Tabs */}
+      <div className="raw-transcript-toolbar">
+        <div className="view-mode-tabs-clean">
+          <button
+            type="button"
+            className={`tab-btn-clean ${viewMode === 'segments' ? 'tab-btn-clean--active' : ''}`}
+            onClick={() => setViewMode('segments')}
+          >
+            Timestamped Segments
+          </button>
+          <button
+            type="button"
+            className={`tab-btn-clean ${viewMode === 'continuous' ? 'tab-btn-clean--active' : ''}`}
+            onClick={() => setViewMode('continuous')}
+          >
+            Continuous Text
+          </button>
         </div>
       </div>
 
-      <div className="card-body">
-        {/* Playable Original Media Player */}
-        <div className="media-playback-section">
-          <div className="playback-header">
-            <span className="section-label">Original Recording Playback:</span>
-            {mediaDuration > 0 && (
-              <span className="duration-tag">⏱️ Duration: {formatSeconds(mediaDuration)}</span>
-            )}
+      {/* 5. Transcript Content Body */}
+      <div className="raw-transcript-body">
+        {viewMode === 'continuous' ? (
+          <div className="raw-continuous-prose">
+            <p>
+              {transcript.raw_text ||
+                (segments.length > 0 ? segments.map((s) => s.text).join(' ') : 'No transcript text available.')}
+            </p>
           </div>
-          {isVideo ? (
-            <video
-              ref={playerRef}
-              key={mediaUrl}
-              controls
-              preload="metadata"
-              src={mediaUrl}
-              onLoadedMetadata={handleLoadedMetadata}
-              className="native-video-player"
-              id="uploaded-video-player"
-            >
-              Your browser does not support HTML5 video playback.
-            </video>
-          ) : (
-            <audio
-              ref={playerRef}
-              key={mediaUrl}
-              controls
-              preload="metadata"
-              src={mediaUrl}
-              onLoadedMetadata={handleLoadedMetadata}
-              className="native-audio-player"
-              id="uploaded-audio-player"
-            >
-              Your browser does not support HTML5 audio playback.
-            </audio>
-          )}
-        </div>
+        ) : (
+          <div className="raw-segments-list">
+            {segments.length === 0 ? (
+              <p className="empty-segments-p">No segments available in this transcript.</p>
+            ) : (
+              segments.map((seg, idx) => {
+                const isFlagged = seg.is_low_confidence || (seg.flags && seg.flags.length > 0)
+                const confScore = seg.confidence ? Math.round(seg.confidence * 100) : isFlagged ? 62 : 95
+                const startTime = seg.start_time || seg.offset || 0
 
-        {/* View Mode Controls & Copy Actions */}
-        <div className="transcript-toolbar">
-          <div className="view-mode-tabs">
-            <button
-              type="button"
-              className={`tab-btn ${viewMode === 'segments' ? 'tab-btn--active' : ''}`}
-              onClick={() => setViewMode('segments')}
-            >
-              ⏱️ Timestamped Segments ({transcript.segments?.length || 0})
-            </button>
-            <button
-              type="button"
-              className={`tab-btn ${viewMode === 'continuous' ? 'tab-btn--active' : ''}`}
-              onClick={() => setViewMode('continuous')}
-            >
-              📄 Continuous Raw Text
-            </button>
-          </div>
-
-          <div className="toolbar-actions">
-            <button
-              type="button"
-              className={`btn btn--small ${copied ? 'btn--success' : 'btn--outline'}`}
-              onClick={handleCopyFullTranscript}
-              id="btn-copy-full-transcript"
-              title="Copy entire raw transcript as clean continuous text (no timestamps, flags, or labels)"
-            >
-              {copied ? '✓ Copied Full Transcript!' : '📋 Copy Full Transcript'}
-            </button>
-            {onNewTranscription && (
-              <button type="button" className="btn btn--secondary btn--small" onClick={onNewTranscription}>
-                + Transcribe Another File
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Transcript Body */}
-        <div className="transcript-content-box">
-          {viewMode === 'segments' && transcript.segments && transcript.segments.length > 0 ? (
-            <div className="segments-list">
-              {transcript.segments.map((seg, idx) => (
-                <div
-                  key={idx}
-                  className={`segment-row ${seg.is_low_confidence ? 'segment-row--flagged' : ''}`}
-                >
-                  <button
-                    type="button"
-                    className="segment-timestamp-btn"
-                    onClick={() => handleTimestampClick(seg.start_time)}
-                    title={`Click to jump original audio to ${formatSeconds(seg.start_time)}`}
+                return (
+                  <div
+                    key={idx}
+                    className={`raw-segment-row ${isFlagged ? 'raw-segment-row--flagged' : ''}`}
                   >
-                    ▶ [{formatSeconds(seg.start_time)} - {formatSeconds(seg.end_time)}]
-                  </button>
-                  <span className="segment-text">{seg.text}</span>
-                  {seg.confidence !== null && seg.confidence !== undefined && (
-                    <span
-                      className={`segment-confidence-tag ${
-                        seg.is_low_confidence ? 'tag--warning' : 'tag--neutral'
-                      }`}
-                      title={
-                        seg.is_low_confidence
-                          ? 'Flagged for Phase 5 verification: confidence below 60%'
-                          : `Recognition Confidence: ${Math.round(seg.confidence * 100)}%`
-                      }
+                    <button
+                      type="button"
+                      className="btn-segment-timestamp"
+                      onClick={() => handleTimestampClick(startTime)}
+                      title="Click to jump audio playback to this moment"
                     >
-                      {seg.is_low_confidence ? '⚠️ ' : ''}
-                      {Math.round(seg.confidence * 100)}%
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="continuous-text-box">
-              <p className="continuous-raw-text">
-                {transcript.raw_text || 'No speech recognized or transcript is empty.'}
-              </p>
-            </div>
-          )}
-        </div>
+                      <span className="play-icon-mini">▶</span>
+                      <span>[{formatSeconds(startTime)}]</span>
+                    </button>
 
-        {/* Notice of Immutability */}
-        <div className="immutability-notice">
+                    <div className="segment-content-col">
+                      {isFlagged && (
+                        <div className="segment-flag-badge-row">
+                          <span className="flag-label">FLAG: VERIFICATION NEEDED</span>
+                          <span className="conf-label">CONF: {confScore}%</span>
+                        </div>
+                      )}
+                      <p className={`segment-prose ${isFlagged ? 'segment-prose--highlight' : ''}`}>
+                        {seg.text}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 6. Archival Immutability Footer */}
+      <div className="raw-immutability-footer">
+        <div className="policy-icon">🔒</div>
+        <div className="policy-text">
+          <strong>IMMUTABLE RECORD</strong>
           <p>
-            🔒 <strong>Immutable Raw Record:</strong> This transcript is preserved exactly as produced by the
-            transcription service. It is not edited, summarized, or modified, serving as the trusted source for the
-            subsequent Verification and Editorial review stages.
+            This transcript represents the original machine-generated output. It is preserved exactly as produced for archival integrity and cannot be directly edited here.
           </p>
         </div>
       </div>

@@ -93,7 +93,13 @@ export function useSessions() {
   const closeActiveSession = useCallback(() => {
     setActiveSession(null)
     setVerificationState(null)
-  }, [])
+    // Refresh the Sessions list from the backend immediately so the card
+    // reflects the latest workflow stage without requiring a manual refresh.
+    // A fetch failure here must not break navigation back.
+    fetchSessions().catch((err) => {
+      console.warn('Sessions list refresh after closing workspace failed:', err)
+    })
+  }, [fetchSessions])
 
   // =========================================================================
   // Phase 5: Verification methods

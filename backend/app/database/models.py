@@ -198,6 +198,29 @@ CREATE TABLE IF NOT EXISTS proofread_reports (
 CREATE INDEX IF NOT EXISTS idx_proofread_reports_session ON proofread_reports(session_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_proofread_reports_rev ON proofread_reports(session_id, revision_number DESC);
 CREATE INDEX IF NOT EXISTS idx_proofread_reports_created ON proofread_reports(created_at DESC);
+
+-- Phase 9: Final Reports (derived from approved proofread report, finalized for download/export)
+CREATE TABLE IF NOT EXISTS final_reports (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    proofread_report_revision_id TEXT,
+    revision_number INTEGER NOT NULL,
+    report_title TEXT NOT NULL,
+    report_text TEXT NOT NULL,
+    minister TEXT,
+    programme TEXT,
+    service_date TEXT,
+    docx_filename TEXT,
+    docx_file_size INTEGER,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_final_reports_session ON final_reports(session_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_final_reports_rev ON final_reports(session_id, revision_number DESC);
+CREATE INDEX IF NOT EXISTS idx_final_reports_created ON final_reports(created_at DESC);
 """
 
 # Phase 5 migration: add verification columns to sessions table.
@@ -229,6 +252,13 @@ PHASE8_MIGRATION_COLUMNS = [
     "ALTER TABLE sessions ADD COLUMN proofreading_completed_at TEXT",
     "ALTER TABLE sessions ADD COLUMN proofreading_standard_version INTEGER",
     "ALTER TABLE sessions ADD COLUMN accepted_proofread_revision_id TEXT",
+]
+
+# Phase 9 migration: add final report workflow columns to sessions table.
+PHASE9_MIGRATION_COLUMNS = [
+    "ALTER TABLE sessions ADD COLUMN final_report_status TEXT DEFAULT 'not_started'",
+    "ALTER TABLE sessions ADD COLUMN final_report_completed_at TEXT",
+    "ALTER TABLE sessions ADD COLUMN final_report_id TEXT",
 ]
 
 

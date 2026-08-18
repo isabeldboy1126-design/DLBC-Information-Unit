@@ -1,11 +1,17 @@
-import React, { useState, useEffect } from 'react'
-import { VerificationItemRow } from './VerificationItemRow'
+import React, { useState, useEffect, useRef } from 'react'
 
 /**
- * VerificationWorkflow — the main Phase 5 verification UI.
- *
- * Shows ONLY flagged/verification items for review, not every transcript segment.
- * Unflagged segments automatically retain their raw wording in the Verified Transcript.
+ * VerificationWorkflow — Human verification workspace matching verification-workspace.png.
+ * 
+ * Features:
+ * - Top header: Verification Mode badge, session ID, sermon title, subtitle, and pending count badge.
+ * - 2-Column Workspace layout:
+ *   - Left Column: Progress meter (e.g. 3 / 15 Resolved), Filter pills (Pending, Resolved, All),
+ *     Confirm Remaining bulk action, and list of flagged segment cards.
+ *   - Right Column: Master audio playback scrubber (synced to segment timestamp) +
+ *     Active Segment review card with Raw Output preview and editable Verification Field.
+ * - Actions: "Save Correction & Next", "Original Was Correct", and "Finalise Verification".
+ * - Safeguards: Unflagged segments preserve raw wording; previous manual corrections are never lost.
  */
 export function VerificationWorkflow({
   session,
@@ -19,25 +25,60 @@ export function VerificationWorkflow({
   onConfirmRawAsVerified,
   onPlaySegment,
   onNavigateToReporting,
+  onFinishForNow,
 }) {
-  const [filter, setFilter] = useState('all') // 'all' | 'pending' | 'resolved'
-  const [showAddSegment, setShowAddSegment] = useState(false)
-  const [addSegmentIndex, setAddSegmentIndex] = useState('')
+  const [filter, setFilter] = useState('pending') // 'pending' | 'resolved' | 'all'
+  const [activeItemIndex, setActiveItemIndex] = useState(0)
+  const [editedText, setEditedText] = useState('')
   const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(false)
   const [isBulkConfirming, setIsBulkConfirming] = useState(false)
   const [isFinalising, setIsFinalising] = useState(false)
-  const [isConfirmingRaw, setIsConfirmingRaw] = useState(false)
-  const [copiedVerified, setCopiedVerified] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isPlayingSegment, setIsPlayingSegment] = useState(false)
+  const [audioSpeed, setAudioSpeed] = useState(1.0)
+  const [currentTime, setCurrentTime] = useState(0)
 
+  const audioRef = useRef(null)
+  const segmentPlaybackEndRef = useRef(null)
   const sessionId = session?.session_id
   const vStatus = session?.verification_status || 'not_started'
 
-  // Load verification state when component mounts (if in_progress)
+  // Load verification state if in progress and not loaded yet
   useEffect(() => {
     if (sessionId && vStatus === 'in_progress' && !verificationState) {
       onLoadVerificationState(sessionId)
     }
   }, [sessionId, vStatus, verificationState, onLoadVerificationState])
+
+  const items = verificationState?.items || []
+  const itemsTotal = verificationState?.items_total || items.length || 0
+  const itemsResolved = verificationState?.items_resolved || items.filter((i) => i.action !== 'pending').length || 0
+  const pendingCount = itemsTotal - itemsResolved
+
+  // Filtered items
+  const filteredItems =
+    filter === 'pending'
+      ? items.filter((i) => i.action === 'pending')
+      : filter === 'resolved'
+      ? items.filter((i) => i.action !== 'pending')
+      : items
+
+  const activeItem = filteredItems[activeItemIndex] || filteredItems[0] || null
+
+  // Sync edited text and clear active segment playback boundary when active item changes
+  useEffect(() => {
+    segmentPlaybackEndRef.current = null
+    setIsPlayingSegment(false)
+    if (activeItem) {
+      setEditedText(activeItem.verified_text || activeItem.original_text || activeItem.text || '')
+    }
+  }, [activeItem?.item_id, activeItem?.segment_index])
+
+  useEffect(() => {
+    return () => {
+      segmentPlaybackEndRef.current = null
+    }
+  }, [])
 
   const formatSeconds = (totalSeconds) => {
     if (!totalSeconds && totalSeconds !== 0) return '00:00'
@@ -52,402 +93,499 @@ export function VerificationWorkflow({
     return `${pad(mins)}:${pad(secs)}`
   }
 
-  // ---- NOT STARTED state ----
-  if (vStatus === 'not_started') {
-    const hasFlags = session?.flag_count > 0
-
-    return (
-      <div className="card verification-card">
-        <div className="card-header">
-          <h3>📋 Transcript Verification</h3>
-        </div>
-        <div className="card-body verification-not-started">
-          {hasFlags ? (
-            <>
-              <div className="verification-summary-banner">
-                <span className="verification-flag-icon">⚠️</span>
-                <div>
-                  <strong>{session.flag_count} flagged section{session.flag_count !== 1 ? 's' : ''} detected</strong>
-                  <p>
-                    These segments had low Azure confidence or were manually flagged during recording.
-                    Review them against the original audio to confirm or correct the transcript.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => onStartVerification(sessionId)}
-                id="btn-start-verification"
-              >
-                Begin Verification ({session.flag_count} item{session.flag_count !== 1 ? 's' : ''} to review)
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="verification-summary-banner verification-no-flags">
-                <span className="verification-flag-icon">✅</span>
-                <div>
-                  <strong>No flagged sections were detected.</strong>
-                  <p>
-                    Azure Speech recognition confidence was above the threshold for all segments,
-                    and no manual flags were added during recording.
-                  </p>
-                  <p>
-                    You may confirm the entire raw transcript as verified, or start a manual review
-                    if you'd like to check specific sections.
-                  </p>
-                </div>
-              </div>
-              <div className="verification-zero-flag-actions">
-                <button
-                  type="button"
-                  className="btn btn--success"
-                  onClick={async () => {
-                    setIsConfirmingRaw(true)
-                    await onConfirmRawAsVerified(sessionId)
-                    setIsConfirmingRaw(false)
-                  }}
-                  disabled={isConfirmingRaw}
-                  id="btn-confirm-raw-as-verified"
-                >
-                  {isConfirmingRaw ? 'Creating Verified Transcript...' : '✓ Confirm Raw Transcript as Verified'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--outline"
-                  onClick={() => onStartVerification(sessionId)}
-                >
-                  Start Manual Review Instead
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    )
+  const formatSegmentTime = (seconds) => {
+    if (!seconds && seconds !== 0) return '00:00'
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${pad(mins)}:${pad(secs)}`
   }
 
-  // ---- COMPLETE state ----
-  if (vStatus === 'complete') {
-    const handleCopyVerified = () => {
-      const text = session?.verified_text || ''
-      if (text) {
-        navigator.clipboard.writeText(text)
-        setCopiedVerified(true)
-        setTimeout(() => setCopiedVerified(false), 2500)
+  // Media setup
+  const mediaId =
+    session?.recording_id ||
+    session?.audio_filename ||
+    session?.session_id
+  const mediaUrl = `http://localhost:8000/api/transcription/media/${encodeURIComponent(mediaId)}`
+
+  // Bounded Segment Playback: Plays strictly between segment start_time and end_time, then automatically pauses
+  const handleReplaySegment = (startTime, endTime) => {
+    if (!audioRef.current) return
+    const sTime = Number(startTime) || 0
+    const eTime = endTime != null && Number(endTime) > sTime ? Number(endTime) : sTime + 5
+
+    segmentPlaybackEndRef.current = eTime
+    setIsPlayingSegment(true)
+
+    audioRef.current.currentTime = sTime
+    audioRef.current.play().catch(() => {})
+    setIsPlaying(true)
+
+    if (onPlaySegment) {
+      onPlaySegment(sTime)
+    }
+  }
+
+  // Master Unrestricted Audio Playback
+  const togglePlayPause = () => {
+    if (audioRef.current) {
+      if (audioRef.current.paused) {
+        // User clicked master play — clear bounded segment playback for full context
+        segmentPlaybackEndRef.current = null
+        setIsPlayingSegment(false)
+        audioRef.current.play().catch(() => {})
+        setIsPlaying(true)
+      } else {
+        audioRef.current.pause()
+        setIsPlaying(false)
+        setIsPlayingSegment(false)
+        segmentPlaybackEndRef.current = null
       }
     }
-
-    return (
-      <div className="card verification-card verification-complete-card">
-        <div className="card-header">
-          <h3>✅ Verified Transcript</h3>
-          <span className="badge badge--success">Verification Complete</span>
-        </div>
-        <div className="card-body">
-          <div className="verification-complete-info">
-            <p>
-              <strong>Verified at:</strong>{' '}
-              {session.verified_at
-                ? new Date(session.verified_at).toLocaleString()
-                : 'Unknown'}
-            </p>
-            {verificationState && (
-              <p>
-                <strong>Items reviewed:</strong> {verificationState.items_total || 0} verification item
-                {(verificationState.items_total || 0) !== 1 ? 's' : ''}
-              </p>
-            )}
-          </div>
-
-          <div className="transcript-toolbar">
-            <button
-              type="button"
-              className={`btn btn--small ${copiedVerified ? 'btn--success' : 'btn--outline'}`}
-              onClick={handleCopyVerified}
-              id="btn-copy-verified-transcript"
-            >
-              {copiedVerified ? '✓ Copied Verified Transcript!' : '📋 Copy Full Verified Transcript'}
-            </button>
-
-            {onNavigateToReporting && (
-              <button
-                type="button"
-                className="btn btn--primary btn--small"
-                onClick={onNavigateToReporting}
-                id="btn-continue-to-reporting"
-              >
-                Continue to Reporting →
-              </button>
-            )}
-          </div>
-
-          <div className="transcript-content-box verified-transcript-box">
-            <p className="continuous-raw-text">
-              {session.verified_text || 'Verified transcript is empty.'}
-            </p>
-          </div>
-
-          <div className="immutability-notice verification-notice">
-            <p>
-              🔒 <strong>Verified Record:</strong> This transcript has been reviewed and confirmed by a human
-              operator. It preserves all original segments with human corrections applied to flagged items.
-              The original Raw Transcript remains unchanged.
-            </p>
-          </div>
-
-          {onNavigateToReporting && (
-            <div className="verification-next-action-bar">
-              <div className="next-action-text">
-                <strong>Next Workflow Step:</strong> Generate independent Information Unit report drafts (Reporter A & Reporter B) from this Verified Transcript.
-              </div>
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={onNavigateToReporting}
-                id="btn-continue-to-reporting-bottom"
-              >
-                Continue to Reporting →
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    )
   }
 
-  // ---- IN PROGRESS state ----
-  const items = verificationState?.items || []
-  const itemsTotal = verificationState?.items_total || 0
-  const itemsResolved = verificationState?.items_resolved || 0
-  const progressPercent = itemsTotal > 0 ? Math.round((itemsResolved / itemsTotal) * 100) : 0
-  const canFinalise = itemsTotal > 0 && itemsResolved === itemsTotal
+  // Master Scrubber Seek (Unrestricted)
+  const handleMasterSeek = (timeSec) => {
+    segmentPlaybackEndRef.current = null
+    setIsPlayingSegment(false)
+    if (audioRef.current) {
+      audioRef.current.currentTime = timeSec
+      audioRef.current.play().catch(() => {})
+      setIsPlaying(true)
+    }
+    if (onPlaySegment) {
+      onPlaySegment(timeSec)
+    }
+  }
 
-  // Filter items
-  const filteredItems =
-    filter === 'pending'
-      ? items.filter((i) => i.action === 'pending')
-      : filter === 'resolved'
-      ? items.filter((i) => i.action !== 'pending')
-      : items
+  // Audio Time Update Handler (Enforces segment boundary when in bounded playback mode)
+  const handleAudioTimeUpdate = (e) => {
+    const time = e.target.currentTime
+    setCurrentTime(time)
 
-  // Build list of segment indices already in verification (to avoid duplicates in add dialog)
-  const existingSegmentIndices = new Set(items.map((i) => i.segment_index))
+    // Automatically pause if bounded segment end boundary is reached
+    if (segmentPlaybackEndRef.current !== null && time >= segmentPlaybackEndRef.current) {
+      if (audioRef.current) {
+        audioRef.current.pause()
+      }
+      setIsPlaying(false)
+      setIsPlayingSegment(false)
+      segmentPlaybackEndRef.current = null
+    }
+  }
 
-  // All raw segments available for manual addition
-  const allSegments = session?.segments || []
-  const addableSegments = allSegments.filter((s) => !existingSegmentIndices.has(s.segment_index))
+  const toggleSpeed = () => {
+    const nextSpeed = audioSpeed === 1.0 ? 1.25 : audioSpeed === 1.25 ? 1.5 : audioSpeed === 1.5 ? 0.75 : 1.0
+    setAudioSpeed(nextSpeed)
+    if (audioRef.current) {
+      audioRef.current.playbackRate = nextSpeed
+    }
+  }
 
-  const handleAddManualItem = async () => {
-    const idx = parseInt(addSegmentIndex, 10)
-    if (isNaN(idx)) return
-    await onAddItem(sessionId, idx)
-    setAddSegmentIndex('')
-    setShowAddSegment(false)
+  // Item resolution actions
+  const handleSaveCorrection = async () => {
+    if (!activeItem) return
+    const textToSave = editedText.trim() || activeItem.original_text || activeItem.text || ''
+    await onResolveItem(sessionId, activeItem.segment_index, {
+      verified_text: textToSave,
+      action: 'corrected',
+      correction_note: 'Operator correction',
+    })
+    // Advance to next pending item if available
+    if (activeItemIndex < filteredItems.length - 1) {
+      setActiveItemIndex(activeItemIndex + 1)
+    }
+  }
+
+  const handleOriginalCorrect = async () => {
+    if (!activeItem) return
+    const originalText = activeItem.original_text || activeItem.text || ''
+    await onResolveItem(sessionId, activeItem.segment_index, {
+      verified_text: originalText,
+      action: 'confirmed',
+      correction_note: 'Confirmed original transcript',
+    })
+    if (activeItemIndex < filteredItems.length - 1) {
+      setActiveItemIndex(activeItemIndex + 1)
+    }
+  }
+
+  const handleBulkConfirm = async () => {
+    setIsBulkConfirming(true)
+    await onConfirmAllRemaining(sessionId)
+    setIsBulkConfirming(false)
+    setShowBulkConfirmModal(false)
   }
 
   const handleFinalise = async () => {
-    if (!window.confirm(
-      `All ${itemsTotal} verification items are resolved.\n\nCreate the Verified Transcript now?\n\nThis will combine all raw segments with your corrections into the final Verified Transcript.`
-    )) return
+    if (
+      !window.confirm(
+        `All ${itemsTotal} verification items are resolved.\n\nCreate the final Verified Transcript now?\n\nThis will combine all segments with your human corrections as the approved factual source.`
+      )
+    ) {
+      return
+    }
     setIsFinalising(true)
     await onFinalise(sessionId)
     setIsFinalising(false)
   }
 
   return (
-    <div className="card verification-card">
-      <div className="card-header">
-        <h3>📋 Transcript Verification</h3>
-        <span className="badge badge--warning">In Progress</span>
+    <div className="verification-workspace-container">
+      {/* Hidden Native Audio Element */}
+      <audio
+        ref={audioRef}
+        key={mediaUrl}
+        preload="metadata"
+        src={mediaUrl}
+        onTimeUpdate={handleAudioTimeUpdate}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => {
+          setIsPlaying(false)
+          setIsPlayingSegment(false)
+        }}
+        style={{ display: 'none' }}
+      />
+
+
+      {/* ------------------------------------------------------------- */}
+      {/* 1. TOP HEADER                                                 */}
+      {/* ------------------------------------------------------------- */}
+      <div className="verification-workspace-header">
+        <div className="verification-header-left">
+          <div className="verification-badge-row">
+            <span className="badge badge--verification-mode">VERIFICATION MODE</span>
+            <span className="verification-session-code">ID: {session.session_id}</span>
+          </div>
+
+          <h1 className="verification-main-title">{session.title || 'Sunday Morning Worship Service'}</h1>
+          <p className="verification-subline">
+            Reviewing automated transcription flags for theological accuracy and spelling.
+          </p>
+        </div>
+
+        <div className="verification-header-right">
+          <span className={`badge ${pendingCount > 0 ? 'badge--warning-solid' : 'badge--success'}`}>
+            {pendingCount > 0 ? `⚠️ ${pendingCount} Flags Pending` : '✓ All Flags Resolved'}
+          </span>
+          {onFinishForNow && (
+            <button type="button" className="btn btn--outline btn--small" onClick={onFinishForNow}>
+              Finish for Now
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="card-body">
-        {/* Progress bar */}
-        <div className="verification-progress">
-          <div className="verification-progress-info">
-            <span>
-              <strong>{itemsResolved}</strong> of <strong>{itemsTotal}</strong> verification item
-              {itemsTotal !== 1 ? 's' : ''} resolved
-            </span>
-            <span className="verification-progress-pct">{progressPercent}%</span>
+      {/* ------------------------------------------------------------- */}
+      {/* 2. MAIN 2-COLUMN WORKSPACE GRID                               */}
+      {/* ------------------------------------------------------------- */}
+      <div className="verification-workspace-grid">
+        {/* LEFT COLUMN: Progress & Flagged Segments List */}
+        <div className="verification-left-col">
+          {/* Progress Card */}
+          <div className="card verification-progress-card">
+            <div className="progress-info-row">
+              <span className="progress-label">Verification Progress</span>
+              <strong className="progress-fraction">
+                {itemsResolved} / {itemsTotal} Resolved
+              </strong>
+            </div>
+
+            <div className="verification-progress-track">
+              <div
+                className="verification-progress-fill"
+                style={{ width: `${itemsTotal ? (itemsResolved / itemsTotal) * 100 : 0}%` }}
+              />
+            </div>
+
+            {/* Filter Tabs & Bulk Confirm */}
+            <div className="verification-filter-row">
+              <div className="filter-pills-group">
+                <button
+                  type="button"
+                  className={`filter-pill ${filter === 'pending' ? 'filter-pill--active' : ''}`}
+                  onClick={() => {
+                    setFilter('pending')
+                    setActiveItemIndex(0)
+                  }}
+                >
+                  Pending ({items.filter((i) => i.action === 'pending').length})
+                </button>
+
+                <button
+                  type="button"
+                  className={`filter-pill ${filter === 'resolved' ? 'filter-pill--active' : ''}`}
+                  onClick={() => {
+                    setFilter('resolved')
+                    setActiveItemIndex(0)
+                  }}
+                >
+                  Resolved ({items.filter((i) => i.action !== 'pending').length})
+                </button>
+
+                <button
+                  type="button"
+                  className={`filter-pill ${filter === 'all' ? 'filter-pill--active' : ''}`}
+                  onClick={() => {
+                    setFilter('all')
+                    setActiveItemIndex(0)
+                  }}
+                >
+                  All ({items.length})
+                </button>
+              </div>
+
+              {pendingCount > 0 && (
+                <button
+                  type="button"
+                  className="btn-confirm-remaining-link"
+                  onClick={() => setShowBulkConfirmModal(true)}
+                  title="Confirm all remaining flagged items with original wording"
+                >
+                  Confirm Remaining
+                </button>
+              )}
+            </div>
           </div>
-          <div className="verification-progress-bar-track">
-            <div
-              className="verification-progress-bar-fill"
-              style={{ width: `${progressPercent}%` }}
-            />
+
+          {/* Flagged Items Scroll List */}
+          <div className="flagged-items-scroll-list">
+            {filteredItems.length === 0 ? (
+              <div className="empty-flagged-card">
+                <span>✓</span>
+                <p>
+                  {filter === 'pending'
+                    ? 'All flagged items in this section have been resolved!'
+                    : 'No verification items found.'}
+                </p>
+              </div>
+            ) : (
+              filteredItems.map((item, idx) => {
+                const isSelected = activeItem?.item_id === item.item_id || (activeItem?.segment_index === item.segment_index)
+                const isResolved = item.action !== 'pending'
+                const timeStart = item.start_time || 0
+                const rawConf = item.original_confidence != null ? item.original_confidence : item.confidence
+                const confScore = rawConf != null ? Math.round(rawConf * 100) : 65
+                const isManual =
+                  item.flag_reasons &&
+                  Array.isArray(item.flag_reasons) &&
+                  item.flag_reasons.some(
+                    (f) => f.flag_type === 'manual_flag' || f.type === 'manual_flag'
+                  )
+
+                const flagLabel = isResolved
+                  ? item.action === 'corrected'
+                    ? '✓ Corrected'
+                    : '✓ Original Confirmed'
+                  : isManual
+                  ? 'Flag: Manual Review'
+                  : `Flag: Low Confidence (${confScore}%)`
+
+                const displayText = item.verified_text || item.original_text || item.text || ''
+
+                return (
+                  <div
+                    key={item.item_id || item.segment_index || idx}
+                    className={`flagged-item-card ${isSelected ? 'flagged-item-card--selected' : ''} ${
+                      isResolved ? 'flagged-item-card--resolved' : ''
+                    }`}
+                    onClick={() => {
+                      setActiveItemIndex(idx)
+                      handleReplaySegment(timeStart, item.end_time)
+                    }}
+                  >
+                    <div className="flagged-item-top">
+                      <span className="item-time-pill">{formatSegmentTime(timeStart)}</span>
+                      <span className="item-flag-reason">{flagLabel}</span>
+                    </div>
+
+                    <p className="item-preview-text">
+                      &ldquo;{displayText}&rdquo;
+                    </p>
+                  </div>
+                )
+              })
+            )}
           </div>
         </div>
 
-        {/* Filter + Add controls */}
-        <div className="verification-toolbar">
-          <div className="view-mode-tabs">
-            <button
-              type="button"
-              className={`tab-btn ${filter === 'all' ? 'tab-btn--active' : ''}`}
-              onClick={() => setFilter('all')}
-            >
-              All ({items.length})
-            </button>
-            <button
-              type="button"
-              className={`tab-btn ${filter === 'pending' ? 'tab-btn--active' : ''}`}
-              onClick={() => setFilter('pending')}
-            >
-              ⏳ Pending ({items.filter((i) => i.action === 'pending').length})
-            </button>
-            <button
-              type="button"
-              className={`tab-btn ${filter === 'resolved' ? 'tab-btn--active' : ''}`}
-              onClick={() => setFilter('resolved')}
-            >
-              ✓ Resolved ({items.filter((i) => i.action !== 'pending').length})
-            </button>
-          </div>
-
-          <div className="toolbar-actions">
-            {itemsTotal - itemsResolved > 0 && (
+        {/* RIGHT COLUMN: Master Audio Player + Active Segment Editor */}
+        <div className="verification-right-col">
+          {/* Master Audio Player Card */}
+          <div className="card master-audio-card">
+            <div className="master-audio-header">
+              <span className="master-audio-title">Master Audio</span>
               <button
                 type="button"
-                className="btn btn--success btn--small"
-                onClick={() => setShowBulkConfirmModal(true)}
-                id="btn-confirm-all-remaining"
-                title="Accept original wording for all remaining unresolved items"
+                className="btn-speed-toggle"
+                onClick={toggleSpeed}
+                title="Change playback speed"
               >
-                ✓ Confirm All Remaining as Correct ({itemsTotal - itemsResolved})
+                {audioSpeed}x speed
               </button>
-            )}
-            <button
-              type="button"
-              className="btn btn--outline btn--small"
-              onClick={() => setShowAddSegment(!showAddSegment)}
-              title="Flag another segment for verification"
-            >
-              + Add Verification Item
-            </button>
-          </div>
-        </div>
+            </div>
 
-        {/* Bulk confirmation dialog */}
-        {showBulkConfirmModal && (
-          <div className="verification-bulk-confirm-dialog">
-            <div className="bulk-confirm-content">
-              <h4>⚠️ Bulk Confirmation</h4>
-              <p>
-                You are about to confirm all remaining flagged sections using their original transcript wording. No transcript text will be changed.
-              </p>
-              <div className="vi-action-buttons">
-                <button
-                  type="button"
-                  className="btn btn--secondary btn--small"
-                  onClick={() => setShowBulkConfirmModal(false)}
-                  disabled={isBulkConfirming}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--success btn--small"
-                  onClick={async () => {
-                    setIsBulkConfirming(true)
-                    await onConfirmAllRemaining(sessionId)
-                    setIsBulkConfirming(false)
-                    setShowBulkConfirmModal(false)
+            <div className="master-audio-scrubber">
+              <button
+                type="button"
+                className="btn-master-play"
+                onClick={togglePlayPause}
+                title={isPlaying && !isPlayingSegment ? 'Pause' : 'Play'}
+              >
+                {isPlaying && !isPlayingSegment ? '⏸' : '▶'}
+              </button>
+
+              <div
+                className="master-audio-waveform-track"
+                onClick={(e) => {
+                  if (audioRef.current && audioRef.current.duration) {
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    const clickPos = (e.clientX - rect.left) / rect.width
+                    const seekTo = clickPos * audioRef.current.duration
+                    handleMasterSeek(seekTo)
+                  }
+                }}
+              >
+                <div
+                  className="master-audio-waveform-fill"
+                  style={{
+                    width: `${
+                      audioRef.current?.duration
+                        ? (currentTime / audioRef.current.duration) * 100
+                        : 0
+                    }%`,
                   }}
-                  disabled={isBulkConfirming}
-                  id="btn-confirm-all-dialog-btn"
+                />
+              </div>
+
+              <span className="master-time-display">
+                {formatSeconds(currentTime)} / {formatSeconds(audioRef.current?.duration || session?.duration_seconds)}
+              </span>
+            </div>
+          </div>
+
+          {/* Active Segment Editor Card */}
+          {activeItem ? (
+            <div className="card active-segment-card">
+              <div className="active-segment-header">
+                <span className="active-segment-badge">
+                  Active Segment {formatSegmentTime(activeItem.start_time || 0)} -{' '}
+                  {formatSegmentTime(activeItem.end_time || (activeItem.start_time || 0) + 8)}
+                </span>
+                <button
+                  type="button"
+                  className={`btn-replay-segment ${isPlayingSegment ? 'btn-replay-segment--active' : ''}`}
+                  onClick={() => handleReplaySegment(activeItem.start_time || 0, activeItem.end_time)}
+                  title="Replay this segment audio (automatically pauses at segment end)"
                 >
-                  {isBulkConfirming ? 'Confirming...' : 'Confirm All'}
+                  {isPlayingSegment ? '⏸ Replaying...' : '🔁 Replay Segment Audio'}
+                </button>
+              </div>
+
+              {/* Raw Output Preview */}
+              <div className="segment-raw-output-block">
+                <span className="block-label">RAW OUTPUT</span>
+                <div className="raw-output-box">
+                  <p>{activeItem.original_text || activeItem.text || ''}</p>
+                </div>
+              </div>
+
+
+              {/* Verification Field (Editable) */}
+              <div className="segment-verification-field-block">
+                <span className="block-label">VERIFICATION FIELD</span>
+                <textarea
+                  className="form-control verification-textarea"
+                  rows={4}
+                  value={editedText}
+                  onChange={(e) => setEditedText(e.target.value)}
+                  placeholder="Enter corrected transcript wording..."
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="segment-actions-row">
+                <button
+                  type="button"
+                  className="btn btn--primary btn--save-correction"
+                  onClick={handleSaveCorrection}
+                  id="btn-save-correction"
+                >
+                  Save Correction &amp; Next
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn--outline btn--original-correct"
+                  onClick={handleOriginalCorrect}
+                  id="btn-original-was-correct"
+                >
+                  Original Was Correct
                 </button>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Add segment dialog */}
-        {showAddSegment && (
-          <div className="verification-add-dialog">
-            <label>Select an unflagged segment to add for review:</label>
-            <select
-              value={addSegmentIndex}
-              onChange={(e) => setAddSegmentIndex(e.target.value)}
-              className="form-control"
-            >
-              <option value="">— Select segment —</option>
-              {addableSegments.map((seg) => (
-                <option key={seg.segment_index} value={seg.segment_index}>
-                  Segment {seg.segment_index} [{formatSeconds(seg.start_time)} – {formatSeconds(seg.end_time)}]: {seg.text.substring(0, 60)}...
-                </option>
-              ))}
-            </select>
-            <div className="vi-action-buttons">
-              <button
-                type="button"
-                className="btn btn--primary btn--small"
-                onClick={handleAddManualItem}
-                disabled={!addSegmentIndex}
-              >
-                Add for Review
-              </button>
-              <button
-                type="button"
-                className="btn btn--secondary btn--small"
-                onClick={() => {
-                  setShowAddSegment(false)
-                  setAddSegmentIndex('')
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Verification items list */}
-        <div className="verification-items-list">
-          {filteredItems.length === 0 ? (
-            <div className="verification-empty-filter">
-              No {filter === 'pending' ? 'pending' : filter === 'resolved' ? 'resolved' : ''} items.
-            </div>
           ) : (
-            filteredItems.map((item) => (
-              <VerificationItemRow
-                key={item.item_id || `vi-${item.segment_index}`}
-                item={item}
-                onResolve={(segIdx, payload) => onResolveItem(sessionId, segIdx, payload)}
-                onPlaySegment={onPlaySegment}
-                formatSeconds={formatSeconds}
-              />
-            ))
+            <div className="card active-segment-empty">
+              <p>Select a flagged segment on the left to verify.</p>
+            </div>
           )}
-        </div>
 
-        {/* Finalise button */}
-        <div className="verification-finalise-section">
-          {canFinalise ? (
-            <button
-              type="button"
-              className="btn btn--success btn--large"
-              onClick={handleFinalise}
-              disabled={isFinalising}
-              id="btn-finalise-verification"
-            >
-              {isFinalising
-                ? 'Creating Verified Transcript...'
-                : `✓ Finalise Verification — Create Verified Transcript (${itemsTotal} items reviewed)`}
-            </button>
-          ) : (
-            <div className="verification-finalise-blocked">
-              <span>
-                ⏳ {itemsTotal - itemsResolved} verification item{itemsTotal - itemsResolved !== 1 ? 's' : ''} still
-                pending — resolve all items to finalise.
-              </span>
+
+          {/* Finalize Banner (When all items resolved) */}
+          {itemsTotal > 0 && itemsResolved === itemsTotal && (
+            <div className="verification-finalize-ready-box">
+              <div className="finalize-ready-text">
+                <strong>✓ All Verification Items Resolved!</strong>
+                <p>Ready to compile the final Verified Transcript and proceed to Reporting.</p>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn--success btn--finalize-action"
+                onClick={handleFinalise}
+                disabled={isFinalising}
+                id="btn-finalize-verification"
+              >
+                {isFinalising ? 'Finalizing...' : 'Finalise Verification →'}
+              </button>
             </div>
           )}
         </div>
       </div>
+
+      {/* Bulk Confirm Modal */}
+      {showBulkConfirmModal && (
+        <div className="verification-modal-backdrop">
+          <div className="card verification-modal-card">
+            <h3>⚠️ Confirm All Remaining Flagged Sections</h3>
+            <p>
+              You are about to accept original machine wording for all {pendingCount} remaining flagged sections without modifying their text.
+            </p>
+            <p className="modal-subtext">
+              Any sections you already corrected manually will be safely preserved.
+            </p>
+            <div className="modal-actions-row">
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={() => setShowBulkConfirmModal(false)}
+                disabled={isBulkConfirming}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn--success"
+                onClick={handleBulkConfirm}
+                disabled={isBulkConfirming}
+                id="btn-confirm-all-modal-submit"
+              >
+                {isBulkConfirming ? 'Confirming...' : 'Yes, Confirm All Remaining'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

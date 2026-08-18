@@ -1,257 +1,388 @@
 import React, { useState } from 'react'
 
+/**
+ * SessionHistoryList — Sessions history matching sessions-history.png.
+ * 
+ * Features:
+ * - Top header: Title, Subtitle, and "+ New Session" CTA button.
+ * - Search bar and Quick Filter status tab pills:
+ *   [ All Sessions | In Progress | Completed | ⚠ Needs Attention ]
+ * - Secondary filter row with Status dropdown and Date Range dropdown.
+ * - 3-Column Card Grid with top accent borders:
+ *   - Red top accent: Interrupted sessions
+ *   - Blue top accent: Live / In-Recording sessions
+ *   - Amber top accent: Needs Verification sessions
+ *   - Green top accent: Verified / In-Reporting sessions
+ *   - Navy top accent: Completed / Final Report Ready sessions
+ * - Retains delete session with confirmation and refresh capabilities.
+ */
 export function SessionHistoryList({
-  sessions,
+  sessions = [],
   onOpenSession,
   onDeleteSession,
   onRefresh,
+  onStartNewSession,
   isLoading,
 }) {
   const [searchTerm, setSearchTerm] = useState('')
+  const [activeTab, setActiveTab] = useState('all') // 'all' | 'in_progress' | 'completed' | 'needs_attention'
   const [statusFilter, setStatusFilter] = useState('all')
+  const [dateFilter, setDateFilter] = useState('all')
 
-  const formatSeconds = (totalSeconds) => {
-    if (!totalSeconds && totalSeconds !== 0) return '00:00'
-    const mins = Math.floor(totalSeconds / 60)
+  const formatDuration = (totalSeconds) => {
+    if (!totalSeconds && totalSeconds !== 0) return '00:00:00'
+    const hours = Math.floor(totalSeconds / 3600)
+    const mins = Math.floor((totalSeconds % 3600) / 60)
     const secs = Math.floor(totalSeconds % 60)
     const pad = (n) => String(n).padStart(2, '0')
-    if (mins >= 60) {
-      const hours = Math.floor(mins / 60)
-      const remMins = mins % 60
-      return `${hours}h ${remMins}m`
-    }
-    return `${pad(mins)}:${pad(secs)}`
+    return `${pad(hours)}:${pad(mins)}:${pad(secs)}`
   }
 
   const formatDate = (isoStr) => {
-    if (!isoStr) return 'Unknown Date'
+    if (!isoStr) return '—'
     try {
       const d = new Date(isoStr)
       return d.toLocaleDateString(undefined, {
-        day: 'numeric',
         month: 'short',
+        day: 'numeric',
         year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
       })
     } catch {
       return isoStr
     }
   }
 
-  const filteredSessions = sessions.filter((s) => {
-    const matchesSearch =
-      !searchTerm ||
-      (s.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.session_id || '').toLowerCase().includes(searchTerm.toLowerCase())
+  const formatTime = (isoStr) => {
+    if (!isoStr) return '—'
+    try {
+      const d = new Date(isoStr)
+      return d.toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    } catch {
+      return ''
+    }
+  }
 
-    let matchesStatus = statusFilter === 'all'
-    if (!matchesStatus) {
-      if (statusFilter === 'verified') {
-        matchesStatus = s.verification_status === 'complete'
-      } else if (statusFilter === 'interrupted') {
+  // Filter logic
+  const filteredSessions = sessions.filter((s) => {
+    // 1. Search Query Filter
+    const query = searchTerm.toLowerCase().trim()
+    const matchesSearch =
+      !query ||
+      (s.title || '').toLowerCase().includes(query) ||
+      (s.session_id || '').toLowerCase().includes(query) ||
+      (s.metadata_json || '').toLowerCase().includes(query)
+
+    // 2. Tab Filter (All, In Progress, Completed, Needs Attention)
+    let matchesTab = true
+    if (activeTab === 'in_progress') {
+      matchesTab = s.status === 'recording' || (s.final_report_status !== 'complete' && !s.is_interrupted)
+    } else if (activeTab === 'completed') {
+      matchesTab = s.final_report_status === 'complete' || s.status === 'completed'
+    } else if (activeTab === 'needs_attention') {
+      matchesTab = !!s.is_interrupted || (s.flag_count > 0 && s.verification_status !== 'completed')
+    }
+
+    // 3. Status Dropdown Filter
+    let matchesStatus = true
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'interrupted') {
         matchesStatus = !!s.is_interrupted
-      } else {
-        matchesStatus = s.status === statusFilter
+      } else if (statusFilter === 'needs_verification') {
+        matchesStatus = s.flag_count > 0 && s.verification_status !== 'completed'
+      } else if (statusFilter === 'verified') {
+        matchesStatus = s.verification_status === 'completed'
+      } else if (statusFilter === 'editing') {
+        matchesStatus = s.editing_status === 'complete' || s.editing_status === 'draft_ready'
+      } else if (statusFilter === 'completed') {
+        matchesStatus = s.final_report_status === 'complete' || s.status === 'completed'
       }
     }
 
-    return matchesSearch && matchesStatus
+    // 4. Date Dropdown Filter
+    let matchesDate = true
+    if (dateFilter !== 'all' && s.date_created) {
+      const now = new Date().getTime()
+      const sessTime = new Date(s.date_created).getTime()
+      const diffDays = (now - sessTime) / (1000 * 3600 * 24)
+      if (dateFilter === '7days') {
+        matchesDate = diffDays <= 7
+      } else if (dateFilter === '30days') {
+        matchesDate = diffDays <= 30
+      }
+    }
+
+    return matchesSearch && matchesTab && matchesStatus && matchesDate
   })
 
-  const getStatusBadge = (s) => {
-    if (s.is_interrupted || s.status === 'interrupted') {
-      return <span className="badge badge--warning">⚠ Interrupted</span>
-    }
-    if (s.status === 'recording') {
-      return <span className="badge badge--danger pulse-dot">● Recording</span>
-    }
-    if (s.status === 'audio_only') {
-      return <span className="badge badge--info">🎙️ Audio Only</span>
-    }
-    if (s.status === 'partial_transcript') {
-      return <span className="badge badge--warning">📄 Partial Transcript</span>
-    }
-    return <span className="badge badge--success">✓ Completed</span>
-  }
-
   return (
-    <div className="card session-history-card">
-      <div className="card-header">
-        <div className="history-header-title">
-          <h3>Church Service Sessions History</h3>
-          <span className="history-count">
-            {sessions.length} {sessions.length === 1 ? 'Session' : 'Sessions'} Total
-          </span>
+    <div className="sessions-history-page-container">
+      {/* ------------------------------------------------------------- */}
+      {/* 1. TOP HEADER & NEW SESSION ACTION                            */}
+      {/* ------------------------------------------------------------- */}
+      <div className="sessions-history-header">
+        <div>
+          <h1 className="sessions-history-title">Sessions History</h1>
+          <p className="sessions-history-subtitle">
+            Showing all recorded and active sessions{' '}
+            <span className="sessions-count-pill">{sessions.length}</span>
+          </p>
         </div>
-        <button
-          type="button"
-          className="btn btn--secondary btn--small"
-          onClick={onRefresh}
-          disabled={isLoading}
-          title="Refresh Session List"
-        >
-          ↻ Refresh
-        </button>
+
+        <div className="sessions-header-actions">
+          {onRefresh && (
+            <button
+              type="button"
+              className="btn btn--outline btn--small"
+              onClick={onRefresh}
+              disabled={isLoading}
+              title="Refresh session list from database"
+            >
+              ↻ Refresh
+            </button>
+          )}
+
+          {onStartNewSession && (
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={onStartNewSession}
+              id="btn-history-new-session"
+            >
+              + New Session
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="card-body">
-        {/* Filters & Search */}
-        <div className="session-filters-row">
-          <input
-            type="text"
-            className="form-control session-search-input"
-            placeholder="Search by sermon title or session ID..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      {/* ------------------------------------------------------------- */}
+      {/* 2. FILTER & SEARCH CONTROLS                                   */}
+      {/* ------------------------------------------------------------- */}
+      <div className="sessions-filter-panel">
+        {/* Top Filter Row: Search + Status Tabs */}
+        <div className="filter-top-row">
+          <div className="filter-search-box">
+            <span className="search-icon">🔍</span>
+            <input
+              type="text"
+              className="filter-search-input"
+              placeholder="Search service, title, minister..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
 
-          <div className="status-filter-group">
-            <label htmlFor="status-filter-select">Status:</label>
+          <div className="filter-tabs-group">
+            <button
+              type="button"
+              className={`filter-tab-btn ${activeTab === 'all' ? 'filter-tab-btn--active' : ''}`}
+              onClick={() => setActiveTab('all')}
+            >
+              All Sessions
+            </button>
+
+            <button
+              type="button"
+              className={`filter-tab-btn ${activeTab === 'in_progress' ? 'filter-tab-btn--active' : ''}`}
+              onClick={() => setActiveTab('in_progress')}
+            >
+              In Progress
+            </button>
+
+            <button
+              type="button"
+              className={`filter-tab-btn ${activeTab === 'completed' ? 'filter-tab-btn--active' : ''}`}
+              onClick={() => setActiveTab('completed')}
+            >
+              Completed
+            </button>
+
+            <button
+              type="button"
+              className={`filter-tab-btn filter-tab-btn--attention ${
+                activeTab === 'needs_attention' ? 'filter-tab-btn--active-attention' : ''
+              }`}
+              onClick={() => setActiveTab('needs_attention')}
+            >
+              ⚠️ Needs Attention
+            </button>
+          </div>
+        </div>
+
+        {/* Secondary Filter Row: Dropdowns & Reset */}
+        <div className="filter-sub-row">
+          <div className="filter-dropdowns">
             <select
-              id="status-filter-select"
-              className="form-control status-select"
+              className="form-control filter-select"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="all">All Statuses</option>
+              <option value="needs_verification">Needs Verification</option>
+              <option value="verified">Verified</option>
+              <option value="editing">In Editing</option>
               <option value="completed">Completed</option>
               <option value="interrupted">Interrupted</option>
-              <option value="audio_only">Audio Only</option>
-              <option value="partial_transcript">Partial Transcript</option>
-              <option value="verified">Verified</option>
+            </select>
+
+            <select
+              className="form-control filter-select"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+            >
+              <option value="all">All Time</option>
+              <option value="7days">Last 7 Days</option>
+              <option value="30days">Last 30 Days</option>
             </select>
           </div>
-        </div>
 
-        {/* Sessions List */}
-        {filteredSessions.length === 0 ? (
-          <div className="empty-state">
-            <p>
-              {sessions.length === 0
-                ? 'No sessions recorded yet. Start a live recording or upload a sermon to create your first session.'
-                : 'No sessions match your search criteria.'}
-            </p>
-          </div>
-        ) : (
-          <div className="sessions-list-grid">
-            {filteredSessions.map((s) => (
-              <div key={s.session_id} className={`session-card-item ${s.is_interrupted ? 'session-item--interrupted' : ''}`}>
-                <div className="session-card-top">
-                  <div className="session-title-block">
-                    <h4 className="session-title">{s.title || 'Untitled Session'}</h4>
-                    <span className="session-date-sub">{formatDate(s.date_created)}</span>
-                  </div>
-                  <div className="session-badges-block">
-                    {getStatusBadge(s)}
-                    {s.verification_status === 'complete' && (
-                      <span className="badge badge--verified">✅ Verified</span>
-                    )}
-                    {s.verification_status === 'in_progress' && (
-                      <span className="badge badge--warning">🔄 Verifying</span>
-                    )}
-                    {s.reporting_status === 'reports_ready' && (
-                      <span className="badge badge--primary">⚡ Reports Ready</span>
-                    )}
-                    {s.reporting_status === 'partial' && (
-                      <span className="badge badge--warning">⚡ Report Draft</span>
-                    )}
-                    {s.proofreading_status === 'complete' && (
-                      <span className="badge badge--success">✓ Proofreading Complete</span>
-                    )}
-                    {(s.proofreading_status === 'ready_for_review' || s.proofreading_status === 'generating') && (
-                      <span className="badge badge--primary">🔍 In Proofreading</span>
-                    )}
-                    {s.editing_status === 'complete' && s.proofreading_status !== 'complete' && s.proofreading_status !== 'ready_for_review' && (
-                      <span className="badge badge--success">✓ Editing Complete</span>
-                    )}
-                    {(s.editing_status === 'draft_ready' || s.editing_status === 'in_review') && (
-                      <span className="badge badge--primary">📝 In Editing</span>
-                    )}
-                  </div>
+          {(searchTerm || activeTab !== 'all' || statusFilter !== 'all' || dateFilter !== 'all') && (
+            <button
+              type="button"
+              className="btn-clear-filters"
+              onClick={() => {
+                setSearchTerm('')
+                setActiveTab('all')
+                setStatusFilter('all')
+                setDateFilter('all')
+              }}
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 3. 3-COLUMN SESSION CARDS GRID                                */}
+      {/* ------------------------------------------------------------- */}
+      {filteredSessions.length === 0 ? (
+        <div className="sessions-empty-card">
+          <div className="empty-icon">📋</div>
+          <h3>No Sessions Found</h3>
+          <p>
+            {sessions.length === 0
+              ? 'No sessions have been recorded yet. Click "+ New Session" to start recording your first service.'
+              : 'No sessions match your search or filter criteria.'}
+          </p>
+        </div>
+      ) : (
+        <div className="sessions-cards-grid-3col">
+          {filteredSessions.map((s) => {
+            const isInterrupted = s.is_interrupted
+            const isLive = s.status === 'recording'
+            const isVerified = s.verification_status === 'completed' || !!s.verified_text
+            const needsVerification = s.flag_count > 0 && !isVerified
+            const isFinalReady = s.final_report_status === 'complete'
+
+            // Determine card accent class and badge
+            let accentClass = 'session-card-accent--default'
+            let badgeComponent = <span className="status-badge badge--default">Completed</span>
+            let actionBtnText = 'View Record'
+            let actionBtnClass = 'btn--outline'
+
+            if (isInterrupted) {
+              accentClass = 'session-card-accent--interrupted'
+              badgeComponent = <span className="status-badge badge--interrupted">⚠️ Interrupted</span>
+              actionBtnText = 'Review Log'
+              actionBtnClass = 'btn--danger'
+            } else if (isLive) {
+              accentClass = 'session-card-accent--live'
+              badgeComponent = <span className="status-badge badge--live">● Live</span>
+              actionBtnText = 'Open Monitor'
+              actionBtnClass = 'btn--primary'
+            } else if (needsVerification) {
+              accentClass = 'session-card-accent--verification'
+              badgeComponent = <span className="status-badge badge--verification">Needs Verification</span>
+              actionBtnText = 'Continue Verification'
+              actionBtnClass = 'btn--primary'
+            } else if (isVerified && s.reporting_status === 'reports_ready') {
+              accentClass = 'session-card-accent--editing'
+              badgeComponent = <span className="status-badge badge--editing">📄 Ready for Editing</span>
+              actionBtnText = 'Continue Editing'
+              actionBtnClass = 'btn--primary'
+            } else if (isVerified) {
+              accentClass = 'session-card-accent--verified'
+              badgeComponent = <span className="status-badge badge--verified">✓ Verified</span>
+              actionBtnText = 'View Record'
+              actionBtnClass = 'btn--outline'
+            } else if (isFinalReady) {
+              accentClass = 'session-card-accent--completed'
+              badgeComponent = <span className="status-badge badge--completed">🏆 Final Report</span>
+              actionBtnText = 'Download Report'
+              actionBtnClass = 'btn--primary'
+            }
+
+            return (
+              <div key={s.session_id} className={`session-card-stitch ${accentClass}`}>
+                {/* Card Top: Status Badge + Date */}
+                <div className="card-stitch-top">
+                  {badgeComponent}
+                  <span className="card-stitch-date">{formatDate(s.date_created)}</span>
                 </div>
 
-                <div className="session-card-details">
-                  <div className="session-stat">
-                    <span className="stat-label">Duration:</span>
-                    <span className="stat-value">{formatSeconds(s.duration_seconds || s.audio_duration_seconds)}</span>
-                  </div>
+                {/* Card Body: Title + Speaker */}
+                <div className="card-stitch-body">
+                  <h3 className="card-stitch-title" title={s.title || 'Untitled Session'}>
+                    {s.title || 'Untitled Session'}
+                  </h3>
 
-                  <div className="session-stat">
-                    <span className="stat-label">Artifacts:</span>
-                    <span className="session-artifacts">
-                      {(s.audio_filename || s.audio_file_size > 0) && (
-                        <span className="artifact-tag tag--audio">✓ Audio</span>
-                      )}
-                      {(s.transcript_id || s.segment_count > 0) && (
-                        <span className="artifact-tag tag--transcript">✓ Raw Transcript</span>
-                      )}
-                      {s.verification_status === 'complete' && (
-                        <span className="artifact-tag tag--verified">✓ Verified</span>
-                      )}
-                      {s.reporting_status === 'reports_ready' && (
-                        <span className="artifact-tag tag--reported">✓ Reports (A & B)</span>
-                      )}
-                      {(s.editing_status === 'complete' || s.editing_status === 'draft_ready' || s.editing_status === 'in_review') && (
-                        <span className="artifact-tag tag--edited">✓ Edited Report</span>
-                      )}
-                      {(s.proofreading_status === 'complete' || s.proofreading_status === 'ready_for_review') && (
-                        <span className="artifact-tag tag--verified">✓ Proofread</span>
-                      )}
-                      {s.flag_count > 0 && s.verification_status !== 'complete' && (
-                        <span className="artifact-tag tag--flag" title={`${s.flag_count} items flagged for verification`}>
-                          ⚠️ {s.flag_count} {s.flag_count === 1 ? 'Flag' : 'Flags'}
-                        </span>
-                      )}
+                  <div className="card-stitch-speaker">
+                    <span className="speaker-icon">👤</span>
+                    <span className="speaker-name">
+                      {s.minister || (s.metadata_json ? JSON.parse(s.metadata_json || '{}').minister : '') || 'Pastor / Minister'}
                     </span>
                   </div>
                 </div>
 
-                {s.recovery_notes && (
-                  <div className="session-recovery-note">
-                    <small>ℹ️ {s.recovery_notes}</small>
+                {/* Card Meta: Time & Duration */}
+                <div className="card-stitch-meta-row">
+                  <div className="meta-col">
+                    <span className="meta-col-label">Time</span>
+                    <span className="meta-col-val">{formatTime(s.date_created)}</span>
                   </div>
-                )}
 
-                <div className="session-card-actions">
+                  <div className="meta-col">
+                    <span className="meta-col-label">Duration</span>
+                    <span className="meta-col-val">
+                      {formatDuration(s.duration_seconds || s.audio_duration_seconds)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card Footer Actions */}
+                <div className="card-stitch-footer">
                   <button
                     type="button"
-                    className="btn btn--primary btn--small"
+                    className={`btn btn--small btn--full-width ${actionBtnClass}`}
                     onClick={() => onOpenSession(s.session_id)}
                   >
-                    {s.proofreading_status === 'complete'
-                      ? 'Ready for Final Report →'
-                      : s.proofreading_status === 'ready_for_review'
-                      ? 'Review Proofreading →'
-                      : s.editing_status === 'complete'
-                      ? 'Ready for Proofreading →'
-                      : s.editing_status === 'draft_ready' || s.editing_status === 'in_review'
-                      ? 'Continue Editing →'
-                      : s.reporting_status === 'reports_ready'
-                      ? 'Continue to Editing →'
-                      : s.verification_status === 'complete'
-                      ? 'Continue to Reporting →'
-                      : 'Open Session →'}
+                    {actionBtnText}
                   </button>
 
-                  <button
-                    type="button"
-                    className="btn btn--danger-outline btn--small"
-                    onClick={() => {
-                      if (window.confirm(`Are you sure you want to delete session "${s.title}"?`)) {
-                        onDeleteSession(s.session_id)
-                      }
-                    }}
-                    title="Delete session record"
-                  >
-                    🗑️
-                  </button>
+                  {onDeleteSession && (
+                    <button
+                      type="button"
+                      className="btn-delete-stitch"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (window.confirm(`Delete session "${s.title || s.session_id}"?`)) {
+                          onDeleteSession(s.session_id)
+                        }
+                      }}
+                      title="Delete session record"
+                    >
+                      🗑️
+                    </button>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

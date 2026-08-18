@@ -403,10 +403,8 @@ class LiveTranscriptionSession:
             self._recognizer.session_started.connect(on_session_started)
             self._recognizer.recognizing.connect(on_recognizing)
             self._recognizer.recognized.connect(on_recognized)
-            self._recognizer.canceled.connect(on_canceled)
-
-            # Start recognition
-            self._recognizer.start_continuous_recognition_async()
+            # Start recognition synchronously in this background worker thread
+            self._recognizer.start_continuous_recognition()
 
             # Audio feeding loop from queue to push stream
             while not self._stop_event.is_set():
@@ -428,17 +426,30 @@ class LiveTranscriptionSession:
                 except Exception:
                     break
 
+            if self._push_stream:
+                try:
+                    self._push_stream.close()
+                except Exception:
+                    pass
+
+            if self._recognizer:
+                try:
+                    self._recognizer.stop_continuous_recognition()
+                except Exception:
+                    pass
+
         except Exception as e:
             print(f"Live transcription worker error: {e}")
             self.status = "unavailable"
-            self.status_message = "Live transcription unavailable"
+            self.status_message = f"Live transcription unavailable: {e}"
             self._notify_status()
         finally:
-            if self._recognizer:
+            if self._push_stream:
                 try:
-                    self._recognizer.stop_continuous_recognition_async()
+                    self._push_stream.close()
                 except Exception:
                     pass
+
 
     # =========================================================================
     # WebSocket Notifications to Frontend

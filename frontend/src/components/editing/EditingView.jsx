@@ -201,6 +201,21 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleExportDocx = async () => {
+    if (!activeRev) return
+    if (isDirty) {
+      const confirmSave = window.confirm(
+        'You have unsaved manual edits!\n\nDo you want to save your changes before exporting to Word (.docx)?\n\nClick OK to Save & Export, or Cancel to abort export.'
+      )
+      if (confirmSave) {
+        await handleSave()
+      } else {
+        return
+      }
+    }
+    window.location.href = `http://localhost:8000/api/editing/sessions/${sessionId}/export-docx`
+  }
+
   const activeRev = editingData.active_revision
   const isComplete = editingData.editing_status === 'complete'
   const canEdit = editingData.sources_available.can_edit
@@ -391,6 +406,16 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
                 </div>
 
                 <div className="editor-top-actions">
+                  <button
+                    type="button"
+                    className="btn btn--outline btn--small"
+                    onClick={handleExportDocx}
+                    title="Download current saved edited report as Microsoft Word (.docx)"
+                    id="btn-export-edited-docx"
+                  >
+                    📥 Export Edited Report (.docx)
+                  </button>
+
                   <button
                     type="button"
                     className="btn btn--secondary btn--small"

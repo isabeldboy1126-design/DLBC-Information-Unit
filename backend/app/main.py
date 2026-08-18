@@ -14,6 +14,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Load environment variables from .env file
 load_dotenv()
+_backend_env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+if os.path.exists(_backend_env_path):
+    load_dotenv(_backend_env_path)
 
 
 from app.database.session_repo import session_repo
@@ -64,6 +67,7 @@ from app.verification.router import router as verification_router
 from app.reporting.router import router as reporting_router
 from app.editing.router import router as editing_router
 from app.proofreading.router import router as proofreading_router
+from app.final_report.router import router as final_report_router
 
 app.include_router(audio_router)
 app.include_router(transcription_router)
@@ -72,6 +76,7 @@ app.include_router(verification_router)
 app.include_router(reporting_router)
 app.include_router(editing_router)
 app.include_router(proofreading_router)
+app.include_router(final_report_router)
 
 
 
