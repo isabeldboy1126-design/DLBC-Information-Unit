@@ -10,14 +10,17 @@ Provides endpoints for:
 """
 
 import time
+import urllib.parse
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import StreamingResponse
 from app.database.editing_repo import editing_repo
 from app.database.reporting_repo import reporting_repo
 from app.database.session_repo import session_repo
 from app.services.editing_provider import gemini_editing_provider
+from app.services.document_service import document_service
 
 router = APIRouter(prefix="/api/editing", tags=["AI Editing (Phase 7)"])
 
@@ -361,18 +364,22 @@ async def export_edited_report_docx(session_id: str):
     programme = session.get("metadata", {}).get("programme") or session.get("programme")
     date_str = session.get("date_created") or session.get("created_at")
 
-    filename = document_service.generate_filename(title, programme, date_str, suffix="Edited Draft")
+    raw_filename = document_service.generate_filename(title, programme, date_str, suffix="Edited Draft")
+    filename = document_service.sanitize_filename(raw_filename.replace('.docx', '')) + '.docx'
     docx_stream = document_service.generate_edited_report_docx(
         report_title=title,
         report_text=active_rev["report_text"],
         session_metadata=session,
     )
 
+    encoded_filename = urllib.parse.quote(filename)
+    ascii_filename = filename.encode("ascii", "replace").decode("ascii").replace('"', '')
+
     return StreamingResponse(
         docx_stream,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Disposition": f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}',
             "Cache-Control": "no-cache",
         },
     )

@@ -37,9 +37,15 @@ class DocumentService:
     """
 
     def sanitize_filename(self, text: str) -> str:
-        """Sanitizes strings for safe filenames across Windows, macOS, and Linux."""
+        """Sanitizes strings for safe filenames across Windows, macOS, Linux, and HTTP headers."""
+        if not text:
+            return "DLBC_Document"
+        # Normalize unicode dashes and quotes to clean ASCII equivalents
+        clean = text.replace('\u2014', ' - ').replace('\u2013', ' - ')
+        clean = clean.replace('\u2018', "'").replace('\u2019', "'")
+        clean = clean.replace('\u201c', '"').replace('\u201d', '"')
         # Replace OS forbidden characters: < > : " / \ | ? *
-        clean = re.sub(r'[<>:"/\\|?*]', ' - ', text)
+        clean = re.sub(r'[<>:"/\\|?*]', ' - ', clean)
         # Remove extra whitespace
         clean = re.sub(r'\s+', ' ', clean).strip()
         # Limit length to avoid path issues
@@ -349,7 +355,9 @@ class DocumentService:
         self._apply_page_setup(doc)
 
         speaker = (
-            session_metadata.get("metadata", {}).get("speaker")
+            session_metadata.get("metadata", {}).get("minister")
+            or session_metadata.get("metadata", {}).get("speaker")
+            or session_metadata.get("minister")
             or session_metadata.get("speaker")
             or "Pastor W.F. Kumuyi"
         )
@@ -393,7 +401,9 @@ class DocumentService:
         self._apply_page_setup(doc)
 
         speaker = (
-            session_metadata.get("metadata", {}).get("speaker")
+            session_metadata.get("metadata", {}).get("minister")
+            or session_metadata.get("metadata", {}).get("speaker")
+            or session_metadata.get("minister")
             or session_metadata.get("speaker")
             or "Pastor W.F. Kumuyi"
         )

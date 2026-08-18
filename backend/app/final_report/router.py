@@ -10,6 +10,7 @@ Provides endpoints for:
 """
 
 from typing import Any, Dict, List, Optional
+import urllib.parse
 from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, HTTPException, Response, status
@@ -196,7 +197,8 @@ async def download_final_report_docx(session_id: str):
 
     programme = session.get("metadata", {}).get("programme") or session.get("programme")
     date_str = session.get("date_created") or session.get("created_at")
-    filename = active_final.get("docx_filename") or document_service.generate_filename(active_final["report_title"], programme, date_str)
+    raw_filename = active_final.get("docx_filename") or document_service.generate_filename(active_final["report_title"], programme, date_str)
+    filename = document_service.sanitize_filename(raw_filename.replace('.docx', '')) + '.docx'
 
     # Generate fresh stream from exact saved report text
     docx_stream = document_service.generate_final_report_docx(
@@ -205,11 +207,14 @@ async def download_final_report_docx(session_id: str):
         session_metadata=session,
     )
 
+    encoded_filename = urllib.parse.quote(filename)
+    ascii_filename = filename.encode("ascii", "replace").decode("ascii").replace('"', '')
+
     return StreamingResponse(
         docx_stream,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Disposition": f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}',
             "Cache-Control": "no-cache",
         },
     )
