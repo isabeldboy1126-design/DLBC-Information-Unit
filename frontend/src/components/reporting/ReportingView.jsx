@@ -12,7 +12,7 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
   const [aiStatus, setAiStatus] = useState({
     configured: false,
     provider: 'gemini',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.7-flash',
     active_standard_version: 'v1',
     message: '',
   })
@@ -107,34 +107,35 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
   const isGeneratingB = generatingRole === 'reporter_b' || isGeneratingAll
 
   return (
-    <div className="reporting-workspace">
-      {/* Top Navigation & Session Identity Bar */}
-      <div className="reporting-header-bar">
-        <div className="header-left">
-          <button type="button" className="btn btn--secondary btn--small" onClick={onBack}>
+    <div className="reporting-workspace-container">
+      {/* Top Hero Banner Matching reporting-workspace.png */}
+      <div className="reporting-hero-banner">
+        <div className="reporting-hero-top">
+          <button type="button" className="btn btn--outline btn--small" onClick={onBack} style={{ color: '#ffffff', borderColor: 'rgba(255,255,255,0.3)' }}>
             ← Back to Session
           </button>
-          <div>
-            <h2>{session?.title || 'Session Reporting'}</h2>
-            <div className="session-breadcrumbs">
-              <span className="breadcrumb-item">Recording ✓</span>
-              <span className="breadcrumb-item">Raw Transcript ✓</span>
-              <span className="breadcrumb-item">Verified Transcript ✓</span>
-              <span className="breadcrumb-item breadcrumb-item--active">Reporting ●</span>
-              <span className="breadcrumb-item breadcrumb-item--future">Editing ○</span>
-              <span className="breadcrumb-item breadcrumb-item--future">Proofreading ○</span>
-            </div>
-          </div>
-        </div>
 
-        <div className="header-right">
           <button
             type="button"
-            className="btn btn--outline btn--small"
+            className="reporting-standard-badge-btn"
             onClick={() => setIsStandardsOpen(true)}
+            id="btn-manage-reporting-standards"
           >
-            ⚙️ Reporting Standards ({aiStatus.active_standard_version})
+            <span>Standard: <strong>Reporting Standard {aiStatus.active_standard_version}</strong></span>
+            <span style={{ textDecoration: 'underline', marginLeft: '0.25rem' }}>Manage</span>
           </button>
+        </div>
+
+        <div className="reporting-hero-title-group">
+          <h1>{session?.title || 'Sunday Morning Worship & Sermon'}</h1>
+          <div className="reporting-lifecycle-stepper-line">
+            <span className="lifecycle-inline-item lifecycle-inline-item--done">Recording ✓</span>
+            <span className="lifecycle-inline-item lifecycle-inline-item--done">Raw Transcript ✓</span>
+            <span className="lifecycle-inline-item lifecycle-inline-item--done">Verified Transcript ✓</span>
+            <span className="lifecycle-inline-item lifecycle-inline-item--active">Reporting ●</span>
+            <span className="lifecycle-inline-item lifecycle-inline-item--future">Editing ○</span>
+            <span className="lifecycle-inline-item lifecycle-inline-item--future">Proofreading ○</span>
+          </div>
         </div>
       </div>
 
@@ -151,32 +152,46 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
         </div>
       )}
 
-      {/* AI Configuration Status Ribbon */}
-      <div className="reporting-status-ribbon">
-        <div className="ribbon-item">
-          <span className="ribbon-label">Source Text:</span>
-          <span className="badge badge--success">✓ Verified Transcript (Authoritative)</span>
+      {/* Reports Ready Floating Banner Matching reporting-workspace.png */}
+      {bothReady ? (
+        <div className="reporting-ready-floating-card">
+          <div className="ready-card-left">
+            <div className="ready-check-icon-circle">✓</div>
+            <div className="ready-card-text">
+              <strong>Both Independent Report Drafts Are Ready!</strong>
+              <p>Reporter A (Structure) and Reporter B (Details) have completed their independent analyses.</p>
+            </div>
+          </div>
+          <div className="ready-card-actions">
+            <button
+              type="button"
+              className="btn btn--outline btn--small"
+              onClick={() => handleGenerate('all')}
+              disabled={generatingRole !== null}
+              title="Regenerate both drafts"
+            >
+              ↻ Regenerate
+            </button>
+            <button
+              type="button"
+              className="btn-continue-editing-primary"
+              onClick={onNavigateToEditing}
+              id="btn-continue-to-editing"
+            >
+              <span>Continue to Editing</span>
+              <span>→</span>
+            </button>
+          </div>
         </div>
-
-        <div className="ribbon-item">
-          <span className="ribbon-label">Active Standard:</span>
-          <span className="badge badge--primary">Reporting Standard {aiStatus.active_standard_version}</span>
-        </div>
-
-        <div className="ribbon-item">
-          <span className="ribbon-label">AI Status:</span>
-          {aiStatus.configured ? (
-            <span className="badge badge--success">
-              ● Ready ({aiStatus.model})
-            </span>
-          ) : (
-            <span className="badge badge--warning" title="Add GEMINI_API_KEY to backend .env">
-              ⚠ AI Reporting is not configured (Key Required)
-            </span>
-          )}
-        </div>
-
-        <div className="ribbon-action">
+      ) : (
+        <div className="card reporting-status-ribbon" style={{ background: '#ffffff', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+            <span>Source: <strong className="badge badge--success">✓ Verified Transcript (Authoritative)</strong></span>
+            <span>Standard: <strong className="badge badge--primary">Reporting Standard {aiStatus.active_standard_version}</strong></span>
+            {!aiStatus.configured && (
+              <span className="badge badge--warning">⚠ Gemini API Key Required</span>
+            )}
+          </div>
           <button
             type="button"
             className="btn btn--primary"
@@ -186,12 +201,10 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
           >
             {generatingRole === 'all'
               ? '⚡ Generating Reports...'
-              : bothReady
-              ? '↻ Regenerate Both Reports'
               : '⚡ Generate Reports'}
           </button>
         </div>
-      </div>
+      )}
 
       {/* Notice if AI key is missing */}
       {!aiStatus.configured && (
@@ -206,31 +219,12 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
         </div>
       )}
 
-      {/* Reports Ready for Next Stage (Editing) Banner */}
-      {bothReady && (
-        <div className="reports-ready-banner">
-          <div className="banner-text">
-            <h4>✓ Both Independent Report Drafts Are Ready!</h4>
-            <p>
-              Reporter A (Main Structure) and Reporter B (Details & Omissions) have produced independent drafts from the Verified Transcript.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="btn btn--success"
-            onClick={onNavigateToEditing}
-            id="btn-continue-to-editing"
-          >
-            Reports Ready for Editing →
-          </button>
-        </div>
-      )}
-
-      {/* Dual Independent Reporter Output Grid */}
-      <div className="reporting-dual-grid">
+      {/* Dual Independent Reporter Output Grid Matching reporting-workspace.png */}
+      <div className="reporting-dual-cards-grid">
         <ReportCard
           role="reporter_a"
-          roleTitle="Reporter A — Main Message & Structure"
+          roleBadge="A"
+          roleTitle="Main Message & Structure"
           roleSubtitle="Focuses on central themes, logical outline, key statements, and core scriptures"
           report={reporterA}
           isGenerating={isGeneratingA}
@@ -240,7 +234,8 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
 
         <ReportCard
           role="reporter_b"
-          roleTitle="Reporter B — Detail & Omission Watch"
+          roleBadge="B"
+          roleTitle="Detail & Omission Watch"
           roleSubtitle="Focuses on supporting facts, illustrations, quotes, names, numbers, and subtle details"
           report={reporterB}
           isGenerating={isGeneratingB}

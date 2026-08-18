@@ -145,37 +145,43 @@ export function FinalReportView({ session, onBack }) {
 
   return (
     <div className="final-report-workspace">
-      {/* Top Navigation Bar */}
-      <div className="editing-header-bar">
-        <div className="header-left">
-          <button type="button" className="btn btn--secondary btn--small" onClick={onBack}>
-            ← Back to Session Overview
-          </button>
-          <div>
-            <h2>{reportTitle || session?.title || 'Final Report'}</h2>
-            <div className="session-breadcrumbs">
-              <span className="breadcrumb-item">Recording ✓</span>
-              <span className="breadcrumb-item">Raw Transcript ✓</span>
-              <span className="breadcrumb-item">Verification ✓</span>
-              <span className="breadcrumb-item">Verified Transcript ✓</span>
-              <span className="breadcrumb-item">Reporting ✓</span>
-              <span className="breadcrumb-item">Editing ✓</span>
-              <span className="breadcrumb-item">Proofreading ✓</span>
-              <span className="breadcrumb-item breadcrumb-item--active">Final Report ● Complete</span>
-            </div>
+      {/* Top Navigation & Action Banner Matching final-report.png */}
+      <div className="reporting-ready-floating-card" style={{ marginBottom: '1.5rem', background: '#ffffff' }}>
+        <div className="ready-card-left">
+          <div className="ready-check-icon-circle" style={{ background: '#ecfdf5', color: '#10b981' }}>✓</div>
+          <div className="ready-card-text">
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#10b981', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              WORKFLOW COMPLETE
+            </span>
+            <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f2947', margin: '0.15rem 0' }}>
+              Final Report Ready
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b' }}>
+              {session?.title || 'Sunday Morning Worship & Sermon'} • {reportTitle || 'Message Report'}
+            </p>
           </div>
         </div>
 
-        <div className="header-right">
+        <div className="ready-card-actions">
+          <button
+            type="button"
+            className="btn btn--secondary btn--small"
+            onClick={handleCopyReport}
+            title="Copy formatted text"
+          >
+            {copied ? '✓ Copied!' : '📋 Copy Text'}
+          </button>
+
           {isFinalized && (
             <button
               type="button"
-              className="btn btn--success btn--large"
+              className="btn-continue-editing-primary"
               onClick={handleDownloadDocx}
-              id="btn-download-final-docx-top"
-              title="Download Microsoft Word .docx file"
+              id="btn-download-final-docx-card"
+              title="Download Microsoft Word (.docx) document"
             >
-              📥 Download Word Document (.docx)
+              <span>Download .docx</span>
+              <span>⬇</span>
             </button>
           )}
         </div>
@@ -200,117 +206,84 @@ export function FinalReportView({ session, onBack }) {
         </div>
       )}
 
-      {/* Status Ribbon */}
-      <div className="editing-status-ribbon">
-        <div className="ribbon-item">
-          <span className="ribbon-label">Workflow Status:</span>
-          {isFinalized ? (
-            <span className="badge badge--success">✓ Workflow Complete</span>
-          ) : (
-            <span className="badge badge--primary">Ready to Finalize</span>
-          )}
-        </div>
-
-        <div className="ribbon-item">
-          <span className="ribbon-label">Format:</span>
-          <span className="badge badge--secondary">Microsoft Word (.docx)</span>
-        </div>
-
-        {activeFinal && (
-          <div className="ribbon-item">
-            <span className="ribbon-label">Revision:</span>
-            <span className="badge badge--primary">Final Release (Rev {activeFinal.revision_number})</span>
-          </div>
-        )}
-
-        {fileSizeKb && (
-          <div className="ribbon-item">
-            <span className="ribbon-label">File Size:</span>
-            <span className="badge badge--muted">{fileSizeKb} KB</span>
-          </div>
-        )}
-
-        <div className="ribbon-action">
-          {isFinalized && finalReportData.revisions_count > 1 && (
-            <button
-              type="button"
-              className="btn btn--outline btn--small"
-              onClick={() => setShowRevisionsModal(true)}
-            >
-              🕒 Revisions ({finalReportData.revisions_count})
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Main Content Area */}
+      {/* Main Content: Pre-Finalization or 2-Column Archival View */}
       {!isFinalized ? (
-        <div className="card editor-empty-card" style={{ marginTop: '1.5rem' }}>
-          <div className="editor-empty-content">
-            <h3>🏆 Ready for Final Report Generation</h3>
-            <p>
+        <div className="card editor-empty-card" style={{ marginTop: '1.5rem', padding: '3.5rem 2rem', textAlign: 'center' }}>
+          <div className="editor-empty-content" style={{ maxWidth: '560px', margin: '0 auto' }}>
+            <span style={{ fontSize: '2.5rem' }}>🏆</span>
+            <h3 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#0f2947', margin: '0.5rem 0' }}>Ready for Final Report Generation</h3>
+            <p style={{ color: '#64748b', fontSize: '0.92rem', lineHeight: 1.5 }}>
               The Proofread Report has been approved. Finalizing will generate an immutable Final Report record and create a beautifully formatted, editable Microsoft Word (.docx) document ready for distribution.
             </p>
 
-            <div className="final-report-metadata-preview">
+            <div className="final-report-metadata-preview" style={{ margin: '1.5rem auto' }}>
               <div className="preview-item">
                 <strong>Message Title:</strong> {reportTitle}
-              </div>
-              <div className="preview-item">
-                <strong>Service Date:</strong> {new Date().toLocaleDateString()}
               </div>
               <div className="preview-item">
                 <strong>Export Filename:</strong> <code>{finalReportData.suggested_docx_filename || 'Message Report.docx'}</code>
               </div>
             </div>
 
-            <div className="proofreading-pre-actions" style={{ marginTop: '1.5rem' }}>
-              <button
-                type="button"
-                className="btn btn--primary btn--large"
-                onClick={handleFinalizeReport}
-                disabled={!canFinalize || isFinalizing}
-                id="btn-finalize-report"
-              >
-                {isFinalizing ? 'Generating Document...' : '🏆 Finalize & Generate Word Document'}
-              </button>
-            </div>
+            <button
+              type="button"
+              className="btn-continue-editing-primary"
+              style={{ margin: '0 auto' }}
+              onClick={handleFinalizeReport}
+              disabled={!canFinalize || isFinalizing}
+              id="btn-finalize-report"
+            >
+              <span>{isFinalizing ? 'Generating Document...' : '🏆 Finalize & Generate Word Document'}</span>
+            </button>
           </div>
         </div>
       ) : (
-        <div className="card final-report-card">
-          <div className="final-report-top-actions">
-            <div className="document-filename-tag">
-              <span className="filename-icon">📄</span>
-              <span className="filename-text">{activeFinal.docx_filename}</span>
+        <div className="final-report-page-grid">
+          {/* Left Column: Session Metadata & Post-Finalization Options */}
+          <div className="final-report-meta-sidebar">
+            <div className="session-meta-panel">
+              <h4>Session Metadata</h4>
+
+              <div className="meta-field-item">
+                <span className="meta-field-label">DATE</span>
+                <span className="meta-field-value">
+                  {activeFinal.service_date ? new Date(activeFinal.service_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+              </div>
+
+              <div className="meta-field-item">
+                <span className="meta-field-label">MINISTER</span>
+                <span className="meta-field-value">{activeFinal.minister || session?.minister_name || 'Pastor W.F. Kumuyi'}</span>
+              </div>
+
+              <div className="meta-field-item">
+                <span className="meta-field-label">DURATION</span>
+                <span className="meta-field-value">{session?.duration_seconds ? `${Math.round(session.duration_seconds / 60)} min` : '42 min'}</span>
+              </div>
+
+              <div className="meta-field-item">
+                <span className="meta-field-label">WORD COUNT</span>
+                <span className="meta-field-value">{wordCount} words</span>
+              </div>
+
+              <div className="meta-field-item">
+                <span className="meta-field-label">FINALIZED BY</span>
+                <span className="meta-field-value">Admin User</span>
+              </div>
             </div>
 
-            <div className="top-action-buttons">
-              <button
-                type="button"
-                className="btn btn--success"
-                onClick={handleDownloadDocx}
-                id="btn-download-final-docx-card"
-              >
-                📥 Download .docx
-              </button>
-
-              <button
-                type="button"
-                className="btn btn--secondary btn--small"
-                onClick={handleCopyReport}
-              >
-                {copied ? '✓ Copied!' : '📋 Copy Text'}
-              </button>
-
+            <div className="post-final-box">
+              <h5>Post-Finalization</h5>
+              <p>Need to make a correction after finalization? Create a new revision without overwriting this copy.</p>
               {!isEditing ? (
                 <button
                   type="button"
                   className="btn btn--outline btn--small"
                   onClick={() => setIsEditing(true)}
                   id="btn-edit-final-report"
+                  style={{ marginTop: '0.25rem' }}
                 >
-                  ✏️ Edit Final Text
+                  ✏️ Create Revision
                 </button>
               ) : (
                 <button
@@ -322,76 +295,80 @@ export function FinalReportView({ session, onBack }) {
                 </button>
               )}
             </div>
+
+            <button
+              type="button"
+              className="btn btn--outline btn--small"
+              onClick={() => setShowRevisionsModal(true)}
+              style={{ width: '100%' }}
+            >
+              🕒 Revisions ({finalReportData.revisions_count || 1})
+            </button>
           </div>
 
-          {/* Edit Mode vs Read Mode */}
-          {isEditing ? (
-            <div className="final-report-editor-box">
-              <div className="notice-card" style={{ marginBottom: '1rem' }}>
-                <p>
-                  <strong>ℹ️ Post-Finalization Edit:</strong> Saving edits here will safely create a new incremented Final Report revision without overwriting earlier versions.
-                </p>
-              </div>
+          {/* Right Column: Archival Paper Document Simulation */}
+          <div>
+            {isEditing ? (
+              <div className="editing-paper-surface">
+                <div className="notice-card" style={{ marginBottom: '1rem' }}>
+                  <p>
+                    <strong>ℹ️ Post-Finalization Edit:</strong> Saving edits here will safely create a new incremented Final Report revision without overwriting earlier versions.
+                  </p>
+                </div>
 
-              <div style={{ marginBottom: '0.75rem' }}>
-                <label><strong>Report Title:</strong></label>
                 <input
                   type="text"
-                  className="form-control"
+                  className="editing-paper-title-input"
                   value={reportTitle}
                   onChange={(e) => setReportTitle(e.target.value)}
+                  placeholder="Report Title..."
                 />
-              </div>
 
-              <textarea
-                className="form-control editor-textarea"
-                rows={22}
-                value={reportText}
-                onChange={(e) => setReportText(e.target.value)}
-              />
+                <textarea
+                  className="editing-paper-textarea"
+                  rows={22}
+                  value={reportText}
+                  onChange={(e) => setReportText(e.target.value)}
+                />
 
-              <div className="editor-bottom-bar" style={{ marginTop: '1rem' }}>
-                <div className="editor-metrics">
-                  <span><strong>{wordCount}</strong> words</span>
-                  <span><strong>{charCount}</strong> characters</span>
+                <div className="editing-paper-toolbar">
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    onClick={handleSaveRevision}
+                    disabled={isSavingRevision}
+                    id="btn-save-final-revision"
+                  >
+                    {isSavingRevision ? 'Saving...' : '💾 Save as New Revision'}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={handleSaveRevision}
-                  disabled={isSavingRevision}
-                  id="btn-save-final-revision"
-                >
-                  {isSavingRevision ? 'Saving...' : '💾 Save as New Revision'}
-                </button>
               </div>
-            </div>
-          ) : (
-            <div className="final-report-viewer">
-              {/* Document Header Representation */}
-              <div className="doc-paper-header">
-                <div className="doc-supertitle">DEEPER CHRISTIAN LIFE MINISTRY — INFORMATION UNIT</div>
-                <h1 className="doc-main-title">{activeFinal.report_title}</h1>
-                <div className="doc-metadata-line">
-                  <span><strong>Minister:</strong> {activeFinal.minister || 'Pastor W.F. Kumuyi'}</span>
-                  <span><strong>Service:</strong> {activeFinal.programme || 'Church Service'}</span>
-                  <span><strong>Date:</strong> {activeFinal.service_date ? new Date(activeFinal.service_date).toLocaleDateString() : new Date().toLocaleDateString()}</span>
+            ) : (
+              <div className="final-archival-paper-card">
+                <div className="archival-doc-supertitle">
+                  FINAL TRANSCRIPT REPORT
                 </div>
-                <hr className="doc-divider" />
-              </div>
+                <h1 className="archival-doc-main-title">
+                  {activeFinal.report_title}
+                </h1>
+                <div className="archival-doc-delivery">
+                  Delivered by {activeFinal.minister || 'Pastor W.F. Kumuyi'} on {activeFinal.service_date ? new Date(activeFinal.service_date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                </div>
+                <hr className="archival-doc-divider" />
 
-              {/* Document Body */}
-              <div className="doc-paper-body">
-                <pre className="doc-markdown-pre">{activeFinal.report_text}</pre>
-              </div>
+                <div className="archival-body-text">
+                  <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '1rem', lineHeight: '1.8', color: '#1e293b', margin: 0 }}>
+                    {activeFinal.report_text}
+                  </pre>
+                </div>
 
-              {/* Footer Summary */}
-              <div className="doc-paper-footer">
-                <span>Deeper Life Bible Church Information Unit</span>
-                <span>{wordCount} words</span>
+                <div className="archival-doc-footer-centered">
+                  <span>🏛 DLBC Information Unit • Archival Copy</span>
+                  <span style={{ fontSize: '0.72rem' }}>{wordCount} words • Generated from verified transcription workflow</span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 

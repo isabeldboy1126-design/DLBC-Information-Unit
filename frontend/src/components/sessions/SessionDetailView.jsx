@@ -24,6 +24,7 @@ export function SessionDetailView({
   session,
   onBack,
   onUpdateTitle,
+  onSubViewChange,
   // Phase 5: Verification props
   verificationState,
   onStartVerification,
@@ -61,6 +62,24 @@ export function SessionDetailView({
   React.useEffect(() => {
     setActiveView(getDefaultView())
   }, [session?.session_id])
+
+  // Inform parent AppShell about current subview title and back action
+  React.useEffect(() => {
+    if (!onSubViewChange) return
+    const titles = {
+      overview: 'Session Workspace',
+      raw_transcript: 'Raw Transcript',
+      verification: 'Verification',
+      verified_transcript: 'Verified Transcript',
+      reporting: 'Reporting',
+      editing: 'Editing',
+      proofreading: 'Proofreading',
+      final_report: 'Final Report',
+    }
+    const title = titles[activeView] || 'Session Workspace'
+    const backFn = activeView === 'overview' ? onBack : () => setActiveView('overview')
+    onSubViewChange({ title, onBack: backFn })
+  }, [activeView, onBack, onSubViewChange])
 
   if (!session) return null
 
@@ -313,7 +332,6 @@ export function SessionDetailView({
       <div className="session-workspace-header">
         <div className="session-header-top-row">
           <div className="session-id-group">
-            <span className="session-id-badge">ID: {session.session_id}</span>
             <span
               className={`session-status-badge ${
                 fStatus === 'complete'
@@ -390,14 +408,30 @@ export function SessionDetailView({
             <span className="meta-icon">📅</span>
             <span>{formatDate(session.date_created)}</span>
           </div>
-          <div className="meta-item">
-            <span className="meta-icon">👤</span>
-            <span>{session.minister || 'Pst. Williams'}</span>
-          </div>
-          <div className="meta-item">
-            <span className="meta-icon">📍</span>
-            <span>Main Auditorium</span>
-          </div>
+          {(session.metadata?.programme || session.metadata_json && JSON.parse(session.metadata_json || '{}').programme || session.metadata?.eventType || session.metadata_json && JSON.parse(session.metadata_json || '{}').eventType) && (
+            <div className="meta-item">
+              <span className="meta-icon">⛪</span>
+              <span>{session.metadata?.programme || JSON.parse(session.metadata_json || '{}').programme || session.metadata?.eventType || JSON.parse(session.metadata_json || '{}').eventType}</span>
+            </div>
+          )}
+          {(session.metadata?.programmeSession || session.metadata_json && JSON.parse(session.metadata_json || '{}').programmeSession) && (
+            <div className="meta-item">
+              <span className="meta-icon">📋</span>
+              <span>{session.metadata?.programmeSession || JSON.parse(session.metadata_json || '{}').programmeSession}</span>
+            </div>
+          )}
+          {(session.minister || (session.metadata?.minister || session.metadata_json && JSON.parse(session.metadata_json || '{}').minister)) && (
+            <div className="meta-item">
+              <span className="meta-icon">👤</span>
+              <span>{session.minister || session.metadata?.minister || JSON.parse(session.metadata_json || '{}').minister}</span>
+            </div>
+          )}
+          {(session.metadata?.messageTitle || session.metadata_json && JSON.parse(session.metadata_json || '{}').messageTitle) && (
+            <div className="meta-item">
+              <span className="meta-icon">📖</span>
+              <span>{session.metadata?.messageTitle || JSON.parse(session.metadata_json || '{}').messageTitle}</span>
+            </div>
+          )}
         </div>
       </div>
 

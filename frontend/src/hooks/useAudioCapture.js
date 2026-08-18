@@ -351,7 +351,7 @@ export function useAudioCapture() {
   }, [isRecording, stopMeteringLoop])
 
   // 6. Start Real Recording (Progressive PCM Streaming to FastAPI + Live Azure Transcription + Phase 4 Session)
-  const startRecording = useCallback(async (sessionTitle = null) => {
+  const startRecording = useCallback(async (sessionTitle = null, sessionMeta = null) => {
     if (isRecording || isRecordingRef.current || isStartingRef.current) return false
     isStartingRef.current = true
     isRecordingRef.current = true
@@ -422,6 +422,7 @@ export function useAudioCapture() {
               channels: 1,
               deviceName: label,
               sessionTitle: sessionTitle ? sessionTitle.trim() : undefined,
+              metadata: sessionMeta || undefined,
             })
           )
 

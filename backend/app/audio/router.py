@@ -94,6 +94,14 @@ async def audio_stream_websocket(websocket: WebSocket):
                     )
                     current_session_id = custom_session_id or f"session_{current_session.session_id}"
 
+                    custom_metadata = payload.get("metadata") or {}
+                    metadata_to_store = {
+                        "sample_rate": sample_rate,
+                        "channels": channels,
+                        "device_name": device_name,
+                        **custom_metadata,
+                    }
+
                     # Initialize durable session in SQLite
                     try:
                         await session_repo.create_session(
@@ -104,11 +112,7 @@ async def audio_stream_websocket(websocket: WebSocket):
                             provider_name="azure_speech",
                             language_code="en-NG",
                             start_time=current_session.start_time,
-                            metadata={
-                                "sample_rate": sample_rate,
-                                "channels": channels,
-                                "device_name": device_name,
-                            },
+                            metadata=metadata_to_store,
                         )
                     except Exception as s_err:
                         print(f"Notice: Failed to initialize SQLite session: {s_err}")

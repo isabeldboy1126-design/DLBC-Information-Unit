@@ -221,6 +221,31 @@ CREATE TABLE IF NOT EXISTS final_reports (
 CREATE INDEX IF NOT EXISTS idx_final_reports_session ON final_reports(session_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_final_reports_rev ON final_reports(session_id, revision_number DESC);
 CREATE INDEX IF NOT EXISTS idx_final_reports_created ON final_reports(created_at DESC);
+
+-- Configurable Programmes & Sessions
+CREATE TABLE IF NOT EXISTS programmes (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    is_archived INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_programmes_archived ON programmes(is_archived, sort_order ASC);
+
+CREATE TABLE IF NOT EXISTS programme_sessions (
+    id TEXT PRIMARY KEY,
+    programme_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    is_archived INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(programme_id) REFERENCES programmes(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_programme_sessions_prog ON programme_sessions(programme_id, is_archived, sort_order ASC);
 """
 
 # Phase 5 migration: add verification columns to sessions table.

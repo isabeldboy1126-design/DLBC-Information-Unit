@@ -15,11 +15,72 @@ export function NewLiveSessionView({
   onStartRecording,
   onBack,
 }) {
-  const [sessionName, setSessionName] = useState('Sunday Morning Worship Service')
-  const [eventType, setEventType] = useState('Sunday Worship Service')
+  const [programmes, setProgrammes] = useState([])
+  const [selectedProgrammeId, setSelectedProgrammeId] = useState('')
+  const [selectedSessionId, setSelectedSessionId] = useState('')
   const [minister, setMinister] = useState('')
   const [messageTitle, setMessageTitle] = useState('')
+  const [customSessionName, setCustomSessionName] = useState('')
+  const [isCustomTitleEdited, setIsCustomTitleEdited] = useState(false)
   const [validationError, setValidationError] = useState('')
+  const [isLoadingProgrammes, setIsLoadingProgrammes] = useState(true)
+
+  // Fetch active configured programmes from server
+  useEffect(() => {
+    let isMounted = true
+    async function loadProgrammes() {
+      try {
+        setIsLoadingProgrammes(true)
+        const res = await fetch('http://localhost:8000/api/programmes?include_archived=false')
+        if (res.ok && isMounted) {
+          const data = await res.json()
+          setProgrammes(data)
+          if (data.length > 0) {
+            const firstProg = data[0]
+            setSelectedProgrammeId(firstProg.id)
+            const activeSessions = (firstProg.sessions || []).filter((s) => !s.is_archived)
+            if (activeSessions.length > 0) {
+              setSelectedSessionId(activeSessions[0].id)
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching programmes in NewLiveSessionView:', err)
+      } finally {
+        if (isMounted) setIsLoadingProgrammes(false)
+      }
+    }
+    loadProgrammes()
+    return () => { isMounted = false }
+  }, [])
+
+  // Currently selected programme object
+  const currentProgramme = programmes.find((p) => p.id === selectedProgrammeId) || programmes[0]
+  // Active sessions belonging to the selected programme
+  const currentProgrammeSessions = (currentProgramme?.sessions || []).filter((s) => !s.is_archived)
+  // Currently selected session object
+  const currentSession = currentProgrammeSessions.find((s) => s.id === selectedSessionId) || currentProgrammeSessions[0]
+
+  // When programme changes, reset selected session to first active session of that programme
+  const handleProgrammeChange = (progId) => {
+    setSelectedProgrammeId(progId)
+    const targetProg = programmes.find((p) => p.id === progId)
+    const activeSessions = (targetProg?.sessions || []).filter((s) => !s.is_archived)
+    if (activeSessions.length > 0) {
+      setSelectedSessionId(activeSessions[0].id)
+    } else {
+      setSelectedSessionId('')
+    }
+  }
+
+  // Compute default session title
+  const progName = currentProgramme?.name || 'Sunday Worship Service'
+  const sessName = currentSession?.name || ''
+  const computedDefaultTitle = sessName
+    ? `${progName} — ${sessName}${messageTitle.trim() ? ': ' + messageTitle.trim() : ''}`
+    : `${progName}${messageTitle.trim() ? ': ' + messageTitle.trim() : ''}`
+
+  const effectiveSessionTitle = isCustomTitleEdited ? customSessionName : computedDefaultTitle
 
   // Start live test meter when component mounts
   useEffect(() => {
@@ -32,15 +93,21 @@ export function NewLiveSessionView({
   }, [liveAudio.permissionState])
 
   const handleStart = () => {
-    if (!sessionName.trim()) {
-      setValidationError('Session Name is required.')
+    const finalTitle = effectiveSessionTitle.trim() || computedDefaultTitle
+    if (!finalTitle) {
+      setValidationError('Please specify or select a Session Title.')
       return
     }
     setValidationError('')
-    // Pass metadata to startRecording
+
+    // Pass structured metadata to startRecording (Message Title is completely optional)
     onStartRecording({
-      title: sessionName.trim(),
-      eventType,
+      title: finalTitle,
+      programme: progName,
+      programmeSession: sessName,
+      programmeId: selectedProgrammeId,
+      programmeSessionId: selectedSessionId,
+      eventType: progName, // Backward compatibility
       minister: minister.trim(),
       messageTitle: messageTitle.trim(),
     })
@@ -71,7 +138,6 @@ export function NewLiveSessionView({
         </div>
       )}
 
-
       {/* 2-Column Grid */}
       <div className="new-session-grid">
         {/* Left Column: Session Metadata */}
@@ -84,40 +150,57 @@ export function NewLiveSessionView({
           </div>
 
           <div className="card-body new-session-card-body">
-            {/* Session Name */}
+            {/* 1. Programme / Event Dropdown */}
             <div className="form-group">
-              <label className="form-label" htmlFor="input-session-name">
-                Session Name *
+              <label className="form-label" htmlFor="select-programme-event">
+                Programme / Event *
               </label>
-              <input
-                type="text"
-                id="input-session-name"
-                className="form-control"
-                placeholder="e.g. Sunday Morning Worship Service"
-                value={sessionName}
-                onChange={(e) => setSessionName(e.target.value)}
-              />
+              {isLoadingProgrammes ? (
+                <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Loading configured programmes...</div>
+              ) : programmes.length === 0 ? (
+                <select id="select-programme-event" className="form-control form-select" disabled>
+                  <option>No programmes configured in Settings</option>
+                </select>
+              ) : (
+                <select
+                  id="select-programme-event"
+                  className="form-control form-select"
+                  value={selectedProgrammeId}
+                  onChange={(e) => handleProgrammeChange(e.target.value)}
+                >
+                  {programmes.map((prog) => (
+                    <option key={prog.id} value={prog.id}>
+                      {prog.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
-            {/* Event Type & Minister */}
+            {/* 2. Session / Section Dropdown (Dependent on Programme) & Minister */}
             <div className="form-row-2col">
               <div className="form-group">
-                <label className="form-label" htmlFor="select-event-type">
-                  Event Type
+                <label className="form-label" htmlFor="select-programme-session">
+                  Session / Section
                 </label>
-                <select
-                  id="select-event-type"
-                  className="form-control form-select"
-                  value={eventType}
-                  onChange={(e) => setEventType(e.target.value)}
-                >
-                  <option value="Sunday Worship Service">Sunday Worship Service</option>
-                  <option value="Monday Bible Study">Monday Bible Study</option>
-                  <option value="Thursday Revival Broadcast">Thursday Revival Broadcast</option>
-                  <option value="Leadership Training Seminar">Leadership Training Seminar</option>
-                  <option value="Youth Fellowship Service">Youth Fellowship Service</option>
-                  <option value="Special Broadcast Event">Special Broadcast Event</option>
-                </select>
+                {currentProgrammeSessions.length === 0 ? (
+                  <select id="select-programme-session" className="form-control form-select" disabled>
+                    <option>General Session (No sections configured)</option>
+                  </select>
+                ) : (
+                  <select
+                    id="select-programme-session"
+                    className="form-control form-select"
+                    value={selectedSessionId}
+                    onChange={(e) => setSelectedSessionId(e.target.value)}
+                  >
+                    {currentProgrammeSessions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="form-group">
@@ -128,14 +211,14 @@ export function NewLiveSessionView({
                   type="text"
                   id="input-minister"
                   className="form-control"
-                  placeholder="Enter speaker name"
+                  placeholder="e.g. Pastor W.F. Kumuyi"
                   value={minister}
                   onChange={(e) => setMinister(e.target.value)}
                 />
               </div>
             </div>
 
-            {/* Message Title */}
+            {/* 3. Message Title (OPTIONAL) */}
             <div className="form-group">
               <label className="form-label" htmlFor="input-message-title">
                 Message Title (Optional)
@@ -144,9 +227,41 @@ export function NewLiveSessionView({
                 type="text"
                 id="input-message-title"
                 className="form-control"
-                placeholder="Theme or topic of the message"
+                placeholder="Theme or topic of the message (optional)"
                 value={messageTitle}
                 onChange={(e) => setMessageTitle(e.target.value)}
+              />
+            </div>
+
+            {/* 4. Session Title Preview / Override */}
+            <div className="form-group" style={{ marginTop: '0.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className="form-label" htmlFor="input-session-name">
+                  Generated Session Title
+                </label>
+                {isCustomTitleEdited && (
+                  <button
+                    type="button"
+                    className="btn-link-small"
+                    onClick={() => {
+                      setIsCustomTitleEdited(false)
+                      setCustomSessionName('')
+                    }}
+                    style={{ fontSize: '0.72rem', color: '#3b82f6' }}
+                  >
+                    ↺ Reset to auto
+                  </button>
+                )}
+              </div>
+              <input
+                type="text"
+                id="input-session-name"
+                className="form-control"
+                value={effectiveSessionTitle}
+                onChange={(e) => {
+                  setIsCustomTitleEdited(true)
+                  setCustomSessionName(e.target.value)
+                }}
               />
             </div>
           </div>

@@ -6,16 +6,17 @@ import React from 'react'
  * Features:
  * - Deep Navy Left Sidebar (#0F2947) with DLBC logo, primary "Start Live Session" CTA,
  *   navigation items (Dashboard, Sessions, Settings), and bottom Operator Profile.
- * - Top Bar with Context/Breadcrumbs, Global Search, Notification bell, and User badge.
+ * - Simplified Contextual Top Bar:
+ *   - Sub-screens: "← Back   [Current Screen Name]"
+ *   - Dashboard: "Dashboard" (no back button)
+ *   - Right: Notification icon alone.
  */
 export function AppShell({
   activeNav, // 'dashboard' | 'sessions' | 'settings' | 'live_session' | 'workspace'
   onNavigate,
-  breadcrumbs = [],
+  screenTitle = 'Dashboard',
+  onBack = null,
   onStartLiveSession,
-  onOpenSearch,
-  searchTerm = '',
-  onSearchChange,
   children,
 }) {
   return (
@@ -103,62 +104,31 @@ export function AppShell({
       <div className="app-main-column">
         {/* Top Header Bar */}
         <header className="app-topbar">
-          {/* Breadcrumbs / Context */}
+          {/* Dynamic Contextual Title & Back Button */}
           <div className="topbar-left">
-            {breadcrumbs.length > 0 ? (
-              <nav className="topbar-breadcrumbs">
-                <span className="breadcrumb-root" onClick={() => onNavigate('dashboard')}>
-                  Information Unit
-                </span>
-                {breadcrumbs.map((crumb, idx) => (
-                  <React.Fragment key={idx}>
-                    <span className="breadcrumb-separator">›</span>
-                    {crumb.onClick ? (
-                      <span className="breadcrumb-link" onClick={crumb.onClick}>
-                        {crumb.label}
-                      </span>
-                    ) : (
-                      <span className="breadcrumb-current">{crumb.label}</span>
-                    )}
-                  </React.Fragment>
-                ))}
-              </nav>
-            ) : (
-              <div className="topbar-context">
-                <span className="context-label">Context:</span>
-                <span className="context-value">Information Unit</span>
+            {onBack ? (
+              <div className="topbar-nav-header">
+                <button
+                  type="button"
+                  className="topbar-back-btn"
+                  onClick={onBack}
+                  id="topbar-btn-back"
+                >
+                  <span className="back-arrow">←</span>
+                  <span className="back-text">Back</span>
+                </button>
+                <span className="topbar-screen-title">{screenTitle}</span>
               </div>
+            ) : (
+              <h1 className="topbar-screen-title topbar-screen-title--root">{screenTitle}</h1>
             )}
           </div>
 
-          {/* Search, Notifications & Profile Badge */}
+          {/* Right: Notification Bell Alone */}
           <div className="topbar-right">
-            {onSearchChange && (
-              <div className="topbar-search">
-                <span className="search-icon">🔍</span>
-                <input
-                  type="text"
-                  className="topbar-search-input"
-                  placeholder="Search sessions, logs, or speakers..."
-                  value={searchTerm}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                />
-              </div>
-            )}
-
-            {/* Notification Bell */}
-            <div className="topbar-notification" title="Notifications">
+            <div className="topbar-notification" title="Notifications" id="topbar-notification-bell">
               <span className="notification-bell">🔔</span>
               <span className="notification-dot" />
-            </div>
-
-            {/* Operator Badge */}
-            <div className="topbar-user-badge">
-              <div className="user-badge-text">
-                <span className="user-badge-name">Operator Admin</span>
-                <span className="user-badge-id">ID: IU-8492</span>
-              </div>
-              <div className="user-badge-avatar">👤</div>
             </div>
           </div>
         </header>

@@ -18,12 +18,12 @@ export function DashboardView({
 }) {
   const fileInputRef = useRef(null)
 
-  // Filter sessions needing immediate attention
+  // Filter sessions needing immediate attention (interrupted or verification incomplete)
   const attentionSessions = sessions.filter((s) => {
-    const isInterrupted = s.is_interrupted
-    const needsVerification = s.flag_count > 0 && (!s.verification_status || s.verification_status === 'in_progress')
-    const readyForEditing = s.reporting_status === 'reports_ready' && s.editing_status !== 'complete'
-    return isInterrupted || needsVerification || readyForEditing
+    const isInterrupted = !!s.is_interrupted
+    const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
+    const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress') && s.reporting_status === 'not_started' && s.editing_status === 'not_started' && s.proofreading_status === 'not_started' && s.final_report_status !== 'complete'
+    return isInterrupted || needsVerification
   }).slice(0, 2)
 
   // Recent 5 sessions
@@ -260,13 +260,29 @@ export function DashboardView({
                 </tr>
               ) : (
                 recentSessions.map((sess) => {
-                  let statusBadge = <span className="status-pill status-pill--completed">● COMPLETED</span>
-                  if (sess.is_interrupted) {
+                  const isInterrupted = !!sess.is_interrupted
+                  const isFinalComplete = sess.final_report_status === 'complete'
+                  const isProofreadComplete = sess.proofreading_status === 'complete'
+                  const isEditingComplete = sess.editing_status === 'complete'
+                  const isReportsReady = sess.reporting_status === 'reports_ready'
+                  const isVerified = sess.verification_status === 'completed' || !!sess.verified_text || !!sess.verified_at
+                  const needsVerification = !isVerified && (sess.flag_count > 0 || sess.verification_status === 'in_progress')
+
+                  let statusBadge = <span className="status-pill status-pill--info">● IN PROGRESS</span>
+                  if (isInterrupted) {
                     statusBadge = <span className="status-pill status-pill--interrupted">● INTERRUPTED</span>
-                  } else if (sess.verification_status === 'completed' || sess.verified_text) {
+                  } else if (isFinalComplete) {
+                    statusBadge = <span className="status-pill status-pill--completed">● COMPLETE</span>
+                  } else if (isProofreadComplete) {
+                    statusBadge = <span className="status-pill status-pill--proofread">● PROOFREADING COMPLETE</span>
+                  } else if (isEditingComplete) {
+                    statusBadge = <span className="status-pill status-pill--edited">● EDITING COMPLETE</span>
+                  } else if (isReportsReady) {
+                    statusBadge = <span className="status-pill status-pill--reported">● REPORTS READY</span>
+                  } else if (isVerified) {
                     statusBadge = <span className="status-pill status-pill--verified">● VERIFIED</span>
-                  } else if (sess.flag_count > 0) {
-                    statusBadge = <span className="status-pill status-pill--warning">● NEEDS REVIEW</span>
+                  } else if (needsVerification) {
+                    statusBadge = <span className="status-pill status-pill--warning">● NEEDS VERIFICATION</span>
                   }
 
                   return (

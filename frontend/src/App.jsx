@@ -33,7 +33,10 @@ function App() {
   })
   const [showCompletionModal, setShowCompletionModal] = useState(false)
   const [completedSessionId, setCompletedSessionId] = useState(null)
-  const [globalSearch, setGlobalSearch] = useState('')
+  const [sessionSubViewInfo, setSessionSubViewInfo] = useState({
+    title: 'Session Workspace',
+    onBack: null,
+  })
 
   // Phase 1 & 3: Audio Capture & Live Transcription Hook
   const liveAudio = useAudioCapture()
@@ -54,7 +57,7 @@ function App() {
   // Handle Start Recording from NewLiveSessionView
   const handleStartRecording = async (meta) => {
     setSessionMetadata(meta)
-    const success = await liveAudio.startRecording(meta.title)
+    const success = await liveAudio.startRecording(meta.title, meta)
     if (success) {
       // isRecording becomes true, rendering LiveRecordingView
     }
@@ -100,47 +103,72 @@ function App() {
     setCurrentView('transcribe')
   }
 
-  // Build Breadcrumbs
-  const getBreadcrumbs = () => {
+  // Contextual Top Header computation: Screen Title & Back Action
+  const getHeaderContext = () => {
     if (liveAudio.isRecording) {
-      return [{ label: 'Live Session Recording' }]
+      return {
+        title: 'Live Session Recording',
+        onBack: null,
+      }
+    }
+    if (showCompletionModal) {
+      return {
+        title: 'Session Completion',
+        onBack: () => {
+          setShowCompletionModal(false)
+          setCurrentView('dashboard')
+        },
+      }
     }
     if (currentView === 'dashboard') {
-      return [{ label: 'Dashboard' }]
+      return {
+        title: 'Dashboard',
+        onBack: null,
+      }
     }
     if (currentView === 'new_live') {
-      return [
-        { label: 'Dashboard', onClick: () => handleNavigate('dashboard') },
-        { label: 'New Live Session' },
-      ]
+      return {
+        title: 'New Live Session',
+        onBack: () => setCurrentView('dashboard'),
+      }
     }
     if (currentView === 'sessions') {
-      if (sessionsHook.activeSession) {
-        return [
-          { label: 'Dashboard', onClick: () => handleNavigate('dashboard') },
-          { label: 'Sessions', onClick: () => sessionsHook.closeActiveSession() },
-          { label: sessionsHook.activeSession.title || 'Session Workspace' },
-        ]
+      if (!sessionsHook.activeSession) {
+        return {
+          title: 'Sessions',
+          onBack: () => setCurrentView('dashboard'),
+        }
       }
-      return [
-        { label: 'Dashboard', onClick: () => handleNavigate('dashboard') },
-        { label: 'Sessions History' },
-      ]
+      return {
+        title: sessionSubViewInfo.title || 'Session Workspace',
+        onBack: sessionSubViewInfo.onBack || (() => sessionsHook.closeActiveSession()),
+      }
     }
     if (currentView === 'transcribe') {
-      return [
-        { label: 'Dashboard', onClick: () => handleNavigate('dashboard') },
-        { label: 'Transcribe Recording' },
-      ]
+      if (recordedTranscription.activeTranscript) {
+        return {
+          title: 'Raw Transcript',
+          onBack: () => recordedTranscription.resetUpload(),
+        }
+      }
+      return {
+        title: 'Transcribe Recording',
+        onBack: () => setCurrentView('dashboard'),
+      }
     }
     if (currentView === 'settings') {
-      return [
-        { label: 'Dashboard', onClick: () => handleNavigate('dashboard') },
-        { label: 'Settings & Standards' },
-      ]
+      return {
+        title: 'Settings',
+        onBack: () => setCurrentView('dashboard'),
+      }
     }
-    return []
+    return {
+      title: 'Dashboard',
+      onBack: null,
+    }
   }
+
+  const { title: currentScreenTitle, onBack: currentScreenBack } = getHeaderContext()
 
   return (
     <AppShell
@@ -152,14 +180,13 @@ function App() {
           : currentView
       }
       onNavigate={handleNavigate}
-      breadcrumbs={getBreadcrumbs()}
+      screenTitle={currentScreenTitle}
+      onBack={currentScreenBack}
       onStartLiveSession={() => {
         if (!liveAudio.isRecording) {
           setCurrentView('new_live')
         }
       }}
-      searchTerm={globalSearch}
-      onSearchChange={setGlobalSearch}
     >
       {/* Global Error Banners */}
       {sessionsHook.error && (
@@ -273,6 +300,7 @@ function App() {
             session={sessionsHook.activeSession}
             onBack={sessionsHook.closeActiveSession}
             onUpdateTitle={sessionsHook.updateSessionTitle}
+            onSubViewChange={setSessionSubViewInfo}
             verificationState={sessionsHook.verificationState}
             onStartVerification={sessionsHook.startVerification}
             onLoadVerificationState={sessionsHook.loadVerificationState}

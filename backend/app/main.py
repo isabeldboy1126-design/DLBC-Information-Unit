@@ -20,6 +20,7 @@ if os.path.exists(_backend_env_path):
 
 
 from app.database.session_repo import session_repo
+from app.database.programmes_repo import programmes_repo
 from app.database.interruption_recovery import recover_interrupted_sessions
 
 @asynccontextmanager
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI):
     print("DLBC Information Unit App backend starting...")
     try:
         await session_repo.init_db()
+        await programmes_repo.init_db()
         await session_repo.index_existing_storage_files()
         await recover_interrupted_sessions()
         print("SQLite Database and Session persistence initialized.")
@@ -68,6 +70,7 @@ from app.reporting.router import router as reporting_router
 from app.editing.router import router as editing_router
 from app.proofreading.router import router as proofreading_router
 from app.final_report.router import router as final_report_router
+from app.programmes.router import router as programmes_router
 
 app.include_router(audio_router)
 app.include_router(transcription_router)
@@ -77,6 +80,7 @@ app.include_router(reporting_router)
 app.include_router(editing_router)
 app.include_router(proofreading_router)
 app.include_router(final_report_router)
+app.include_router(programmes_router)
 
 
 

@@ -193,9 +193,10 @@ async def run_proofreading(session_id: str, payload: RunProofreadRequest):
 
     if not result.is_success:
         await proofreading_repo.set_proofreading_status(session_id, "failed")
+        status_code = 429 if "request limit" in (result.error_message or "").lower() else 500
         raise HTTPException(
-            status_code=500,
-            detail=f"Proofreading could not be completed: {result.error_message}",
+            status_code=status_code,
+            detail=result.error_message or "Proofreading could not be completed.",
         )
 
     # 5. Save AI Proofread Revision

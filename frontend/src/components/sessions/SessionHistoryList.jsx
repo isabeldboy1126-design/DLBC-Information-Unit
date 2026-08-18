@@ -75,29 +75,41 @@ export function SessionHistoryList({
       (s.session_id || '').toLowerCase().includes(query) ||
       (s.metadata_json || '').toLowerCase().includes(query)
 
+    // Stage indicators
+    const isInterrupted = !!s.is_interrupted
+    const isLive = s.status === 'recording'
+    const isFinalComplete = s.final_report_status === 'complete'
+    const isProofreadComplete = s.proofreading_status === 'complete'
+    const isProofreadingReview = s.proofreading_status === 'ready_for_review' || s.proofreading_status === 'generating'
+    const isEditingComplete = s.editing_status === 'complete'
+    const isEditingDraft = s.editing_status === 'draft_ready' || s.editing_status === 'in_review' || s.editing_status === 'generating'
+    const isReportsReady = s.reporting_status === 'reports_ready'
+    const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
+    const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress') && !isReportsReady && !isEditingComplete && !isEditingDraft && !isProofreadComplete && !isProofreadingReview && !isFinalComplete
+
     // 2. Tab Filter (All, In Progress, Completed, Needs Attention)
     let matchesTab = true
     if (activeTab === 'in_progress') {
-      matchesTab = s.status === 'recording' || (s.final_report_status !== 'complete' && !s.is_interrupted)
+      matchesTab = isLive || (!isFinalComplete && !isInterrupted)
     } else if (activeTab === 'completed') {
-      matchesTab = s.final_report_status === 'complete' || s.status === 'completed'
+      matchesTab = isFinalComplete
     } else if (activeTab === 'needs_attention') {
-      matchesTab = !!s.is_interrupted || (s.flag_count > 0 && s.verification_status !== 'completed')
+      matchesTab = isInterrupted || needsVerification
     }
 
     // 3. Status Dropdown Filter
     let matchesStatus = true
     if (statusFilter !== 'all') {
       if (statusFilter === 'interrupted') {
-        matchesStatus = !!s.is_interrupted
+        matchesStatus = isInterrupted
       } else if (statusFilter === 'needs_verification') {
-        matchesStatus = s.flag_count > 0 && s.verification_status !== 'completed'
+        matchesStatus = needsVerification
       } else if (statusFilter === 'verified') {
-        matchesStatus = s.verification_status === 'completed'
+        matchesStatus = isVerified && !isReportsReady && !isEditingComplete && !isProofreadComplete && !isFinalComplete
       } else if (statusFilter === 'editing') {
-        matchesStatus = s.editing_status === 'complete' || s.editing_status === 'draft_ready'
+        matchesStatus = isEditingComplete || isEditingDraft || isReportsReady
       } else if (statusFilter === 'completed') {
-        matchesStatus = s.final_report_status === 'complete' || s.status === 'completed'
+        matchesStatus = isFinalComplete
       }
     }
 
@@ -271,17 +283,22 @@ export function SessionHistoryList({
       ) : (
         <div className="sessions-cards-grid-3col">
           {filteredSessions.map((s) => {
-            const isInterrupted = s.is_interrupted
+            const isInterrupted = !!s.is_interrupted
             const isLive = s.status === 'recording'
-            const isVerified = s.verification_status === 'completed' || !!s.verified_text
-            const needsVerification = s.flag_count > 0 && !isVerified
-            const isFinalReady = s.final_report_status === 'complete'
+            const isFinalComplete = s.final_report_status === 'complete'
+            const isProofreadComplete = s.proofreading_status === 'complete'
+            const isProofreadingReview = s.proofreading_status === 'ready_for_review' || s.proofreading_status === 'generating'
+            const isEditingComplete = s.editing_status === 'complete'
+            const isEditingDraft = s.editing_status === 'draft_ready' || s.editing_status === 'in_review' || s.editing_status === 'generating'
+            const isReportsReady = s.reporting_status === 'reports_ready'
+            const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
+            const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress') && !isReportsReady && !isEditingComplete && !isEditingDraft && !isProofreadComplete && !isProofreadingReview && !isFinalComplete
 
-            // Determine card accent class and badge
+            // Determine card accent class, badge, and CTA action
             let accentClass = 'session-card-accent--default'
-            let badgeComponent = <span className="status-badge badge--default">Completed</span>
-            let actionBtnText = 'View Record'
-            let actionBtnClass = 'btn--outline'
+            let badgeComponent = <span className="status-badge badge--default">● In Progress</span>
+            let actionBtnText = 'View Workspace'
+            let actionBtnClass = 'btn--primary'
 
             if (isInterrupted) {
               accentClass = 'session-card-accent--interrupted'
@@ -293,25 +310,45 @@ export function SessionHistoryList({
               badgeComponent = <span className="status-badge badge--live">● Live</span>
               actionBtnText = 'Open Monitor'
               actionBtnClass = 'btn--primary'
-            } else if (needsVerification) {
-              accentClass = 'session-card-accent--verification'
-              badgeComponent = <span className="status-badge badge--verification">Needs Verification</span>
-              actionBtnText = 'Continue Verification'
+            } else if (isFinalComplete) {
+              accentClass = 'session-card-accent--completed'
+              badgeComponent = <span className="status-badge badge--completed">🏆 Complete</span>
+              actionBtnText = 'Download Document'
               actionBtnClass = 'btn--primary'
-            } else if (isVerified && s.reporting_status === 'reports_ready') {
+            } else if (isProofreadComplete) {
+              accentClass = 'session-card-accent--proofread'
+              badgeComponent = <span className="status-badge badge--proofread">● Proofreading Complete</span>
+              actionBtnText = 'Continue to Final Report'
+              actionBtnClass = 'btn--primary'
+            } else if (isProofreadingReview) {
+              accentClass = 'session-card-accent--proofread'
+              badgeComponent = <span className="status-badge badge--proofread">● Proofreading Review</span>
+              actionBtnText = 'Continue to Proofreading'
+              actionBtnClass = 'btn--primary'
+            } else if (isEditingComplete) {
               accentClass = 'session-card-accent--editing'
-              badgeComponent = <span className="status-badge badge--editing">📄 Ready for Editing</span>
-              actionBtnText = 'Continue Editing'
+              badgeComponent = <span className="status-badge badge--editing">● Editing Complete</span>
+              actionBtnText = 'Continue to Proofreading'
+              actionBtnClass = 'btn--primary'
+            } else if (isEditingDraft) {
+              accentClass = 'session-card-accent--editing'
+              badgeComponent = <span className="status-badge badge--editing">● Editing Draft Ready</span>
+              actionBtnText = 'Continue to Editing'
+              actionBtnClass = 'btn--primary'
+            } else if (isReportsReady) {
+              accentClass = 'session-card-accent--reported'
+              badgeComponent = <span className="status-badge badge--reported">● Reports Ready</span>
+              actionBtnText = 'Continue to Editing'
               actionBtnClass = 'btn--primary'
             } else if (isVerified) {
               accentClass = 'session-card-accent--verified'
               badgeComponent = <span className="status-badge badge--verified">✓ Verified</span>
-              actionBtnText = 'View Record'
-              actionBtnClass = 'btn--outline'
-            } else if (isFinalReady) {
-              accentClass = 'session-card-accent--completed'
-              badgeComponent = <span className="status-badge badge--completed">🏆 Final Report</span>
-              actionBtnText = 'Download Report'
+              actionBtnText = 'Continue to Reporting'
+              actionBtnClass = 'btn--primary'
+            } else if (needsVerification) {
+              accentClass = 'session-card-accent--verification'
+              badgeComponent = <span className="status-badge badge--verification">Needs Verification</span>
+              actionBtnText = 'Continue Verification'
               actionBtnClass = 'btn--primary'
             }
 

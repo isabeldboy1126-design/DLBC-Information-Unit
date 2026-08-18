@@ -221,9 +221,10 @@ async def generate_edited_report(session_id: str, payload: GenerateEditedReportR
         # If generation failed, restore previous editing status or set to failed
         prev_status = "in_review" if len(prior_revisions) > 0 else "failed"
         await editing_repo.set_editing_status(session_id, prev_status)
+        status_code = 429 if "request limit" in (result.error_message or "").lower() else 500
         raise HTTPException(
-            status_code=500,
-            detail=f"Editing generation could not be completed: {result.error_message}",
+            status_code=status_code,
+            detail=result.error_message or "Editing generation could not be completed.",
         )
 
     # 7. Persist new revision in SQLite

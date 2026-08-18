@@ -149,7 +149,7 @@ async def test_proofread_report_lifecycle_and_revisions():
             }
         ],
         review_notes=["All scripture citations are accurate."],
-        model_name="gemini-2.5-flash",
+        model_name="gemini-3.7-flash",
     )
 
     assert rev1 is not None

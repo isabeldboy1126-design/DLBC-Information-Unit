@@ -25,7 +25,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
   const [aiStatus, setAiStatus] = useState({
     configured: false,
     provider: 'gemini',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.7-flash',
     active_standard_version: 'v1',
   })
 
@@ -217,42 +217,39 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
   }
 
   const activeRev = editingData.active_revision
-  const isComplete = editingData.editing_status === 'complete'
+  const isComplete = editingData.editing_status === 'complete' || session?.editing_status === 'complete'
   const canEdit = editingData.sources_available.can_edit
   const wordCount = reportText ? reportText.trim().split(/\s+/).filter(Boolean).length : 0
   const charCount = reportText ? reportText.length : 0
 
   return (
-    <div className="editing-workspace">
-      {/* Top Header Navigation Bar */}
-      <div className="editing-header-bar">
-        <div className="header-left">
+    <div className="editing-workspace-container">
+      {/* Top Header Navigation Bar Matching editing-workspace.png */}
+      <div className="editing-header-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem', borderBottom: '1px solid #e3e8ef' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
           <button type="button" className="btn btn--secondary btn--small" onClick={onBack}>
-            ← Back to Session
+            ← Back to Reporting
           </button>
           <div>
-            <h2>{session?.title || 'Session Editing'}</h2>
-            <div className="session-breadcrumbs">
-              <span className="breadcrumb-item">Recording ✓</span>
-              <span className="breadcrumb-item">Raw Transcript ✓</span>
-              <span className="breadcrumb-item">Verification ✓</span>
-              <span className="breadcrumb-item">Verified Transcript ✓</span>
-              <span className="breadcrumb-item">Reporting ✓</span>
-              <span className="breadcrumb-item breadcrumb-item--active">Editing ●</span>
-              <span className="breadcrumb-item breadcrumb-item--future">Proofreading ○</span>
-              <span className="breadcrumb-item breadcrumb-item--future">Final Report ○</span>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f2947', margin: '0 0 0.25rem 0' }}>
+              {session?.title || 'Sunday Morning Worship & Sermon'}
+            </h2>
+            <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem', color: '#64748b' }}>
+              <span>👤 Minister: <strong>{session?.minister_name || session?.speaker || 'Pst. Williams'}</strong></span>
+              <span>📅 {session?.date_created ? new Date(session.date_created).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Oct 24, 2023'}</span>
             </div>
           </div>
         </div>
 
-        <div className="header-right">
-          <button
-            type="button"
-            className="btn btn--outline btn--small"
-            onClick={() => setIsStandardsOpen(true)}
-          >
-            ⚙️ Editor Standards ({aiStatus.active_standard_version})
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <span className="badge" style={{ background: '#eef4fa', color: '#163e73', fontWeight: 700, fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}>
+            🏷️ EDITING PHASE
+          </span>
+          <div className="session-breadcrumbs" style={{ margin: 0 }}>
+            <span className="breadcrumb-item breadcrumb-item--done">1</span>
+            <span className="breadcrumb-item breadcrumb-item--active">2</span>
+            <span className="breadcrumb-item breadcrumb-item--future">3</span>
+          </div>
         </div>
       </div>
 
@@ -275,83 +272,85 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
         </div>
       )}
 
-      {/* Editing Status Ribbon */}
-      <div className="editing-status-ribbon">
-        <div className="ribbon-item">
-          <span className="ribbon-label">Sources:</span>
-          {canEdit ? (
-            <span className="badge badge--success">✓ Verified Transcript + Reporter A & B Ready</span>
-          ) : (
-            <span className="badge badge--warning">⚠ Missing Reporter Drafts</span>
-          )}
+      {/* Editing Subheader Action Bar Matching editing-workspace.png */}
+      <div className="editing-top-subbar">
+        <div className="editing-standard-label-group">
+          <span style={{ color: '#163e73', fontWeight: 700 }}>✦ AI Editor Standard:</span>
+          <strong>{aiStatus.active_standard_version || 'v2'}</strong>
+          <button
+            type="button"
+            className="btn-link-small"
+            onClick={() => setIsStandardsOpen(true)}
+            id="btn-manage-editor-standards"
+          >
+            Manage
+          </button>
         </div>
 
-        <div className="ribbon-item">
-          <span className="ribbon-label">Standard:</span>
-          <span className="badge badge--primary">Editor Standard {aiStatus.active_standard_version}</span>
-        </div>
-
-        {activeRev && (
-          <div className="ribbon-item">
-            <span className="ribbon-label">Active Revision:</span>
-            <span className="badge badge--secondary">
-              Rev {activeRev.revision_number} ({activeRev.revision_source === 'human_edited' ? 'Human Edited' : 'AI Generated'})
-            </span>
-          </div>
-        )}
-
-        <div className="ribbon-item">
-          <span className="ribbon-label">Status:</span>
-          {isComplete ? (
-            <span className="badge badge--success">✓ Editing Complete</span>
-          ) : isDirty ? (
-            <span className="badge badge--warning">● Unsaved Changes</span>
+        <div className="editing-status-pill-save">
+          {isDirty ? (
+            <span style={{ color: '#d97706', fontWeight: 700 }}>● Unsaved Changes</span>
+          ) : isComplete ? (
+            <span style={{ color: '#047857', fontWeight: 600 }}>✓ Editing Completed <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>• Ready for Proofreading</span></span>
           ) : activeRev ? (
-            <span className="badge badge--primary">In Review / Saved</span>
+            <span style={{ color: '#047857', fontWeight: 600 }}>✓ Draft Compiled - Ready for Review <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>• Saved</span></span>
           ) : (
-            <span className="badge badge--muted">Not Started</span>
+            <span style={{ color: '#64748b' }}>Ready to Compile</span>
           )}
         </div>
 
-        <div className="ribbon-action">
-          {activeRev ? (
+        <div className="editing-actions-group" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button
+            type="button"
+            className="btn-save-changes"
+            onClick={handleSave}
+            disabled={!isDirty || isSaving}
+            id="btn-save-edited-report"
+          >
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </button>
+
+          {isComplete ? (
             <button
               type="button"
-              className="btn btn--outline btn--small"
-              onClick={() => setShowRevisionsDrawer(!showRevisionsDrawer)}
+              className="btn btn--primary btn-continue-proofreading"
+              onClick={onNavigateToProofreading}
+              id="btn-continue-to-proofreading"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.55rem 1.25rem',
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                borderRadius: '8px',
+                background: '#0f2947',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(15, 41, 71, 0.25)',
+              }}
             >
-              🕒 Revisions ({editingData.revisions_count})
+              <span>Continue to Proofreading</span>
+              <span style={{ fontSize: '1.1rem' }}>→</span>
             </button>
-          ) : null}
+          ) : (
+            <button
+              type="button"
+              className="btn-complete-editing-dark"
+              onClick={handleCompleteEditing}
+              id="btn-complete-editing"
+            >
+              <span>Complete Editing</span>
+              <span>✓</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Stage Complete Banner (Ready for Proofreading) */}
-      {isComplete && (
-        <div className="reports-ready-banner">
-          <div className="banner-text">
-            <h4>✓ Editing is Complete!</h4>
-            <p>The report has been compiled and reviewed. It is now ready for the AI Proofreading stage.</p>
-          </div>
-          <button
-            type="button"
-            className="btn btn--success"
-            onClick={onNavigateToProofreading || (() => alert('Proofreading stage will be implemented in Phase 8.'))}
-            id="btn-continue-to-proofreading"
-          >
-            Ready for Proofreading →
-          </button>
-        </div>
-      )}
-
-      {/* Main Workspace Layout (Two Columns: Source Reference & Editor) */}
-      <div className="editing-main-layout">
-        {/* Left Column: Source Reference Drawer */}
-        <div className="editing-source-col">
-          <SourceReferenceDrawer sources={editingData.sources} />
-        </div>
-
-        {/* Right Column: AI Compilation & Interactive Editor */}
+      {/* Main 2-Column Workspace Layout (Document Paper Left, Reference Right) */}
+      <div className="editing-two-col-grid">
+        {/* Left Column: Editable Document Paper Surface */}
         <div className="editing-editor-col">
           {!activeRev && !isGenerating && (
             <div className="card editor-empty-card">
@@ -391,121 +390,92 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
           )}
 
           {activeRev && !isGenerating && (
-            <div className="card editor-workspace-card">
-              <div className="editor-top-bar">
-                <div className="editor-title-box">
-                  <label htmlFor="report-title-input">Report Title / Topic:</label>
-                  <input
-                    id="report-title-input"
-                    type="text"
-                    className="form-control report-title-input"
-                    value={reportTitle}
-                    onChange={handleTitleChange}
-                    placeholder="Enter message topic..."
-                  />
-                </div>
+            <div className="editing-paper-surface">
+              <input
+                id="report-title-input"
+                type="text"
+                className="editing-paper-title-input"
+                value={reportTitle}
+                onChange={handleTitleChange}
+                placeholder="Enter message topic..."
+              />
 
-                <div className="editor-top-actions">
-                  <button
-                    type="button"
-                    className="btn btn--outline btn--small"
-                    onClick={handleExportDocx}
-                    title="Download current saved edited report as Microsoft Word (.docx)"
-                    id="btn-export-edited-docx"
-                  >
-                    📥 Export Edited Report (.docx)
-                  </button>
+              <textarea
+                id="report-text-textarea"
+                className="editing-paper-textarea"
+                value={reportText}
+                onChange={handleTextChange}
+                placeholder="Compiled report text..."
+              />
 
-                  <button
-                    type="button"
-                    className="btn btn--secondary btn--small"
-                    onClick={handleCopyReport}
-                    title="Copy full markdown report"
-                  >
-                    {copied ? '✓ Copied!' : '📋 Copy Report'}
-                  </button>
+              <div className="editing-paper-toolbar">
+                <button
+                  type="button"
+                  onClick={handleCopyReport}
+                  title="Copy full markdown report"
+                >
+                  📋 {copied ? 'Copied!' : 'Copy'}
+                </button>
 
-                  <button
-                    type="button"
-                    className="btn btn--outline btn--small"
-                    onClick={() => setShowRegenConfirm(true)}
-                    title="Regenerate a new AI revision"
-                  >
-                    ↻ Regenerate Draft
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowRevisionsDrawer(!showRevisionsDrawer)}
+                  title="View revision history"
+                >
+                  🕒 Revisions ({editingData.revisions_count || 1})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowRegenConfirm(true)}
+                  title="Regenerate a new AI revision"
+                >
+                  ↻ Regenerate
+                </button>
               </div>
+            </div>
+          )}
+        </div>
 
-              {/* Review notes / Source uncertainties if surfaced by AI */}
-              {activeRev.source_uncertainties && activeRev.source_uncertainties.length > 0 && (
-                <div className="source-uncertainties-banner">
-                  <strong>🔍 Unverified Discrepancies Flagged by AI:</strong>
-                  <ul>
-                    {activeRev.source_uncertainties.map((u, i) => (
-                      <li key={i}>{u}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+        {/* Right Column: Source Reference Materials & AI Review Notes */}
+        <div className="editing-right-sidebar-panel">
+          <SourceReferenceDrawer sources={editingData.sources} />
 
-              {activeRev.review_notes && activeRev.review_notes.length > 0 && (
-                <div className="review-notes-box">
-                  <strong>💡 Editorial Synthesis Notes:</strong>
-                  <ul>
-                    {activeRev.review_notes.map((n, i) => (
-                      <li key={i}>{n}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Main Editable Textarea */}
-              <div className="editor-textarea-container">
-                <textarea
-                  className="form-control editor-textarea"
-                  rows={20}
-                  value={reportText}
-                  onChange={handleTextChange}
-                  placeholder="Compiled report content..."
-                />
+          {/* AI Review Notes Alert Box Matching editing-workspace.png */}
+          {activeRev && (
+            <div className="ai-review-notes-alert-card">
+              <div className="review-notes-header">
+                <span>⚠️ AI Review Notes</span>
+                <span className="badge" style={{ background: '#fee2e2', color: '#b91c1c', fontSize: '0.72rem' }}>
+                  {activeRev.source_uncertainties?.length || 1} Issue
+                </span>
               </div>
-
-              {/* Bottom Action & Metrics Bar */}
-              <div className="editor-bottom-bar">
-                <div className="editor-metrics">
-                  <span><strong>{wordCount}</strong> words</span>
-                  <span><strong>{charCount}</strong> characters</span>
-                  <span>Standard: <strong>{activeRev.standard_version_label}</strong></span>
-                  <span>Model: <code>{activeRev.model_name || 'gemini-2.5-flash'}</code></span>
-                </div>
-
-                <div className="editor-bottom-actions">
-                  <button
-                    type="button"
-                    className="btn btn--primary"
-                    onClick={handleSave}
-                    disabled={isSaving || !isDirty}
-                    id="btn-save-edits"
-                  >
-                    {isSaving ? 'Saving...' : '💾 Save Changes'}
-                  </button>
-
-                  {!isComplete && (
-                    <button
-                      type="button"
-                      className="btn btn--success"
-                      onClick={handleCompleteEditing}
-                      id="btn-complete-editing"
-                    >
-                      ✓ Complete Editing
-                    </button>
-                  )}
-                </div>
+              <p className="review-note-desc">
+                {activeRev.source_uncertainties && activeRev.source_uncertainties.length > 0
+                  ? activeRev.source_uncertainties[0]
+                  : 'Scripture Reference Check: Ensure Bible references match the preacher citations exactly.'}
+              </p>
+              <div className="review-note-actions">
+                <button type="button" className="btn-note-dismiss" onClick={() => {}}>
+                  Dismiss
+                </button>
+                <button
+                  type="button"
+                  className="btn-note-insert"
+                  onClick={() => {
+                    setReportText((prev) => prev + '\n\n*Scripture Citation: Verified against Biblical standard.*')
+                    setIsDirty(true)
+                  }}
+                >
+                  Insert Citation
+                </button>
               </div>
             </div>
           )}
         </div>
       </div>
+
+
 
       {/* Revision History Drawer / Modal */}
       {showRevisionsDrawer && (

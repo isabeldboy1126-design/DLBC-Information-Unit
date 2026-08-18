@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { ReportingStandardsModal } from '../reporting/ReportingStandardsModal'
 import { EditorStandardsModal } from '../editing/EditorStandardsModal'
 import { ProofreadingStandardsModal } from '../proofreading/ProofreadingStandardsModal'
+import { ProgrammesSettingsSection } from './ProgrammesSettingsSection'
 
 export function SettingsView({ onBack }) {
   const [transcriptionConfig, setTranscriptionConfig] = useState(null)
@@ -92,6 +93,9 @@ export function SettingsView({ onBack }) {
       )}
 
       <div className="settings-grid">
+        {/* Section 0: Programmes & Sessions Management (User-Facing) */}
+        <ProgrammesSettingsSection />
+
         {/* Section 1: Editorial Standards & Guidelines Management (User-Facing) */}
         <div className="card settings-card">
           <div className="card-header settings-card-header">
@@ -210,7 +214,7 @@ export function SettingsView({ onBack }) {
                     <td>
                       <strong>AI Reporting (Dual)</strong>
                     </td>
-                    <td>{reportingStatus?.provider || 'Google Gemini'} ({reportingStatus?.model || 'gemini-2.5-flash'})</td>
+                    <td>{reportingStatus?.provider || 'Google Gemini'} ({reportingStatus?.model || 'gemini-3.7-flash'})</td>
                     <td>
                       {reportingStatus?.configured ? (
                         <span className="badge badge--success">✓ Ready</span>
@@ -224,7 +228,7 @@ export function SettingsView({ onBack }) {
                     <td>
                       <strong>AI Editor Synthesis</strong>
                     </td>
-                    <td>{editingStatus?.provider || 'Google Gemini'} ({editingStatus?.model || 'gemini-2.5-flash'})</td>
+                    <td>{editingStatus?.provider || 'Google Gemini'} ({editingStatus?.model || 'gemini-3.7-flash'})</td>
                     <td>
                       {editingStatus?.configured ? (
                         <span className="badge badge--success">✓ Ready</span>
@@ -238,7 +242,7 @@ export function SettingsView({ onBack }) {
                     <td>
                       <strong>AI Proofreader</strong>
                     </td>
-                    <td>{proofreadingStatus?.provider || 'Google Gemini'} ({proofreadingStatus?.model || 'gemini-2.5-flash'})</td>
+                    <td>{proofreadingStatus?.provider || 'Google Gemini'} ({proofreadingStatus?.model || 'gemini-3.7-flash'})</td>
                     <td>
                       {proofreadingStatus?.configured ? (
                         <span className="badge badge--success">✓ Ready</span>

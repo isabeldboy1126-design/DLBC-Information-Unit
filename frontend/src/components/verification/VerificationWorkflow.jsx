@@ -255,7 +255,6 @@ export function VerificationWorkflow({
         <div className="verification-header-left">
           <div className="verification-badge-row">
             <span className="badge badge--verification-mode">VERIFICATION MODE</span>
-            <span className="verification-session-code">ID: {session.session_id}</span>
           </div>
 
           <h1 className="verification-main-title">{session.title || 'Sunday Morning Worship Service'}</h1>

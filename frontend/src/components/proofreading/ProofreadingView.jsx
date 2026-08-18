@@ -18,7 +18,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
   const [aiStatus, setAiStatus] = useState({
     configured: false,
     provider: 'gemini',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.7-flash',
     active_standard_version: 'v1',
   })
 
@@ -205,39 +205,37 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
   const sourceEdited = proofreadingData.source_edited_report
   const isComplete = proofreadingData.proofreading_status === 'complete'
   const canProofread = proofreadingData.can_proofread
+  const isFinalized = isComplete
   const wordCount = reportText ? reportText.trim().split(/\s+/).filter(Boolean).length : 0
   const charCount = reportText ? reportText.length : 0
 
   return (
-    <div className="editing-workspace proofreading-workspace">
+    <div className="editing-workspace-container proofreading-workspace-container">
       {/* Top Header Navigation Bar */}
-      <div className="editing-header-bar">
-        <div className="header-left">
+      <div className="editing-header-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem', borderBottom: '1px solid #e3e8ef' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
           <button type="button" className="btn btn--secondary btn--small" onClick={onBack}>
-            ← Back to Session
+            ← Back to Editing
           </button>
           <div>
-            <h2>{session?.title || 'Session Proofreading'}</h2>
-            <div className="session-breadcrumbs">
-              <span className="breadcrumb-item">Recording ✓</span>
-              <span className="breadcrumb-item">Raw Transcript ✓</span>
-              <span className="breadcrumb-item">Verification ✓</span>
-              <span className="breadcrumb-item">Verified Transcript ✓</span>
-              <span className="breadcrumb-item">Reporting ✓</span>
-              <span className="breadcrumb-item">Editing ✓</span>
-              <span className="breadcrumb-item breadcrumb-item--active">Proofreading ●</span>
-              <span className="breadcrumb-item breadcrumb-item--future">Final Report ○</span>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f2947', margin: '0 0 0.25rem 0' }}>
+              {session?.title || 'Sunday Morning Worship & Sermon'}
+            </h2>
+            <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem', color: '#64748b' }}>
+              <span>👤 Minister: <strong>{session?.minister_name || session?.speaker || 'Pst. Williams'}</strong></span>
+              <span>📅 {session?.date_created ? new Date(session.date_created).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Oct 24, 2023'}</span>
             </div>
           </div>
         </div>
 
-        <div className="header-right">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <button
             type="button"
             className="btn btn--outline btn--small"
             onClick={() => setIsStandardsOpen(true)}
+            id="btn-manage-proofreading-standards"
           >
-            ⚙️ Proofreading Standards ({aiStatus.active_standard_version})
+            ⚙️ Proofreading Standard ({aiStatus.active_standard_version})
           </button>
         </div>
       </div>
@@ -261,258 +259,257 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
         </div>
       )}
 
-      {/* Proofreading Status Ribbon */}
-      <div className="editing-status-ribbon">
-        <div className="ribbon-item">
-          <span className="ribbon-label">Primary Source:</span>
-          {sourceEdited ? (
-            <span className="badge badge--success">✓ Edited Report (Rev {sourceEdited.revision_number})</span>
-          ) : (
-            <span className="badge badge--warning">⚠ Missing Edited Report</span>
+      {/* STATE 1: PRE-RUN STATE (proofreading-workspace.png) */}
+      {!activeRev && !isGenerating && (
+        <div className="proofreading-pre-run-box">
+          <div className="proofreading-magnifier-icon">🔍</div>
+          <h3 className="proofreading-pre-run-title">Run Automated Proofread</h3>
+          <p className="proofreading-pre-run-desc">
+            The AI Proofreader checks spelling, grammar, punctuation, and scripture citations according to DLBC Standard {aiStatus.active_standard_version || 'v1.4'} without altering theological meaning.
+          </p>
+
+          {!canProofread && (
+            <div className="notice-card" style={{ margin: '0.5rem 0', maxWidth: '480px' }}>
+              <p className="text-warning" style={{ margin: 0, fontSize: '0.88rem' }}>
+                ⚠️ An approved Edited Report is required before Proofreading can begin.
+              </p>
+            </div>
           )}
-        </div>
 
-        <div className="ribbon-item">
-          <span className="ribbon-label">Standard:</span>
-          <span className="badge badge--primary">Proofreading Standard {aiStatus.active_standard_version}</span>
-        </div>
-
-        {activeRev && (
-          <div className="ribbon-item">
-            <span className="ribbon-label">Active Revision:</span>
-            <span className="badge badge--secondary">
-              Rev {activeRev.revision_number} ({activeRev.revision_source === 'human_reviewed' ? 'Human Adjusted' : 'AI Proofread'})
-            </span>
-          </div>
-        )}
-
-        <div className="ribbon-item">
-          <span className="ribbon-label">Status:</span>
-          {isComplete ? (
-            <span className="badge badge--success">✓ Proofreading Complete</span>
-          ) : isDirty ? (
-            <span className="badge badge--warning">● Unsaved Changes</span>
-          ) : activeRev ? (
-            <span className="badge badge--primary">In Review</span>
-          ) : (
-            <span className="badge badge--muted">Ready to Run</span>
-          )}
-        </div>
-
-        <div className="ribbon-action">
-          {activeRev ? (
-            <button
-              type="button"
-              className="btn btn--outline btn--small"
-              onClick={() => setShowRevisionsDrawer(!showRevisionsDrawer)}
-            >
-              🕒 Revisions ({proofreadingData.revisions_count})
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      {/* Stage Complete Banner */}
-      {isComplete && (
-        <div className="reports-ready-banner">
-          <div className="banner-text">
-            <h4>✓ Proofreading Complete!</h4>
-            <p>The report has been reviewed, polished, and accepted. It is ready for the Final Report stage.</p>
-          </div>
           <button
             type="button"
-            className="btn btn--success btn--large"
-            onClick={onNavigateToFinalReport || (() => alert('Final Report stage will be implemented in Phase 9.'))}
-            id="btn-continue-to-final-report"
+            className="btn-start-proofreading-large"
+            onClick={handleRunProofread}
+            disabled={!canProofread || isGenerating}
+            id="btn-start-proofreading"
           >
-            Ready for Final Report →
+            <span>⚡</span>
+            <span>Start Proofreading Run</span>
           </button>
+
+          <span className="proofreading-est-time">Est. time: ~10-20 seconds</span>
         </div>
       )}
 
-      {/* Main Workspace Layout */}
-      <div className="editing-main-layout proofreading-main-layout">
-        {/* Left Column: Changes Breakdown or Source Edited Report */}
-        <div className="editing-source-col">
-          {activeRev ? (
-            <div>
-              <div className="source-tabs-bar" style={{ marginBottom: '1rem' }}>
+      {/* LOADING STATE */}
+      {isGenerating && (
+        <div className="card editor-loading-card" style={{ padding: '4rem 2rem', textAlign: 'center' }}>
+          <div className="spinner"></div>
+          <h3 style={{ marginTop: '1.25rem', color: '#0f2947' }}>Proofreading in Progress...</h3>
+          <p style={{ color: '#64748b' }}>Checking spelling, grammar, punctuation, and Scripture formatting against editorial standards...</p>
+        </div>
+      )}
+
+      {/* STATE 2 & 3: REVIEW STATE OR FINALIZED STATE */}
+      {activeRev && !isGenerating && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Top Banner: Review Mode vs Finalized */}
+          {isFinalized ? (
+            <div className="reporting-ready-floating-card" style={{ background: '#ecfdf5', borderColor: '#a7f3d0' }}>
+              <div className="ready-card-left">
+                <div className="ready-check-icon-circle" style={{ background: '#10b981', color: '#ffffff' }}>✓</div>
+                <div className="ready-card-text">
+                  <strong style={{ color: '#065f46' }}>Proofreading Finalized</strong>
+                  <p style={{ color: '#047857' }}>The report has been successfully proofread and locked. It is now ready for final publishing.</p>
+                </div>
+              </div>
+              <div className="ready-card-actions">
                 <button
                   type="button"
-                  className={`source-tab ${leftTab === 'changes' ? 'source-tab--active' : ''}`}
-                  onClick={() => setLeftTab('changes')}
+                  className="btn-continue-editing-primary"
+                  onClick={onNavigateToFinalReport}
+                  id="btn-continue-to-final-report"
                 >
-                  🔍 Suggested Corrections ({activeRev.changes?.length || 0})
-                </button>
-                <button
-                  type="button"
-                  className={`source-tab ${leftTab === 'edited_source' ? 'source-tab--active' : ''}`}
-                  onClick={() => setLeftTab('edited_source')}
-                >
-                  📄 Original Edited Report
+                  <span>Continue to Final Report</span>
+                  <span>→</span>
                 </button>
               </div>
-
-              {leftTab === 'changes' && (
-                <ProofreadingChangesList
-                  changes={activeRev.changes}
-                  reviewNotes={activeRev.review_notes}
-                />
-              )}
-
-              {leftTab === 'edited_source' && (
-                <div className="card source-reference-card">
-                  <div className="card-header">
-                    <div>
-                      <h3>📄 Original Edited Report</h3>
-                      <p className="card-subtitle">
-                        Phase 7 approved source (Rev {sourceEdited?.revision_number})
-                      </p>
-                    </div>
-                  </div>
-                  <pre className="source-pre">{sourceEdited?.report_text || 'No edited report text.'}</pre>
-                </div>
-              )}
             </div>
           ) : (
-            <div className="card source-reference-card">
-              <div className="card-header">
+            <div className="proofreading-review-top-banner">
+              <div className="review-banner-left">
+                <div className="review-check-badge">✓</div>
                 <div>
-                  <h3>📄 Source Edited Report</h3>
-                  <p className="card-subtitle">
-                    The Proofreader will check this document without altering meaning or structure.
+                  <h4 className="review-banner-title">Proofreading Complete</h4>
+                  <p className="review-banner-sub">
+                    {activeRev.changes?.length || 0} suggestions made across the document.
                   </p>
                 </div>
               </div>
-              <pre className="source-pre">{sourceEdited?.report_text || 'No edited report found. Please complete Phase 7 editing first.'}</pre>
-            </div>
-          )}
-        </div>
 
-        {/* Right Column: AI Proofread Workspace */}
-        <div className="editing-editor-col">
-          {!activeRev && !isGenerating && (
-            <div className="card editor-empty-card">
-              <div className="editor-empty-content">
-                <h3>🔍 Conservative AI Proofreading</h3>
-                <p>
-                  The AI Proofreader will perform a careful pass over the Edited Report to catch typographical errors, spelling slips, punctuation inaccuracies, and Scripture citation formats while strictly protecting the text.
-                </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="btn btn--outline btn--small"
+                  onClick={() => setShowRerunConfirm(true)}
+                  title="Re-run AI proofreading"
+                >
+                  ↻ Re-run
+                </button>
 
-                {!canProofread && (
-                  <div className="notice-card" style={{ margin: '1rem 0' }}>
-                    <p className="text-warning">
-                      ⚠️ An approved Edited Report from Phase 7 is required before Proofreading can begin.
-                    </p>
-                  </div>
-                )}
+                <button
+                  type="button"
+                  className="btn-save-changes"
+                  onClick={handleSaveAdjustments}
+                  disabled={!isDirty || isSaving}
+                  id="btn-save-proofread-adjustments"
+                >
+                  {isSaving ? 'Saving...' : 'Save Edits'}
+                </button>
 
-                <div className="proofreading-pre-actions">
-                  <button
-                    type="button"
-                    className="btn btn--primary btn--large"
-                    onClick={handleRunProofread}
-                    disabled={!canProofread || isGenerating}
-                    id="btn-run-proofread"
-                  >
-                    ⚡ Run AI Proofread
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="btn-complete-editing-dark"
+                  onClick={handleAcceptProofread}
+                  id="btn-complete-proofreading"
+                >
+                  <span>Complete Proofreading</span>
+                  <span>✓</span>
+                </button>
               </div>
             </div>
           )}
 
-          {isGenerating && (
-            <div className="card editor-loading-card">
-              <div className="spinner"></div>
-              <h3>Proofreading in Progress...</h3>
-              <p>Checking spelling, grammar, punctuation, and Scripture formatting against editorial standards...</p>
-            </div>
-          )}
+          {/* 2-Column Grid */}
+          <div className="editing-two-col-grid">
+            {/* Left Column: Document Surface */}
+            <div className="editing-editor-col">
+              <div className="review-toolbar-row">
+                {isFinalized ? (
+                  <div className="document-locked-bar">
+                    <span>🔒 DOCUMENT LOCKED</span>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <span className="review-mode-pill">● Review Mode</span>
+                    {isDirty && <span className="badge badge--warning">● Unsaved Edits</span>}
+                  </div>
+                )}
 
-          {activeRev && !isGenerating && (
-            <div className="card editor-workspace-card">
-              <div className="editor-top-bar">
-                <div className="editor-title-box">
-                  <label htmlFor="proofread-title-input">Report Title / Topic:</label>
-                  <input
-                    id="proofread-title-input"
-                    type="text"
-                    className="form-control report-title-input"
-                    value={reportTitle}
-                    onChange={handleTitleChange}
-                    placeholder="Enter message topic..."
-                  />
-                </div>
-
-                <div className="editor-top-actions">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <button
                     type="button"
                     className="btn btn--secondary btn--small"
                     onClick={handleCopyReport}
-                    title="Copy full markdown report"
+                    title="Copy full report"
                   >
-                    {copied ? '✓ Copied!' : '📋 Copy Report'}
+                    {copied ? '✓ Copied!' : '📋 Copy'}
                   </button>
-
                   <button
                     type="button"
                     className="btn btn--outline btn--small"
-                    onClick={() => setShowRerunConfirm(true)}
-                    title="Re-run AI proofreading"
+                    onClick={() => setShowRevisionsDrawer(!showRevisionsDrawer)}
                   >
-                    ↻ Re-run Proofreading
+                    🕒 Revisions ({proofreadingData.revisions_count || 1})
                   </button>
                 </div>
               </div>
 
-              {/* Main Editable Textarea */}
-              <div className="editor-textarea-container">
+              <div className="editing-paper-surface">
+                <input
+                  id="proofread-title-input"
+                  type="text"
+                  className="editing-paper-title-input"
+                  value={reportTitle}
+                  onChange={handleTitleChange}
+                  disabled={isFinalized}
+                  placeholder="Enter message topic..."
+                />
+
                 <textarea
-                  className="form-control editor-textarea"
-                  rows={20}
+                  id="proofread-text-textarea"
+                  className="editing-paper-textarea"
                   value={reportText}
                   onChange={handleTextChange}
+                  disabled={isFinalized}
                   placeholder="Proofread report content..."
                 />
-              </div>
 
-              {/* Bottom Action & Metrics Bar */}
-              <div className="editor-bottom-bar">
-                <div className="editor-metrics">
-                  <span><strong>{wordCount}</strong> words</span>
-                  <span><strong>{charCount}</strong> characters</span>
-                  <span>Standard: <strong>{activeRev.standard_version_label}</strong></span>
-                  <span>Model: <code>{activeRev.model_name || 'gemini-2.5-flash'}</code></span>
-                </div>
-
-                <div className="editor-bottom-actions">
-                  <button
-                    type="button"
-                    className="btn btn--primary"
-                    onClick={handleSaveAdjustments}
-                    disabled={isSaving || !isDirty}
-                    id="btn-save-proofread-edits"
-                  >
-                    {isSaving ? 'Saving...' : '💾 Save Adjustments'}
-                  </button>
-
-                  {!isComplete && (
-                    <button
-                      type="button"
-                      className="btn btn--success"
-                      onClick={handleAcceptProofread}
-                      id="btn-accept-proofread"
-                    >
-                      ✓ Accept Proofread Version
-                    </button>
-                  )}
-                </div>
+                {isFinalized && (
+                  <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+                    <span className="end-of-transcript-pill">● END OF TRANSCRIPT</span>
+                  </div>
+                )}
               </div>
             </div>
-          )}
+
+            {/* Right Column: Suggestions Sidebar or Final Summary Sidebar */}
+            <div className="editing-right-sidebar-panel">
+              {isFinalized ? (
+                <div className="suggestions-sidebar-card">
+                  <div className="suggestions-sidebar-header">
+                    <h4 className="suggestions-title">Session Summary</h4>
+                    <span className="badge badge--success">Complete</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', fontSize: '0.85rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#64748b' }}>Total Corrections:</span>
+                      <strong>{activeRev.changes?.length || 0}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#64748b' }}>Words:</span>
+                      <strong>{wordCount}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#64748b' }}>Standard:</span>
+                      <strong>DLBC Standard {activeRev.standard_version_label || 'v1.4'}</strong>
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '1rem', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn--outline btn--small"
+                      onClick={handleCopyReport}
+                      style={{ width: '100%' }}
+                    >
+                      📋 Copy Full Transcript
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--small"
+                      onClick={() => window.print()}
+                      style={{ width: '100%' }}
+                    >
+                      🖨 Print View
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="suggestions-sidebar-card">
+                  <div className="suggestions-sidebar-header">
+                    <h4 className="suggestions-title">Suggestions</h4>
+                    <span className="suggestions-count-pill">{activeRev.changes?.length || 0} Left</span>
+                  </div>
+
+                  {activeRev.changes && activeRev.changes.length > 0 ? (
+                    <ProofreadingChangesList
+                      changes={activeRev.changes}
+                      reviewNotes={activeRev.review_notes}
+                    />
+                  ) : (
+                    <div style={{ padding: '1.5rem', textAlign: 'center', color: '#10b981' }}>
+                      <span style={{ fontSize: '1.5rem' }}>✓</span>
+                      <p style={{ margin: '0.5rem 0 0 0', fontWeight: 700, fontSize: '0.88rem' }}>No language issues detected!</p>
+                      <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Text aligns with DLBC editorial standard.</span>
+                    </div>
+                  )}
+
+                  {/* Manual Confirmation Alert Box */}
+                  <div className="ai-review-notes-alert-card" style={{ marginTop: '0.5rem' }}>
+                    <div className="review-notes-header">
+                      <span>⚠ Manual Confirmation</span>
+                    </div>
+                    <p className="review-note-desc">
+                      Verify speaker quotes and proper nouns against church history standard.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Revision History Modal */}
       {showRevisionsDrawer && (

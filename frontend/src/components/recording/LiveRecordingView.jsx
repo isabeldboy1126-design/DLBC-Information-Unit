@@ -51,101 +51,109 @@ export function LiveRecordingView({
   return (
     <div className="live-recording-view-container">
       {/* ------------------------------------------------------------- */}
-      {/* 1. TOP RECORDING MONITOR HEADER                               */}
+      {/* 1. STICKY RECORDING MONITOR & CONTROLS HEADER                 */}
       {/* ------------------------------------------------------------- */}
-      <div className="recording-monitor-header-grid">
-        {/* Left Card: Timer & Controls */}
-        <div className="card recording-controls-card">
-          <div className="recording-timer-block">
-            <div className="recording-badge-row">
-              <span className="live-rec-dot">●</span>
-              <span className="live-rec-text">RECORDING ACTIVE</span>
+      <div className="live-recording-sticky-controls">
+        <div className="recording-monitor-header-grid">
+          {/* Left Card: Timer & Controls */}
+          <div className="card recording-controls-card">
+            <div className="recording-timer-block">
+              <div className="recording-badge-row">
+                <span className="live-rec-dot">●</span>
+                <span className="live-rec-text">RECORDING ACTIVE</span>
+              </div>
+              <div className="recording-large-timer">{formatTimer(elapsedTime)}</div>
             </div>
-            <div className="recording-large-timer">{formatTimer(elapsedTime)}</div>
+
+            {/* Live Waveform Bars */}
+            <div className="live-waveform-visualizer" title="Live audio signal level">
+              {[0.2, 0.5, 0.8, 0.4, 0.9, 0.6, 0.3, 0.7, 0.5, 0.8, 0.3].map((height, i) => {
+                const dynamicHeight = Math.max(15, Math.min(100, (audioLevel * (i % 2 === 0 ? 1.2 : 0.8))))
+                return (
+                  <div
+                    key={i}
+                    className="waveform-bar"
+                    style={{ height: `${hasAudioSignal ? dynamicHeight : 15}%` }}
+                  />
+                )
+              })}
+            </div>
+
+            {/* Signal Status */}
+            <div className="signal-status-box">
+              <span className="signal-icon">📶</span>
+              <div className="signal-text">
+                <span className="signal-label">SIGNAL:</span>
+                <span className="signal-val">{hasAudioSignal ? 'STRONG' : 'IDLE'}</span>
+              </div>
+            </div>
+
+            {/* Stop Session Button */}
+            <button
+              type="button"
+              className="btn btn--danger btn--stop-session"
+              onClick={onStopRecording}
+              id="btn-stop-live-recording"
+            >
+              <span className="stop-icon">⏹</span>
+              <span>STOP SESSION</span>
+            </button>
           </div>
 
-          {/* Live Waveform Bars */}
-          <div className="live-waveform-visualizer" title="Live audio signal level">
-            {[0.2, 0.5, 0.8, 0.4, 0.9, 0.6, 0.3, 0.7, 0.5, 0.8, 0.3].map((height, i) => {
-              const dynamicHeight = Math.max(15, Math.min(100, (audioLevel * (i % 2 === 0 ? 1.2 : 0.8))))
-              return (
-                <div
-                  key={i}
-                  className="waveform-bar"
-                  style={{ height: `${hasAudioSignal ? dynamicHeight : 15}%` }}
-                />
-              )
-            })}
-          </div>
+          {/* Right Card: Active Session Information */}
+          <div className="card recording-session-info-card">
+            <span className="session-info-supertitle">LIVE SESSION</span>
+            <h2 className="session-info-main-title">
+              {sessionMetadata.title || 'Sunday Morning Worship Service'}
+            </h2>
 
-          {/* Signal Status */}
-          <div className="signal-status-box">
-            <span className="signal-icon">📶</span>
-            <div className="signal-text">
-              <span className="signal-label">SIGNAL:</span>
-              <span className="signal-val">{hasAudioSignal ? 'STRONG' : 'IDLE'}</span>
+            <div className="session-info-details">
+              {(sessionMetadata.programme || sessionMetadata.eventType) && (
+                <div className="info-pill-item">
+                  <span className="pill-icon">⛪</span>
+                  <span>{sessionMetadata.programme || sessionMetadata.eventType}</span>
+                </div>
+              )}
+              {(sessionMetadata.programmeSession || sessionMetadata.sessionSection) && (
+                <div className="info-pill-item">
+                  <span className="pill-icon">📋</span>
+                  <span>{sessionMetadata.programmeSession || sessionMetadata.sessionSection}</span>
+                </div>
+              )}
+              {sessionMetadata.minister && (
+                <div className="info-pill-item">
+                  <span className="pill-icon">👤</span>
+                  <span>{sessionMetadata.minister}</span>
+                </div>
+              )}
+              {sessionMetadata.messageTitle && (
+                <div className="info-pill-item">
+                  <span className="pill-icon">📖</span>
+                  <span>{sessionMetadata.messageTitle}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------------------- */}
+        {/* 2. STATUS SUB-BAR                                             */}
+        {/* ------------------------------------------------------------- */}
+        <div className="recording-status-subbar">
+          <div className="subbar-left">
+            <div className="status-chip chip--optimal">
+              <span>☁️ STORAGE: OPTIMAL</span>
+            </div>
+            <div className="status-chip chip--ai">
+              <span>👂 AI TRANSCRIPTION: {transcriptStatus.toUpperCase()}</span>
             </div>
           </div>
 
-          {/* Stop Session Button */}
-          <button
-            type="button"
-            className="btn btn--danger btn--stop-session"
-            onClick={onStopRecording}
-            id="btn-stop-live-recording"
-          >
-            <span className="stop-icon">⏹</span>
-            <span>STOP SESSION</span>
-          </button>
-        </div>
-
-        {/* Right Card: Active Session Information */}
-        <div className="card recording-session-info-card">
-          <span className="session-info-supertitle">LIVE SESSION</span>
-          <h2 className="session-info-main-title">
-            {sessionMetadata.title || 'Sunday Morning Worship Service'}
-          </h2>
-
-          <div className="session-info-details">
-            {sessionMetadata.messageTitle && (
-              <div className="info-pill-item">
-                <span className="pill-icon">📖</span>
-                <span>{sessionMetadata.messageTitle}</span>
-              </div>
-            )}
-            {sessionMetadata.minister && (
-              <div className="info-pill-item">
-                <span className="pill-icon">👤</span>
-                <span>{sessionMetadata.minister}</span>
-              </div>
-            )}
-            {sessionMetadata.eventType && (
-              <div className="info-pill-item">
-                <span className="pill-icon">⛪</span>
-                <span>{sessionMetadata.eventType}</span>
-              </div>
-            )}
+          <div className="subbar-right">
+            <span className="engine-model-text">
+              Engine: Azure Speech (en-NG) &bull; Lossless PCM Archive
+            </span>
           </div>
-        </div>
-      </div>
-
-      {/* ------------------------------------------------------------- */}
-      {/* 2. STATUS SUB-BAR                                             */}
-      {/* ------------------------------------------------------------- */}
-      <div className="recording-status-subbar">
-        <div className="subbar-left">
-          <div className="status-chip chip--optimal">
-            <span>☁️ STORAGE: OPTIMAL</span>
-          </div>
-          <div className="status-chip chip--ai">
-            <span>👂 AI TRANSCRIPTION: {transcriptStatus.toUpperCase()}</span>
-          </div>
-        </div>
-
-        <div className="subbar-right">
-          <span className="engine-model-text">
-            Engine: Azure Speech (en-NG) &bull; Lossless PCM Archive
-          </span>
         </div>
       </div>
 

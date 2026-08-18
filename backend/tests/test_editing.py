@@ -166,7 +166,7 @@ async def test_edited_report_lifecycle_and_revisions():
         standard_version_label=std["version_label"],
         report_title="The Mystery of Divine Grace",
         review_notes=["Check spelling of Ephesians citation."],
-        model_name="gemini-2.5-flash",
+        model_name="gemini-3.7-flash",
     )
 
     assert rev1 is not None

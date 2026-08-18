@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
+from app.services.gemini_error_handler import handle_gemini_error
+
 load_dotenv()
 
 # Protected Backend Editor Rules (16 Immutable Guardrails)
@@ -111,7 +113,7 @@ class EditingProvider(ABC):
 
 class GeminiEditingProvider(EditingProvider):
     def __init__(self):
-        self._default_model = os.getenv("GEMINI_EDITING_MODEL", os.getenv("GEMINI_REPORTING_MODEL", "gemini-2.5-flash"))
+        self._default_model = os.getenv("GEMINI_EDITING_MODEL", os.getenv("GEMINI_REPORTING_MODEL", "gemini-3.7-flash"))
 
     def is_configured(self) -> bool:
         key = os.getenv("GEMINI_API_KEY", "").strip()
@@ -310,12 +312,13 @@ INSTRUCTIONS FOR FINAL EDITED REPORT:
             )
 
         except Exception as e:
+            user_error = handle_gemini_error(e, context="Editing synthesis")
             return EditingResult(
                 is_success=False,
                 standard_version=standard_version,
                 standard_version_label=standard_version_label,
                 model_name=model_name,
-                error_message=f"Gemini editing generation error: {str(e)}",
+                error_message=user_error,
             )
 
 
