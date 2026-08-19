@@ -108,10 +108,15 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
 
   return (
     <div className="reporting-workspace-container">
-      {/* Top Hero Banner Matching reporting-workspace.png */}
+      {/* Top Hero Banner (Compact & Refined) */}
       <div className="reporting-hero-banner">
         <div className="reporting-hero-top">
-          <button type="button" className="btn btn--outline btn--small" onClick={onBack} style={{ color: '#ffffff', borderColor: 'rgba(255,255,255,0.3)' }}>
+          <button
+            type="button"
+            className="reporting-back-btn"
+            onClick={onBack}
+            id="btn-reporting-back-to-session"
+          >
             ← Back to Session
           </button>
 
@@ -122,12 +127,12 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
             id="btn-manage-reporting-standards"
           >
             <span>Standard: <strong>Reporting Standard {aiStatus.active_standard_version}</strong></span>
-            <span style={{ textDecoration: 'underline', marginLeft: '0.25rem' }}>Manage</span>
+            <span className="reporting-standard-manage-link">Manage</span>
           </button>
         </div>
 
         <div className="reporting-hero-title-group">
-          <h1>{session?.title || 'Sunday Morning Worship & Sermon'}</h1>
+          <h1 className="reporting-hero-title">{session?.title || 'Sunday Morning Worship & Sermon'}</h1>
           <div className="reporting-lifecycle-stepper-line">
             <span className="lifecycle-inline-item lifecycle-inline-item--done">Recording ✓</span>
             <span className="lifecycle-inline-item lifecycle-inline-item--done">Raw Transcript ✓</span>
@@ -152,7 +157,7 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
         </div>
       )}
 
-      {/* Reports Ready Floating Banner Matching reporting-workspace.png */}
+      {/* Reports Ready Banner */}
       {bothReady ? (
         <div className="reporting-ready-floating-card">
           <div className="ready-card-left">
@@ -184,17 +189,23 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
           </div>
         </div>
       ) : (
-        <div className="card reporting-status-ribbon" style={{ background: '#ffffff', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-            <span>Source: <strong className="badge badge--success">✓ Verified Transcript (Authoritative)</strong></span>
-            <span>Standard: <strong className="badge badge--primary">Reporting Standard {aiStatus.active_standard_version}</strong></span>
+        <div className="card reporting-status-ribbon">
+          <div className="reporting-ribbon-meta-group">
+            <div className="reporting-meta-item">
+              <span className="meta-label">Source:</span>
+              <span className="meta-badge meta-badge--success">✓ Verified Transcript (Authoritative)</span>
+            </div>
+            <div className="reporting-meta-item">
+              <span className="meta-label">Standard:</span>
+              <span className="meta-badge meta-badge--primary">Reporting Standard {aiStatus.active_standard_version}</span>
+            </div>
             {!aiStatus.configured && (
-              <span className="badge badge--warning">⚠ Gemini API Key Required</span>
+              <span className="meta-badge meta-badge--warning">⚠ Gemini API Key Required</span>
             )}
           </div>
           <button
             type="button"
-            className="btn btn--primary"
+            className="btn-generate-reports-primary"
             onClick={() => handleGenerate('all')}
             disabled={generatingRole !== null}
             id="btn-generate-reports"

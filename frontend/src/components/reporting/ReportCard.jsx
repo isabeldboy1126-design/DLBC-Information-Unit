@@ -39,14 +39,20 @@ export function ReportCard({
 
   return (
     <div className={`card stitch-report-card report-card--${role}`}>
+      {/* Standardized Card Header */}
       <div className="stitch-report-card-header">
         <div className="reporter-badge-title-group">
           <span className={`role-badge-box role-badge-box--${roleBadge.toLowerCase()}`}>
             {roleBadge}
           </span>
-          <h3 className="reporter-card-title">{roleTitle}</h3>
+          <div className="reporter-title-wrap">
+            <h3 className="reporter-card-title">{roleTitle}</h3>
+            {roleSubtitle && (
+              <p className="reporter-card-subtitle">{roleSubtitle}</p>
+            )}
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+        <div className="reporter-card-header-actions">
           {getStatusBadge()}
           <button
             type="button"
@@ -54,24 +60,27 @@ export function ReportCard({
             onClick={onRegenerate}
             disabled={disabled || isGenerating}
             title={`Regenerate ${roleTitle}`}
+            aria-label={`Regenerate ${roleTitle}`}
           >
             ↻
           </button>
         </div>
       </div>
 
-      <div className="card-body" style={{ padding: 0 }}>
+      <div className="stitch-report-card-body">
+        {/* Loading State */}
         {isGenerating && (
-          <div className="report-loading-state" style={{ padding: '2.5rem 1rem', textAlign: 'center' }}>
+          <div className="report-loading-state">
             <div className="spinner"></div>
-            <p style={{ marginTop: '0.85rem', color: '#1e293b', fontWeight: 600 }}>Analyzing verified transcript and drafting report...</p>
-            <span className="hint-text" style={{ fontSize: '0.8rem', color: '#64748b' }}>Generating independent draft for {roleTitle}</span>
+            <p className="loading-state-title">Analyzing verified transcript and drafting report...</p>
+            <span className="hint-text">Generating independent draft for {roleTitle}</span>
           </div>
         )}
 
+        {/* Failed State */}
         {!isGenerating && report && report.status === 'failed' && (
-          <div className="report-failed-box" style={{ padding: '1rem', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px' }}>
-            <p className="text-danger" style={{ color: '#b91c1c', margin: '0 0 0.5rem 0' }}>
+          <div className="report-failed-box">
+            <p className="text-danger">
               <strong>Generation Error:</strong> {report.error_message || 'Could not generate report.'}
             </p>
             <button
@@ -85,15 +94,16 @@ export function ReportCard({
           </div>
         )}
 
+        {/* Ready Generated Report State (Natural growth without fixed height) */}
         {!isGenerating && report && report.status === 'ready' && (
-          <div className="report-ready-content" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>
-              <strong style={{ fontSize: '1.05rem', color: '#0f2947' }}>
+          <div className="report-ready-content">
+            <div className="report-ready-header-row">
+              <strong className="report-draft-heading">
                 {report.report_title || 'Message Report Draft'}
               </strong>
               <button
                 type="button"
-                className="btn btn--secondary btn--small"
+                className="btn btn--secondary btn--small btn-copy-draft"
                 onClick={handleCopy}
                 title="Copy formatted draft"
               >
@@ -117,34 +127,37 @@ export function ReportCard({
             )}
 
             {report.scriptures && report.scriptures.length > 0 && (
-              <div className="scriptures-pill-box" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
-                <span className="pill-label" style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>Scriptures:</span>
+              <div className="scriptures-pill-box">
+                <span className="pill-label">Scriptures:</span>
                 {report.scriptures.map((sc, i) => (
-                  <span key={i} className="scripture-pill" style={{ background: '#eff6ff', color: '#1e40af', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 600 }}>
+                  <span key={i} className="scripture-pill">
                     📖 {sc}
                   </span>
                 ))}
               </div>
             )}
 
-            <div className="report-text-container" style={{ maxHeight: '420px', overflowY: 'auto', background: '#fafcff', border: '1px solid #eef2f6', borderRadius: '8px', padding: '1.25rem' }}>
-              <pre className="report-markdown-preview" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.92rem', lineHeight: '1.65', color: '#1e293b', margin: 0 }}>
+            {/* Natural content growth container (no fixed/max height) */}
+            <div className="report-text-natural-container">
+              <pre className="report-markdown-preview">
                 {report.report_text}
               </pre>
             </div>
 
-            <div className="report-footer-meta" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8', borderTop: '1px solid #f1f5f9', paddingTop: '0.5rem' }}>
+            <div className="report-footer-meta">
               <span>Standard: <strong>{report.standard_version_label}</strong></span>
               <span>Created: {new Date(report.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
           </div>
         )}
 
+        {/* Compact & Clean Empty State */}
         {!isGenerating && !report && (
-          <div className="report-empty-state" style={{ padding: '3rem 1.5rem', textAlign: 'center', color: '#64748b' }}>
-            <p style={{ margin: '0 0 0.5rem 0', fontWeight: 600 }}>No report draft generated yet for {roleTitle}.</p>
-            <p className="hint-text" style={{ fontSize: '0.82rem', margin: 0 }}>
-              Click <strong>"Generate Reports"</strong> above to generate both independent drafts from the Verified Transcript.
+          <div className="report-empty-state-compact">
+            <div className="empty-state-icon">📄</div>
+            <p className="empty-state-heading">No draft generated yet for {roleTitle}</p>
+            <p className="empty-state-hint">
+              Click <strong>"Generate Reports"</strong> to produce this independent draft from the verified transcript.
             </p>
           </div>
         )}

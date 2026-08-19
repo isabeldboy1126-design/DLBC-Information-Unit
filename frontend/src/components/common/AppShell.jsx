@@ -1,11 +1,12 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 /**
  * AppShell — Persistent application shell matching the Stitch design system.
  * 
  * Features:
  * - Deep Navy Left Sidebar (#0F2947) with DLBC logo, primary "Start Live Session" CTA,
- *   navigation items (Dashboard, Sessions, Settings), and bottom Operator Profile.
+ *   navigation items (Dashboard, Sessions, Settings).
+ * - On Mobile: Responsive slide-out drawer with hamburger toggle.
  * - Simplified Contextual Top Bar:
  *   - Sub-screens: "← Back   [Current Screen Name]"
  *   - Dashboard: "Dashboard" (no back button)
@@ -19,23 +20,56 @@ export function AppShell({
   onStartLiveSession,
   children,
 }) {
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
+
+  const handleNavClick = (view) => {
+    setIsMobileNavOpen(false)
+    onNavigate(view)
+  }
+
+  const handleStartLiveClick = () => {
+    setIsMobileNavOpen(false)
+    onStartLiveSession()
+  }
+
   return (
     <div className="app-shell-container">
+      {/* Mobile Drawer Backdrop */}
+      {isMobileNavOpen && (
+        <div
+          className="mobile-sidebar-backdrop"
+          onClick={() => setIsMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       {/* ------------------------------------------------------------- */}
       {/* LEFT SIDEBAR                                                  */}
       {/* ------------------------------------------------------------- */}
-      <aside className="app-sidebar">
+      <aside className={`app-sidebar ${isMobileNavOpen ? 'app-sidebar--open' : ''}`}>
         {/* Brand Logo */}
-        <div className="sidebar-brand" onClick={() => onNavigate('dashboard')} role="button" tabIndex={0}>
-          <img
-            src="/dlbc-logo.png"
-            alt="DLBC logo"
-            className="sidebar-brand-logo"
-          />
-          <div className="sidebar-brand-text">
-            <span className="brand-name">DLBC</span>
-            <span className="brand-sub">INFORMATION UNIT</span>
+        <div className="sidebar-brand-row">
+          <div className="sidebar-brand" onClick={() => handleNavClick('dashboard')} role="button" tabIndex={0}>
+            <img
+              src="/dlbc-logo.png"
+              alt="DLBC logo"
+              className="sidebar-brand-logo"
+            />
+            <div className="sidebar-brand-text">
+              <span className="brand-name">DLBC</span>
+              <span className="brand-sub">INFORMATION UNIT</span>
+            </div>
           </div>
+
+          {/* Close button inside mobile drawer */}
+          <button
+            type="button"
+            className="mobile-sidebar-close-btn"
+            onClick={() => setIsMobileNavOpen(false)}
+            aria-label="Close navigation"
+          >
+            ✕
+          </button>
         </div>
 
         {/* Primary CTA: Start Live Session */}
@@ -43,7 +77,7 @@ export function AppShell({
           <button
             type="button"
             className="sidebar-live-btn"
-            onClick={onStartLiveSession}
+            onClick={handleStartLiveClick}
             id="sidebar-btn-start-live"
           >
             <span className="live-pulse-dot">●</span>
@@ -56,7 +90,7 @@ export function AppShell({
           <button
             type="button"
             className={`sidebar-nav-item ${activeView === 'dashboard' ? 'sidebar-nav-item--active' : ''}`}
-            onClick={() => onNavigate('dashboard')}
+            onClick={() => handleNavClick('dashboard')}
             id="nav-link-dashboard"
           >
             <span className="nav-icon">⊞</span>
@@ -66,7 +100,7 @@ export function AppShell({
           <button
             type="button"
             className={`sidebar-nav-item ${activeView === 'sessions' ? 'sidebar-nav-item--active' : ''}`}
-            onClick={() => onNavigate('sessions')}
+            onClick={() => handleNavClick('sessions')}
             id="nav-link-sessions"
           >
             <span className="nav-icon">📋</span>
@@ -79,7 +113,7 @@ export function AppShell({
           <button
             type="button"
             className={`sidebar-nav-item ${activeView === 'settings' ? 'sidebar-nav-item--active' : ''}`}
-            onClick={() => onNavigate('settings')}
+            onClick={() => handleNavClick('settings')}
             id="nav-link-settings"
           >
             <span className="nav-icon">⚙️</span>
@@ -96,6 +130,17 @@ export function AppShell({
         <header className="app-topbar">
           {/* Dynamic Contextual Title & Back Button */}
           <div className="topbar-left">
+            {/* Hamburger Button (Mobile / Tablet only) */}
+            <button
+              type="button"
+              className="mobile-menu-toggle"
+              onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
+              aria-label="Toggle navigation menu"
+              id="btn-toggle-mobile-menu"
+            >
+              ☰
+            </button>
+
             {onBack ? (
               <div className="topbar-nav-header">
                 <button
@@ -123,7 +168,7 @@ export function AppShell({
           </div>
         </header>
 
-        {/* Page Content View */}
+        {/* Page Content Body — the ONLY scrolling region */}
         <main className="app-content-body">
           {children}
         </main>
