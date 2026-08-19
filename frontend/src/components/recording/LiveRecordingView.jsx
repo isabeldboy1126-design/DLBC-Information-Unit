@@ -48,24 +48,36 @@ export function LiveRecordingView({
     return `${pad(hours)}:${pad(mins)}:${pad(secs)}`
   }
 
+  // Format compact metadata line: Programme • Session • Minister • Message Title
+  const metadataParts = [
+    sessionMetadata.programme || sessionMetadata.eventType,
+    sessionMetadata.programmeSession || sessionMetadata.sessionSection,
+    sessionMetadata.minister,
+    sessionMetadata.messageTitle,
+  ].filter(Boolean)
+
+  const compactMetadataString = metadataParts.length > 0
+    ? metadataParts.join(' • ')
+    : (sessionMetadata.title || 'Live Session Recording')
+
   return (
     <div className="live-recording-view-container">
       {/* ------------------------------------------------------------- */}
-      {/* 1. STICKY RECORDING MONITOR & CONTROLS HEADER                 */}
+      {/* 1. COMPACT TOP RECORDING CONTROL BAR                          */}
       {/* ------------------------------------------------------------- */}
-      <div className="live-recording-sticky-controls">
-        <div className="recording-monitor-header-grid">
-          {/* Left Card: Timer & Controls */}
-          <div className="card recording-controls-card">
-            <div className="recording-timer-block">
-              <div className="recording-badge-row">
-                <span className="live-rec-dot">●</span>
-                <span className="live-rec-text">RECORDING ACTIVE</span>
-              </div>
-              <div className="recording-large-timer">{formatTimer(elapsedTime)}</div>
-            </div>
+      <div className="card live-top-recording-bar">
+        <div className="live-bar-left">
+          {/* Active Recording Badge */}
+          <div className="live-rec-badge-pill">
+            <span className="live-rec-dot">●</span>
+            <span className="live-rec-text">RECORDING ACTIVE</span>
+          </div>
 
-            {/* Live Waveform Bars */}
+          {/* Recording Timer */}
+          <div className="live-bar-timer">{formatTimer(elapsedTime)}</div>
+
+          {/* Audio Waveform & Signal Status */}
+          <div className="live-bar-signal-group">
             <div className="live-waveform-visualizer" title="Live audio signal level">
               {[0.2, 0.5, 0.8, 0.4, 0.9, 0.6, 0.3, 0.7, 0.5, 0.8, 0.3].map((height, i) => {
                 const dynamicHeight = Math.max(15, Math.min(100, (audioLevel * (i % 2 === 0 ? 1.2 : 0.8))))
@@ -78,94 +90,41 @@ export function LiveRecordingView({
                 )
               })}
             </div>
-
-            {/* Signal Status */}
-            <div className="signal-status-box">
-              <span className="signal-icon">📶</span>
-              <div className="signal-text">
-                <span className="signal-label">SIGNAL:</span>
-                <span className="signal-val">{hasAudioSignal ? 'STRONG' : 'IDLE'}</span>
-              </div>
-            </div>
-
-            {/* Stop Session Button */}
-            <button
-              type="button"
-              className="btn btn--danger btn--stop-session"
-              onClick={onStopRecording}
-              id="btn-stop-live-recording"
-            >
-              <span className="stop-icon">⏹</span>
-              <span>STOP SESSION</span>
-            </button>
+            <span className="live-signal-badge">
+              {hasAudioSignal ? '📶 STRONG' : '📶 IDLE'}
+            </span>
           </div>
 
-          {/* Right Card: Active Session Information */}
-          <div className="card recording-session-info-card">
-            <span className="session-info-supertitle">LIVE SESSION</span>
-            <h2 className="session-info-main-title">
-              {sessionMetadata.title || 'Sunday Morning Worship Service'}
-            </h2>
-
-            <div className="session-info-details">
-              {(sessionMetadata.programme || sessionMetadata.eventType) && (
-                <div className="info-pill-item">
-                  <span className="pill-icon">⛪</span>
-                  <span>{sessionMetadata.programme || sessionMetadata.eventType}</span>
-                </div>
-              )}
-              {(sessionMetadata.programmeSession || sessionMetadata.sessionSection) && (
-                <div className="info-pill-item">
-                  <span className="pill-icon">📋</span>
-                  <span>{sessionMetadata.programmeSession || sessionMetadata.sessionSection}</span>
-                </div>
-              )}
-              {sessionMetadata.minister && (
-                <div className="info-pill-item">
-                  <span className="pill-icon">👤</span>
-                  <span>{sessionMetadata.minister}</span>
-                </div>
-              )}
-              {sessionMetadata.messageTitle && (
-                <div className="info-pill-item">
-                  <span className="pill-icon">📖</span>
-                  <span>{sessionMetadata.messageTitle}</span>
-                </div>
-              )}
-            </div>
+          {/* Compact Session / Programme Details */}
+          <div className="live-bar-metadata" title={compactMetadataString}>
+            <span className="live-meta-icon">🏛️</span>
+            <span className="live-meta-text">{compactMetadataString}</span>
           </div>
         </div>
 
-        {/* ------------------------------------------------------------- */}
-        {/* 2. STATUS SUB-BAR                                             */}
-        {/* ------------------------------------------------------------- */}
-        <div className="recording-status-subbar">
-          <div className="subbar-left">
-            <div className="status-chip chip--optimal">
-              <span>☁️ STORAGE: OPTIMAL</span>
-            </div>
-            <div className="status-chip chip--ai">
-              <span>👂 AI TRANSCRIPTION: {transcriptStatus.toUpperCase()}</span>
-            </div>
-          </div>
-
-          <div className="subbar-right">
-            <span className="engine-model-text">
-              Engine: Azure Speech (en-NG) &bull; Lossless PCM Archive
-            </span>
-          </div>
+        {/* Right: Red Stop Session Action */}
+        <div className="live-bar-right">
+          <button
+            type="button"
+            className="btn btn--danger btn--stop-session"
+            onClick={onStopRecording}
+            id="btn-stop-live-recording"
+          >
+            <span className="stop-icon">⏹</span>
+            <span>STOP SESSION</span>
+          </button>
         </div>
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 3. REAL-TIME TRANSCRIPT STREAM CANVAS                         */}
+      {/* 2. REAL-TIME DOMINANT TRANSCRIPT CANVAS (35px)                */}
       {/* ------------------------------------------------------------- */}
       <div className="card live-transcript-canvas-card">
         <div className="transcript-stream-container">
           {segments.length === 0 && !interimText ? (
             <div className="transcript-waiting-placeholder">
               <span className="waiting-spinner">⏳</span>
-              <p>Listening to audio input... Transcript will stream here automatically.</p>
+              <p className="waiting-text">Listening for live audio input... Live transcript will stream here.</p>
             </div>
           ) : (
             <>
@@ -228,6 +187,26 @@ export function LiveRecordingView({
           )}
 
           <div ref={transcriptEndRef} />
+        </div>
+
+        {/* ----------------------------------------------------------- */}
+        {/* 3. SUBTLE SECONDARY STATUS FOOTER                           */}
+        {/* ----------------------------------------------------------- */}
+        <div className="recording-status-subbar">
+          <div className="subbar-left">
+            <div className="status-chip chip--optimal">
+              <span>☁️ STORAGE: OPTIMAL</span>
+            </div>
+            <div className="status-chip chip--ai">
+              <span>👂 AI TRANSCRIPTION: {transcriptStatus.toUpperCase()}</span>
+            </div>
+          </div>
+
+          <div className="subbar-right">
+            <span className="engine-model-text">
+              Azure Speech (en-NG) &bull; Lossless PCM Archive
+            </span>
+          </div>
         </div>
       </div>
     </div>

@@ -23,11 +23,18 @@ export function SessionHistoryList({
   onRefresh,
   onStartNewSession,
   isLoading,
+  initialStatusFilter = 'all',
 }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeTab, setActiveTab] = useState('all') // 'all' | 'in_progress' | 'completed' | 'needs_attention'
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter)
   const [dateFilter, setDateFilter] = useState('all')
+
+  React.useEffect(() => {
+    if (initialStatusFilter) {
+      setStatusFilter(initialStatusFilter)
+    }
+  }, [initialStatusFilter])
 
   const formatDuration = (totalSeconds) => {
     if (!totalSeconds && totalSeconds !== 0) return '00:00:00'
@@ -129,6 +136,8 @@ export function SessionHistoryList({
     return matchesSearch && matchesTab && matchesStatus && matchesDate
   })
 
+  const activeSessionsCount = sessions.filter((s) => s.final_report_status !== 'complete').length
+
   return (
     <div className="sessions-history-page-container">
       {/* ------------------------------------------------------------- */}
@@ -138,8 +147,7 @@ export function SessionHistoryList({
         <div>
           <h1 className="sessions-history-title">Sessions History</h1>
           <p className="sessions-history-subtitle">
-            Showing all recorded and active sessions{' '}
-            <span className="sessions-count-pill">{sessions.length}</span>
+            Active sessions: {activeSessionsCount}
           </p>
         </div>
 
@@ -213,9 +221,8 @@ export function SessionHistoryList({
 
             <button
               type="button"
-              className={`filter-tab-btn filter-tab-btn--attention ${
-                activeTab === 'needs_attention' ? 'filter-tab-btn--active-attention' : ''
-              }`}
+              className={`filter-tab-btn filter-tab-btn--attention ${activeTab === 'needs_attention' ? 'filter-tab-btn--active-attention' : ''
+                }`}
               onClick={() => setActiveTab('needs_attention')}
             >
               ⚠️ Needs Attention

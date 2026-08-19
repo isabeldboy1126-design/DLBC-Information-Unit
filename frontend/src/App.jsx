@@ -37,6 +37,7 @@ function App() {
     title: 'Session Workspace',
     onBack: null,
   })
+  const [sessionsStatusFilter, setSessionsStatusFilter] = useState('all')
 
   // Phase 1 & 3: Audio Capture & Live Transcription Hook
   const liveAudio = useAudioCapture()
@@ -93,6 +94,7 @@ function App() {
     if (view === 'sessions') {
       sessionsHook.closeActiveSession()
       sessionsHook.fetchSessions()
+      setSessionsStatusFilter('all')
     }
     setCurrentView(view)
   }
@@ -128,42 +130,36 @@ function App() {
     }
     if (currentView === 'new_live') {
       return {
-        title: 'New Live Session',
+        title: 'New Live Recording',
         onBack: () => setCurrentView('dashboard'),
       }
     }
-    if (currentView === 'sessions') {
-      if (!sessionsHook.activeSession) {
-        return {
-          title: 'Sessions',
-          onBack: () => setCurrentView('dashboard'),
-        }
-      }
-      return {
-        title: sessionSubViewInfo.title || 'Session Workspace',
-        onBack: sessionSubViewInfo.onBack || (() => sessionsHook.closeActiveSession()),
-      }
-    }
     if (currentView === 'transcribe') {
-      if (recordedTranscription.activeTranscript) {
-        return {
-          title: 'Raw Transcript',
-          onBack: () => recordedTranscription.resetUpload(),
-        }
-      }
       return {
-        title: 'Transcribe Recording',
+        title: 'Transcribe Recording File',
         onBack: () => setCurrentView('dashboard'),
       }
     }
     if (currentView === 'settings') {
       return {
-        title: 'Settings',
+        title: 'Settings & Standards',
+        onBack: () => setCurrentView('dashboard'),
+      }
+    }
+    if (currentView === 'sessions') {
+      if (sessionsHook.activeSession) {
+        return {
+          title: sessionSubViewInfo.title,
+          onBack: sessionSubViewInfo.onBack || (() => sessionsHook.closeActiveSession()),
+        }
+      }
+      return {
+        title: 'Sessions History',
         onBack: () => setCurrentView('dashboard'),
       }
     }
     return {
-      title: 'Dashboard',
+      title: 'Information Unit',
       onBack: null,
     }
   }
@@ -172,11 +168,11 @@ function App() {
 
   return (
     <AppShell
-      activeNav={
-        liveAudio.isRecording
-          ? 'live_session'
-          : currentView === 'new_live'
-          ? 'live_session'
+      activeView={
+        showCompletionModal
+          ? 'dashboard'
+          : liveAudio.isRecording
+          ? 'live_recording'
           : currentView
       }
       onNavigate={handleNavigate}
@@ -267,6 +263,12 @@ function App() {
           }}
           onViewAllSessions={() => {
             sessionsHook.closeActiveSession()
+            setSessionsStatusFilter('all')
+            setCurrentView('sessions')
+          }}
+          onViewNeedsVerification={() => {
+            sessionsHook.closeActiveSession()
+            setSessionsStatusFilter('needs_verification')
             setCurrentView('sessions')
           }}
           onFileSelect={handleDashboardFileSelect}
@@ -294,6 +296,7 @@ function App() {
             onRefresh={sessionsHook.fetchSessions}
             onStartNewSession={() => setCurrentView('new_live')}
             isLoading={sessionsHook.isLoading}
+            initialStatusFilter={sessionsStatusFilter}
           />
         ) : (
           <SessionDetailView

@@ -14,6 +14,7 @@ export function DashboardView({
   onStartLiveSession,
   onOpenSession,
   onViewAllSessions,
+  onViewNeedsVerification,
   onFileSelect,
 }) {
   const fileInputRef = useRef(null)
@@ -95,11 +96,9 @@ export function DashboardView({
           </div>
         </div>
 
-        {/* Hero Card 2: Transcribe Recording */}
+        {/* Hero Card 2: Transcribe Recording (Secondary Action) */}
         <div
-          className="dashboard-hero-card hero-card--upload"
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
+          className="dashboard-hero-card hero-card--upload hero-card--secondary"
           onClick={() => fileInputRef.current?.click()}
           role="button"
           tabIndex={0}
@@ -117,24 +116,28 @@ export function DashboardView({
             }}
           />
 
-          <div className="hero-card-header">
-            <div className="hero-card-icon-box hero-card-icon-box--light">
-              <span className="hero-icon">📁</span>
+          <div>
+            <div className="hero-card-header hero-card-header--compact">
+              <div className="hero-card-icon-box hero-card-icon-box--light">
+                <span className="hero-icon">📁</span>
+              </div>
+              <div className="hero-card-title-group">
+                <h2 className="hero-card-title hero-card-title--dark" style={{ fontSize: '1.12rem' }}>
+                  Transcribe Recording
+                </h2>
+              </div>
             </div>
-            <div className="hero-card-title-group">
-              <h2 className="hero-card-title hero-card-title--dark">Transcribe Recording</h2>
-              <span className="hero-arrow hero-arrow--dark">→</span>
-            </div>
+
+            <p className="hero-card-desc hero-card-desc--dark" style={{ fontSize: '0.84rem', margin: '0 0 1rem 0' }}>
+              Upload an existing audio or video recording to transcribe and create a session.
+            </p>
           </div>
 
-          <p className="hero-card-desc hero-card-desc--dark">
-            Use an existing audio or video recording to create a transcript and Session.
-          </p>
-
-          <div className="hero-dropzone-box">
-            <div className="dropzone-cloud-icon">☁️</div>
-            <div className="dropzone-title">Drag &amp; drop files here</div>
-            <div className="dropzone-subtitle">Supported: WAV, MP3, MP4 (Max 5GB)</div>
+          <div className="hero-upload-action">
+            <button type="button" className="btn btn--outline btn--small hero-upload-btn" tabIndex={-1}>
+              <span>Upload Recording</span>
+              <span>→</span>
+            </button>
           </div>
         </div>
       </div>
@@ -143,72 +146,86 @@ export function DashboardView({
       {/* 2. NEEDS YOUR ATTENTION SECTION                               */}
       {/* ------------------------------------------------------------- */}
       {attentionSessions.length > 0 && (
-        <section className="dashboard-section">
-          <div className="section-header-title">
-            <span className="section-alert-icon">⚠️</span>
-            <h3>Needs Your Attention</h3>
+        <section className="dashboard-section dashboard-attention-section">
+          <div className="section-header-flex">
+            <div className="section-header-title">
+              <span className="attention-header-badge">⚠️</span>
+              <h3>Needs Your Attention</h3>
+              <span className="attention-header-count">{attentionSessions.length}</span>
+            </div>
+
+            <button
+              type="button"
+              className="view-all-link-btn"
+              onClick={onViewNeedsVerification || onViewAllSessions}
+              id="btn-attention-view-more"
+            >
+              View More →
+            </button>
           </div>
 
-          <div className="attention-cards-grid">
+          <div className="attention-panel">
             {attentionSessions.map((sess) => {
               const needsVerify = sess.flag_count > 0 && (!sess.verification_status || sess.verification_status === 'in_progress')
               const readyEditing = sess.reporting_status === 'reports_ready' && sess.editing_status !== 'complete'
-              const isInterrupted = sess.is_interrupted
+              const isInterrupted = !!sess.is_interrupted
+
+              let metaSpeaker = ''
+              try {
+                if (sess.metadata_json) {
+                  const parsed = JSON.parse(sess.metadata_json)
+                  metaSpeaker = parsed.preacher_name || parsed.speaker || ''
+                }
+              } catch {}
 
               return (
                 <div
                   key={sess.session_id}
-                  className={`attention-card ${
-                    needsVerify
-                      ? 'attention-card--verify'
-                      : readyEditing
-                      ? 'attention-card--editing'
-                      : 'attention-card--warning'
-                  }`}
+                  className={`attention-row ${isInterrupted ? 'attention-row--interrupted' : 'attention-row--in-progress'}`}
                 >
-                  <div className="attention-card-top">
-                    <div className="attention-card-title-area">
-                      <h4 className="attention-session-title">{sess.title || 'Untitled Session'}</h4>
-                      <p className="attention-session-sub">
+                  <div className="attention-row-main">
+                    <div className="attention-row-title-group">
+                      <h4 className="attention-row-title">{sess.title || 'Untitled Session'}</h4>
+                      <span
+                        className={`status-badge ${
+                          isInterrupted ? 'badge--interrupted' : 'badge--default'
+                        }`}
+                      >
+                        {isInterrupted
+                          ? '⚠ INTERRUPTED'
+                          : needsVerify
+                          ? 'IN PROGRESS · VERIFICATION'
+                          : readyEditing
+                          ? 'IN PROGRESS · EDITING'
+                          : 'IN PROGRESS'}
+                      </span>
+                    </div>
+
+                    <div className="attention-row-meta">
+                      {sess.date_created && (
+                        <span className="attention-meta-item">
+                          📅 {formatDate(sess.date_created).slice(0, 10)}
+                        </span>
+                      )}
+                      {metaSpeaker && (
+                        <span className="attention-meta-item">
+                          👤 {metaSpeaker}
+                        </span>
+                      )}
+                      <span className="attention-meta-item attention-meta-desc">
                         {isInterrupted
                           ? 'Interrupted during recording — review recovery'
                           : needsVerify
-                          ? `${sess.flag_count} section${sess.flag_count !== 1 ? 's' : ''} need verification`
-                          : 'Verification complete — ready for editing'}
-                      </p>
+                          ? `${sess.flag_count} section${sess.flag_count !== 1 ? 's' : ''} to verify`
+                          : 'Ready for compilation'}
+                      </span>
                     </div>
-
-                    <span
-                      className={`badge ${
-                        needsVerify ? 'badge--warning' : readyEditing ? 'badge--info' : 'badge--danger'
-                      }`}
-                    >
-                      {needsVerify
-                        ? '⚠ VERIFICATION'
-                        : readyEditing
-                        ? '📄 EDITING'
-                        : '⚠ INTERRUPTED'}
-                    </span>
                   </div>
 
-                  <div className="attention-card-footer">
-                    <div className="attention-status-info">
-                      {needsVerify ? (
-                        <>
-                          <span className="dot-red">●</span>
-                          <span>{sess.flag_count} sections flagged</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="icon-clock">🕒</span>
-                          <span>Ready for compilation</span>
-                        </>
-                      )}
-                    </div>
-
+                  <div className="attention-row-action">
                     <button
                       type="button"
-                      className="btn btn--primary btn--small attention-action-btn"
+                      className="btn btn--primary btn--small"
                       onClick={() => onOpenSession(sess.session_id)}
                     >
                       {needsVerify ? 'Review Sections ›' : readyEditing ? 'Continue to Editing ›' : 'Review Log ›'}

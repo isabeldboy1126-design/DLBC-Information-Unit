@@ -57,7 +57,7 @@ class LiveTranscriptionSession:
         self.api_key = os.getenv("AZURE_SPEECH_KEY", "").strip()
         self.region = os.getenv("AZURE_SPEECH_REGION", "southafricanorth").strip()
         self.silence_timeout_ms = os.getenv("AZURE_SEGMENTATION_SILENCE_MS", "400").strip()
-        self.low_conf_threshold = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.60"))
+        self.low_conf_threshold = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.54"))
 
         self.is_active = False
         self.status = "initializing"  # 'initializing', 'listening', 'recognizing', 'reconnecting', 'unavailable', 'completed'
@@ -345,7 +345,7 @@ class LiveTranscriptionSession:
                         except Exception as parse_err:
                             print(f"Notice: Parsing live Azure confidence: {parse_err}")
 
-                        # Automated low confidence check (< 0.60)
+                        # Automated low confidence check (< 0.54)
                         is_low_conf = False
                         flags: List[SegmentFlag] = []
                         if confidence is not None and confidence < self.low_conf_threshold:

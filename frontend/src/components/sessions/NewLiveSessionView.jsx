@@ -269,7 +269,7 @@ export function NewLiveSessionView({
 
         {/* Right Column: Audio Input & Start Action */}
         <div className="new-session-right-col">
-          {/* Audio Input Card */}
+          {/* Audio Input Card (Permanently Visible) */}
           <div className="card new-session-card">
             <div className="card-header new-session-card-header">
               <div className="card-header-icon-title">
@@ -282,20 +282,22 @@ export function NewLiveSessionView({
             </div>
 
             <div className="card-body new-session-card-body">
-              <div className="source-selection-header">
-                <span className="form-label">Source Selection</span>
-                <button
-                  type="button"
-                  className="btn-link-small"
-                  onClick={liveAudio.updateDeviceList}
-                  title="Refresh connected audio devices"
-                >
-                  ↻ Refresh
-                </button>
-              </div>
+              {/* Audio Input Source Dropdown */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <div className="source-selection-header">
+                  <label className="form-label" htmlFor="select-audio-device" style={{ margin: 0 }}>
+                    Audio Input Source
+                  </label>
+                  <button
+                    type="button"
+                    className="btn-link-small"
+                    onClick={liveAudio.updateDeviceList}
+                    title="Refresh connected audio devices"
+                  >
+                    ↻ Refresh
+                  </button>
+                </div>
 
-              {/* Device List Radios */}
-              <div className="audio-devices-radio-group">
                 {liveAudio.permissionState !== 'granted' ? (
                   <div className="permission-prompt-box">
                     <p>Microphone access is required to capture audio.</p>
@@ -308,42 +310,33 @@ export function NewLiveSessionView({
                     </button>
                   </div>
                 ) : liveAudio.devices.length === 0 ? (
-                  <div className="device-radio-item device-radio-item--selected">
-                    <input type="radio" checked readOnly id="dev-default" />
-                    <label htmlFor="dev-default">Default System Microphone</label>
-                  </div>
+                  <select id="select-audio-device" className="form-control form-select" disabled>
+                    <option>Default System Microphone</option>
+                  </select>
                 ) : (
-                  liveAudio.devices.map((device) => {
-                    const isSelected = liveAudio.selectedDeviceId === device.deviceId
-                    const label = device.label || `Microphone ${device.deviceId.slice(0, 8)}`
-                    const isUsb = label.toLowerCase().includes('usb') || label.toLowerCase().includes('interface')
-
-                    return (
-                      <div
-                        key={device.deviceId}
-                        className={`device-radio-item ${isSelected ? 'device-radio-item--selected' : ''}`}
-                        onClick={() => liveAudio.setSelectedDeviceId(device.deviceId)}
-                      >
-                        <input
-                          type="radio"
-                          id={`dev-${device.deviceId}`}
-                          name="audio-device"
-                          checked={isSelected}
-                          onChange={() => liveAudio.setSelectedDeviceId(device.deviceId)}
-                        />
-                        <label htmlFor={`dev-${device.deviceId}`}>
-                          {label} {isUsb && <span className="usb-pill">USB</span>}
-                        </label>
-                      </div>
-                    )
-                  })
+                  <select
+                    id="select-audio-device"
+                    className="form-control form-select"
+                    value={liveAudio.selectedDeviceId || ''}
+                    onChange={(e) => liveAudio.setSelectedDeviceId(e.target.value)}
+                  >
+                    {liveAudio.devices.map((device) => {
+                      const label = device.label || `Microphone ${device.deviceId.slice(0, 8)}`
+                      const isUsb = label.toLowerCase().includes('usb') || label.toLowerCase().includes('interface')
+                      return (
+                        <option key={device.deviceId} value={device.deviceId}>
+                          {label} {isUsb ? '(USB)' : ''}
+                        </option>
+                      )
+                    })}
+                  </select>
                 )}
               </div>
 
               {/* Input Level Live Visualizer */}
               <div className="input-level-block">
                 <div className="input-level-label-row">
-                  <span className="form-label">Input Level</span>
+                  <span className="form-label" style={{ fontSize: '0.78rem' }}>Input Level</span>
                   <span className="level-db-val">
                     {liveAudio.audioDb !== null ? `${Math.round(liveAudio.audioDb)} dB` : '-∞ dB'}
                   </span>
@@ -390,3 +383,4 @@ export function NewLiveSessionView({
     </div>
   )
 }
+

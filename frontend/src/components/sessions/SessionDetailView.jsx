@@ -450,325 +450,250 @@ export function SessionDetailView({
         }}
       />
 
-      {/* 3. 2-Column Grid: Left (Hero + Artifact Tiles) & Right (Future Stages) */}
-      <div className="session-workspace-grid">
-        {/* Left Column */}
-        <div className="workspace-main-column">
-          {/* Action Required Hero Banner */}
-          {!isVerified && flagCount > 0 ? (
-            <div className="workspace-action-hero">
-              <div className="action-hero-text">
-                <div className="action-hero-badge">
-                  <span className="hero-alert-icon">⚠️</span>
-                  <span>ACTION REQUIRED</span>
-                </div>
-                <h2 className="action-hero-title">{flagCount} sections require human verification</h2>
-                <p className="action-hero-desc">
-                  AI confidence below threshold. Review required before transcript finalization.
-                </p>
+      {/* 3. Action Hero Banner + 6 Artifact Tiles Grid */}
+      <div className="workspace-main-column">
+        {/* Action Required Hero Banner */}
+        {!isVerified && flagCount > 0 ? (
+          <div className="workspace-action-hero">
+            <div className="action-hero-text">
+              <div className="action-hero-badge">
+                <span className="hero-alert-icon">⚠️</span>
+                <span>ACTION REQUIRED</span>
               </div>
-              <button
-                type="button"
-                className="btn btn--primary btn--action-hero"
-                onClick={() => {
-                  onStartVerification(session.session_id)
-                  setActiveView('verification')
-                }}
-                id="btn-workspace-begin-verify"
-              >
-                <span>Begin Verification ({flagCount} pending blocks)</span>
-                <span>→</span>
-              </button>
+              <h2 className="action-hero-title">{flagCount} sections require human verification</h2>
+              <p className="action-hero-desc">
+                AI confidence below threshold. Review required before transcript finalization.
+              </p>
             </div>
-          ) : isVerified && rStatus !== 'reports_ready' ? (
-            <div className="workspace-action-hero hero--reporting">
-              <div className="action-hero-text">
-                <div className="action-hero-badge">
-                  <span className="hero-alert-icon">⚡</span>
-                  <span>ACTION READY</span>
-                </div>
-                <h2 className="action-hero-title">Verified Transcript Approved</h2>
-                <p className="action-hero-desc">
-                  Ready to run dual independent Information Unit reporting drafts (Reporter A &amp; B).
-                </p>
+            <button
+              type="button"
+              className="btn btn--primary btn--action-hero"
+              onClick={() => {
+                onStartVerification(session.session_id)
+                setActiveView('verification')
+              }}
+              id="btn-workspace-begin-verify"
+            >
+              <span>Begin Verification ({flagCount} pending blocks)</span>
+              <span>→</span>
+            </button>
+          </div>
+        ) : isVerified && rStatus !== 'reports_ready' ? (
+          <div className="workspace-action-hero hero--reporting">
+            <div className="action-hero-text">
+              <h2 className="action-hero-title">Verified Transcript Approved</h2>
+              <p className="action-hero-desc">
+                Ready to run dual independent Information Unit reporting drafts (Reporter A &amp; B).
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn--primary btn--action-hero"
+              onClick={() => setActiveView('reporting')}
+              id="btn-workspace-open-reporting"
+            >
+              <span>Open Reporting Workspace</span>
+              <span>→</span>
+            </button>
+          </div>
+        ) : rStatus === 'reports_ready' && eStatus !== 'complete' ? (
+          <div className="workspace-action-hero hero--editing">
+            <div className="action-hero-text">
+              <h2 className="action-hero-title">Reporting Drafts Ready for Compilation</h2>
+              <p className="action-hero-desc">
+                Both Reporter A and B have finished. Synthesize and review the Edited Report.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn--primary btn--action-hero"
+              onClick={() => setActiveView('editing')}
+              id="btn-workspace-open-editing"
+            >
+              <span>Open Editing Workspace</span>
+              <span>→</span>
+            </button>
+          </div>
+        ) : eStatus === 'complete' && pStatus !== 'complete' ? (
+          <div className="workspace-action-hero hero--proofreading">
+            <div className="action-hero-text">
+              <h2 className="action-hero-title">Edited Report Ready for Proofreading</h2>
+              <p className="action-hero-desc">
+                Run conservative AI proofreading and theological formatting check.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn--primary btn--action-hero"
+              onClick={() => setActiveView('proofreading')}
+              id="btn-workspace-open-proofreading"
+            >
+              <span>Open Proofreading Workspace</span>
+              <span>→</span>
+            </button>
+          </div>
+        ) : fStatus === 'complete' ? (
+          <div className="workspace-action-hero hero--completed">
+            <div className="action-hero-text">
+              <div className="action-hero-badge">
+                <span className="hero-alert-icon">🏆</span>
+                <span>WORKFLOW COMPLETE</span>
               </div>
-              <button
-                type="button"
-                className="btn btn--primary btn--action-hero"
-                onClick={() => setActiveView('reporting')}
-                id="btn-workspace-open-reporting"
-              >
-                <span>Open Reporting Workspace</span>
-                <span>→</span>
-              </button>
+              <h2 className="action-hero-title">Final Message Report Ready</h2>
+              <p className="action-hero-desc">
+                The publication-ready message report is compiled. Download Word (.docx) or view final document.
+              </p>
             </div>
-          ) : rStatus === 'reports_ready' && eStatus !== 'complete' ? (
-            <div className="workspace-action-hero hero--editing">
-              <div className="action-hero-text">
-                <div className="action-hero-badge">
-                  <span className="hero-alert-icon">📄</span>
-                  <span>ACTION READY</span>
-                </div>
-                <h2 className="action-hero-title">Reporting Drafts Ready for Compilation</h2>
-                <p className="action-hero-desc">
-                  Both Reporter A and B have finished. Synthesize and review the Edited Report.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="btn btn--primary btn--action-hero"
-                onClick={() => setActiveView('editing')}
-                id="btn-workspace-open-editing"
-              >
-                <span>Open Editing Workspace</span>
-                <span>→</span>
-              </button>
-            </div>
-          ) : eStatus === 'complete' && pStatus !== 'complete' ? (
-            <div className="workspace-action-hero hero--proofreading">
-              <div className="action-hero-text">
-                <div className="action-hero-badge">
-                  <span className="hero-alert-icon">🔍</span>
-                  <span>ACTION READY</span>
-                </div>
-                <h2 className="action-hero-title">Edited Report Ready for Proofreading</h2>
-                <p className="action-hero-desc">
-                  Run conservative AI proofreading and theological formatting check.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="btn btn--primary btn--action-hero"
-                onClick={() => setActiveView('proofreading')}
-                id="btn-workspace-open-proofreading"
-              >
-                <span>Open Proofreading Workspace</span>
-                <span>→</span>
-              </button>
-            </div>
-          ) : fStatus === 'complete' ? (
-            <div className="workspace-action-hero hero--completed">
-              <div className="action-hero-text">
-                <div className="action-hero-badge">
-                  <span className="hero-alert-icon">🏆</span>
-                  <span>WORKFLOW COMPLETE</span>
-                </div>
-                <h2 className="action-hero-title">Final Message Report Ready</h2>
-                <p className="action-hero-desc">
-                  The publication-ready message report is compiled. Download Word (.docx) or view final document.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="btn btn--success btn--action-hero"
-                onClick={() => setActiveView('final_report')}
-                id="btn-workspace-open-final-report"
-              >
-                <span>Download Final Document (.docx)</span>
-                <span>→</span>
-              </button>
-            </div>
-          ) : null}
+            <button
+              type="button"
+              className="btn btn--success btn--action-hero"
+              onClick={() => setActiveView('final_report')}
+              id="btn-workspace-open-final-report"
+            >
+              <span>Download Final Document (.docx)</span>
+              <span>→</span>
+            </button>
+          </div>
+        ) : null}
 
-          {/* 6/8 Artifact Cards Grid */}
-          <div className="workspace-artifacts-grid">
-            {/* Tile 1: Audio Recording */}
-            <div className="card artifact-tile">
-              <div className="artifact-tile-header">
-                <span className="tile-icon">🎙️</span>
-                <span className="badge badge--success">● Saved</span>
-              </div>
-              <div className="artifact-tile-body">
-                <h4 className="artifact-tile-title">Audio Recording</h4>
-                <p className="artifact-tile-desc">Source Material ({formatSeconds(session.duration_seconds || session.audio_duration_seconds)})</p>
-              </div>
-              <button
-                type="button"
-                className="btn-tile-action"
-                onClick={() => setActiveView('raw_transcript')}
-              >
-                ▶ Play Recording
-              </button>
+        {/* 6 Artifact Cards Grid (3 Columns) */}
+        <div className="workspace-artifacts-grid">
+          {/* Tile 1: Audio Recording */}
+          <div className="card artifact-tile">
+            <div className="artifact-tile-header">
+              <span className="tile-icon tile-icon--mic">◉</span>
+              <span className="badge badge--success">✓ Saved</span>
             </div>
-
-            {/* Tile 2: Raw Transcript */}
-            <div className="card artifact-tile">
-              <div className="artifact-tile-header">
-                <span className="tile-icon">📝</span>
-                <span className="badge badge--success">● Ready</span>
-              </div>
-              <div className="artifact-tile-body">
-                <h4 className="artifact-tile-title">Raw Transcript</h4>
-                <p className="artifact-tile-desc">Indexed &amp; Synced ({session.segment_count || 0} segments)</p>
-              </div>
-              <button
-                type="button"
-                className="btn-tile-action"
-                onClick={() => setActiveView('raw_transcript')}
-              >
-                👁 View Raw Transcript
-              </button>
+            <div className="artifact-tile-body">
+              <h4 className="artifact-tile-title">Audio Recording</h4>
+              <p className="artifact-tile-desc">Source Material ({formatSeconds(session.duration_seconds || session.audio_duration_seconds)})</p>
             </div>
-
-            {/* Tile 3: Verified Transcript */}
-            <div className={`card artifact-tile ${!isVerified ? 'artifact-tile--locked' : ''}`}>
-              <div className="artifact-tile-header">
-                <span className="tile-icon">📜</span>
-                <span className={`badge ${isVerified ? 'badge--success' : 'badge--secondary'}`}>
-                  {isVerified ? '● Verified' : '🔒 Locked'}
-                </span>
-              </div>
-              <div className="artifact-tile-body">
-                <h4 className="artifact-tile-title">Verified Transcript</h4>
-                <p className="artifact-tile-desc">{isVerified ? 'Approved Factual Record' : 'Human Review Required'}</p>
-              </div>
-              <button
-                type="button"
-                className="btn-tile-action"
-                onClick={() => isVerified ? setActiveView('verified_transcript') : setActiveView('verification')}
-              >
-                {isVerified ? '👁 View Verified Transcript' : 'Begin Verification'}
-              </button>
-            </div>
-
-            {/* Tile 4: Reporter Drafts */}
-            <div className={`card artifact-tile ${rStatus !== 'reports_ready' ? 'artifact-tile--locked' : ''}`}>
-              <div className="artifact-tile-header">
-                <span className="tile-icon">⚡</span>
-                <span className={`badge ${rStatus === 'reports_ready' ? 'badge--success' : 'badge--secondary'}`}>
-                  {rStatus === 'reports_ready' ? '● Ready' : '🔒 Locked'}
-                </span>
-              </div>
-              <div className="artifact-tile-body">
-                <h4 className="artifact-tile-title">Reporter Drafts</h4>
-                <p className="artifact-tile-desc">{rStatus === 'reports_ready' ? 'Reporter A & B Complete' : 'Verification Required'}</p>
-              </div>
-              <button
-                type="button"
-                className="btn-tile-action"
-                onClick={() => isVerified && setActiveView('reporting')}
-                disabled={!isVerified}
-              >
-                {rStatus === 'reports_ready' ? '⚡ View Reports' : 'Reports Locked'}
-              </button>
-            </div>
-
-            {/* Tile 5: Edited Report */}
-            <div className={`card artifact-tile ${eStatus !== 'complete' && eStatus !== 'draft_ready' ? 'artifact-tile--locked' : ''}`}>
-              <div className="artifact-tile-header">
-                <span className="tile-icon">📄</span>
-                <span className={`badge ${eStatus === 'complete' ? 'badge--success' : eStatus === 'draft_ready' ? 'badge--info' : 'badge--secondary'}`}>
-                  {eStatus === 'complete' ? '● Complete' : eStatus === 'draft_ready' ? '● Draft Ready' : '🔒 Locked'}
-                </span>
-              </div>
-              <div className="artifact-tile-body">
-                <h4 className="artifact-tile-title">Edited Report</h4>
-                <p className="artifact-tile-desc">Theological Review</p>
-              </div>
-              <button
-                type="button"
-                className="btn-tile-action"
-                onClick={() => rStatus === 'reports_ready' && setActiveView('editing')}
-                disabled={rStatus !== 'reports_ready'}
-              >
-                {eStatus === 'complete' ? '📄 Open Editing' : rStatus === 'reports_ready' ? 'Compile Draft' : 'Editing Locked'}
-              </button>
-            </div>
-
-            {/* Tile 6: Final Report */}
-            <div className={`card artifact-tile ${fStatus !== 'complete' ? 'artifact-tile--locked' : ''}`}>
-              <div className="artifact-tile-header">
-                <span className="tile-icon">🏆</span>
-                <span className={`badge ${fStatus === 'complete' ? 'badge--success' : 'badge--secondary'}`}>
-                  {fStatus === 'complete' ? '● Final Document' : '🔒 Locked'}
-                </span>
-              </div>
-              <div className="artifact-tile-body">
-                <h4 className="artifact-tile-title">Final Report</h4>
-                <p className="artifact-tile-desc">Archival &amp; Word (.docx)</p>
-              </div>
-              <button
-                type="button"
-                className="btn-tile-action"
-                onClick={() => pStatus === 'complete' && setActiveView('final_report')}
-                disabled={pStatus !== 'complete' && fStatus !== 'complete'}
-              >
-                {fStatus === 'complete' ? '📥 Download .docx' : pStatus === 'complete' ? 'Finalize Report' : 'Report Locked'}
-              </button>
-            </div>
+            <button
+              type="button"
+              className="btn-tile-action"
+              onClick={() => setActiveView('raw_transcript')}
+            >
+              ▶ Play Recording
+            </button>
           </div>
 
-          {/* Operational Notice (if interrupted) */}
-          {session.is_interrupted ? (
-            <div className="workspace-operational-notice">
-              <div className="notice-icon">ℹ️</div>
-              <div className="notice-body">
-                <strong>Operational Notice</strong>
-                <p>{session.recovery_notes || 'Brief interruption recorded. Master lossless recording safely preserved.'}</p>
-              </div>
+          {/* Tile 2: Raw Transcript */}
+          <div className="card artifact-tile">
+            <div className="artifact-tile-header">
+              <span className="tile-icon">≡</span>
+              <span className="badge badge--success">✓ Ready</span>
             </div>
-          ) : null}
-        </div>
-
-        {/* Right Column: Future Stages Roadmap */}
-        <div className="workspace-sidebar-column">
-          <div className="card future-stages-card">
-            <div className="future-stages-header">
-              <span className="stages-icon">🗓️</span>
-              <h3>Future Stages</h3>
+            <div className="artifact-tile-body">
+              <h4 className="artifact-tile-title">Raw Transcript</h4>
+              <p className="artifact-tile-desc">Indexed &amp; Synced ({session.segment_count || 0} segments)</p>
             </div>
+            <button
+              type="button"
+              className="btn-tile-action"
+              onClick={() => setActiveView('raw_transcript')}
+            >
+              View Raw Transcript
+            </button>
+          </div>
 
-            <div className="future-stages-timeline">
-              <div className={`timeline-item ${isVerified ? 'timeline-item--done' : 'timeline-item--current'}`}>
-                <div className="timeline-node" />
-                <div className="timeline-text">
-                  <strong>Verified Transcript</strong>
-                  <p>{isVerified ? 'Manual verification complete.' : 'Awaiting manual verification of flagged sections.'}</p>
-                  <span className="timeline-badge">Dependency: Verification</span>
-                </div>
-              </div>
-
-              <div className={`timeline-item ${rStatus === 'reports_ready' ? 'timeline-item--done' : isVerified ? 'timeline-item--current' : ''}`}>
-                <div className="timeline-node" />
-                <div className="timeline-text">
-                  <strong>Reporting</strong>
-                  <p>Initial summarization and highlight extraction.</p>
-                </div>
-              </div>
-
-              <div className={`timeline-item ${eStatus === 'complete' ? 'timeline-item--done' : rStatus === 'reports_ready' ? 'timeline-item--current' : ''}`}>
-                <div className="timeline-node" />
-                <div className="timeline-text">
-                  <strong>Structural Editing</strong>
-                  <p>Formatting, sectioning, and theological review.</p>
-                </div>
-              </div>
-
-              <div className={`timeline-item ${pStatus === 'complete' ? 'timeline-item--done' : eStatus === 'complete' ? 'timeline-item--current' : ''}`}>
-                <div className="timeline-node" />
-                <div className="timeline-text">
-                  <strong>Proofreading Check</strong>
-                  <p>Conservative language and scripture notation check.</p>
-                </div>
-              </div>
-
-              <div className={`timeline-item ${fStatus === 'complete' ? 'timeline-item--done' : pStatus === 'complete' ? 'timeline-item--current' : ''}`}>
-                <div className="timeline-node" />
-                <div className="timeline-text">
-                  <strong>Final Report Generation</strong>
-                  <p>Archival and distribution formats.</p>
-                </div>
-              </div>
+          {/* Tile 3: Verified Transcript */}
+          <div className={`card artifact-tile ${!isVerified ? 'artifact-tile--locked' : ''}`}>
+            <div className="artifact-tile-header">
+              <span className="tile-icon">✓</span>
+              <span className={`badge ${isVerified ? 'badge--success' : 'badge--secondary'}`}>
+                {isVerified ? '✓ Verified' : '⊘ Locked'}
+              </span>
             </div>
+            <div className="artifact-tile-body">
+              <h4 className="artifact-tile-title">Verified Transcript</h4>
+              <p className="artifact-tile-desc">{isVerified ? 'Approved Factual Record' : 'Human Review Required'}</p>
+            </div>
+            <button
+              type="button"
+              className="btn-tile-action"
+              onClick={() => isVerified ? setActiveView('verified_transcript') : setActiveView('verification')}
+            >
+              {isVerified ? 'View Verified Transcript' : 'Begin Verification'}
+            </button>
+          </div>
 
-            {!isVerified && (
-              <div className="future-stages-lock-banner">
-                <span className="lock-icon">🔒</span>
-                <p>Complete verification to unlock downstream processes.</p>
-              </div>
-            )}
+          {/* Tile 4: Reporter Drafts */}
+          <div className={`card artifact-tile ${rStatus !== 'reports_ready' ? 'artifact-tile--locked' : ''}`}>
+            <div className="artifact-tile-header">
+              <span className="tile-icon">◈</span>
+              <span className={`badge ${rStatus === 'reports_ready' ? 'badge--success' : 'badge--secondary'}`}>
+                {rStatus === 'reports_ready' ? '✓ Ready' : '⊘ Locked'}
+              </span>
+            </div>
+            <div className="artifact-tile-body">
+              <h4 className="artifact-tile-title">Reporter Drafts</h4>
+              <p className="artifact-tile-desc">{rStatus === 'reports_ready' ? 'Reporter A & B Complete' : 'Verification Required'}</p>
+            </div>
+            <button
+              type="button"
+              className="btn-tile-action"
+              onClick={() => isVerified && setActiveView('reporting')}
+              disabled={!isVerified}
+            >
+              {rStatus === 'reports_ready' ? 'View Reports' : 'Reports Locked'}
+            </button>
+          </div>
+
+          {/* Tile 5: Edited Report */}
+          <div className={`card artifact-tile ${eStatus !== 'complete' && eStatus !== 'draft_ready' ? 'artifact-tile--locked' : ''}`}>
+            <div className="artifact-tile-header">
+              <span className="tile-icon">▤</span>
+              <span className={`badge ${eStatus === 'complete' ? 'badge--success' : eStatus === 'draft_ready' ? 'badge--info' : 'badge--secondary'}`}>
+                {eStatus === 'complete' ? '✓ Complete' : eStatus === 'draft_ready' ? '◎ Draft Ready' : '⊘ Locked'}
+              </span>
+            </div>
+            <div className="artifact-tile-body">
+              <h4 className="artifact-tile-title">Edited Report</h4>
+              <p className="artifact-tile-desc">Theological Review</p>
+            </div>
+            <button
+              type="button"
+              className="btn-tile-action"
+              onClick={() => rStatus === 'reports_ready' && setActiveView('editing')}
+              disabled={rStatus !== 'reports_ready'}
+            >
+              {eStatus === 'complete' ? 'Open Editing' : rStatus === 'reports_ready' ? 'Compile Draft' : 'Editing Locked'}
+            </button>
+          </div>
+
+          {/* Tile 6: Final Report */}
+          <div className={`card artifact-tile ${fStatus !== 'complete' ? 'artifact-tile--locked' : ''}`}>
+            <div className="artifact-tile-header">
+              <span className="tile-icon">◇</span>
+              <span className={`badge ${fStatus === 'complete' ? 'badge--success' : 'badge--secondary'}`}>
+                {fStatus === 'complete' ? '✓ Final' : '⊘ Locked'}
+              </span>
+            </div>
+            <div className="artifact-tile-body">
+              <h4 className="artifact-tile-title">Final Report</h4>
+              <p className="artifact-tile-desc">Archival &amp; Word (.docx)</p>
+            </div>
+            <button
+              type="button"
+              className="btn-tile-action"
+              onClick={() => pStatus === 'complete' && setActiveView('final_report')}
+              disabled={pStatus !== 'complete' && fStatus !== 'complete'}
+            >
+              {fStatus === 'complete' ? 'Download .docx' : pStatus === 'complete' ? 'Finalize Report' : 'Report Locked'}
+            </button>
           </div>
         </div>
+
+        {/* Operational Notice (if interrupted) */}
+        {session.is_interrupted ? (
+          <div className="workspace-operational-notice">
+            <div className="notice-icon">ℹ️</div>
+            <div className="notice-body">
+              <strong>Operational Notice</strong>
+              <p>{session.recovery_notes || 'Brief interruption recorded. Master lossless recording safely preserved.'}</p>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   )

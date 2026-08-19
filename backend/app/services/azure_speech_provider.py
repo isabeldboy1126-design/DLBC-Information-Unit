@@ -132,8 +132,8 @@ class AzureSpeechToTextProvider(TranscriptionProvider):
                 str(silence_timeout_ms),
             )
 
-            # Verification threshold (default 0.60)
-            low_conf_threshold = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.60"))
+            # Verification threshold (default 0.54)
+            low_conf_threshold = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.54"))
 
             audio_config = speechsdk.AudioConfig(filename=processing_wav_path)
             speech_recognizer = speechsdk.SpeechRecognizer(
@@ -184,7 +184,7 @@ class AzureSpeechToTextProvider(TranscriptionProvider):
                         except Exception as parse_err:
                             print(f"Notice: Could not parse detailed Azure confidence/words: {parse_err}")
 
-                        # Determine if confidence flag should be attached (< 60% confidence)
+                        # Determine if confidence flag should be attached (< 54% confidence)
                         is_low_conf = False
                         flags: List[Dict[str, Any]] = []
                         if confidence is not None and confidence < low_conf_threshold:
