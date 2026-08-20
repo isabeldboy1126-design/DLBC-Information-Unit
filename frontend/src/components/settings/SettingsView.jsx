@@ -59,11 +59,6 @@ export function SettingsView({ onBack }) {
       {/* Top Header */}
       <div className="settings-page-header">
         <div className="settings-header-left">
-          {onBack && (
-            <button type="button" className="btn btn--secondary btn--small" onClick={onBack}>
-              ← Back
-            </button>
-          )}
           <div>
             <h1 className="settings-title">System Settings &amp; AI Standards</h1>
             <p className="settings-subtitle">
