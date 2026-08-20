@@ -8199,6 +8199,7 @@ textarea.form-control {
    ========================================================================= */
 
 /* Desktop defaults for mobile drawer items */
+.mobile-nav-toggle,
 .mobile-menu-toggle {
   display: none !important;
 }
@@ -8207,6 +8208,7 @@ textarea.form-control {
   display: none !important;
 }
 
+.mobile-nav-backdrop,
 .mobile-sidebar-backdrop {
   display: none !important;
 }
@@ -8223,36 +8225,40 @@ textarea.form-control {
    ========================================================================= */
 @media (max-width: 1024px) {
   /* Viewport Containment */
-  html, body {
+  html, body, #root {
     overflow-x: hidden;
     max-width: 100vw;
   }
 
   .app-shell-container {
-    max-width: 100vw;
+    width: 100%;
+    max-width: 100%;
     overflow-x: hidden;
   }
 
   /* App Shell & Navigation */
+  .mobile-nav-toggle,
   .mobile-menu-toggle {
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
-    background: #f1f5f9;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    font-size: 1.15rem;
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    background: #ffffff;
+    border: 1px solid #dce2ea;
+    border-radius: 8px;
+    font-size: 1.25rem;
     color: #0f2947;
     cursor: pointer;
     margin-right: 0.75rem;
-    flex-shrink: 0;
+    line-height: 1;
     transition: background 0.15s ease;
   }
 
+  .mobile-nav-toggle:hover,
   .mobile-menu-toggle:hover {
-    background: #e2e8f0;
+    background: #f1f5f9;
   }
 
   .mobile-sidebar-close-btn {
@@ -8269,41 +8275,52 @@ textarea.form-control {
     cursor: pointer;
   }
 
+  .mobile-nav-backdrop,
   .mobile-sidebar-backdrop {
     display: block !important;
     position: fixed;
     inset: 0;
-    background: rgba(15, 41, 71, 0.55);
-    z-index: 998;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    background: rgba(15, 23, 42, 0.42);
+    z-index: 1100;
+    cursor: pointer;
     backdrop-filter: blur(2px);
   }
 
   .app-sidebar {
-    position: fixed;
+    position: fixed !important;
     top: 0;
     left: 0;
-    width: 280px;
-    max-width: 85vw;
-    height: 100vh;
-    z-index: 999;
+    width: min(82vw, 280px) !important;
+    max-width: min(82vw, 280px) !important;
+    height: 100dvh;
+    margin: 0 !important;
     transform: translateX(-100%);
+    transition: transform 180ms ease;
+    z-index: 1200;
+    overflow-y: auto;
+    overflow-x: hidden;
     visibility: hidden;
     pointer-events: none;
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.25s ease;
     box-shadow: none;
   }
 
+  .app-sidebar.app-sidebar--mobile-open,
+  .app-sidebar.app-sidebar--open,
+  .app-sidebar--mobile-open,
   .app-sidebar--open {
-    transform: translateX(0);
-    visibility: visible;
-    pointer-events: auto;
+    transform: translateX(0) !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
   }
 
   .app-main-column {
     margin-left: 0 !important;
     width: 100% !important;
-    max-width: 100vw !important;
+    max-width: 100% !important;
     min-width: 0 !important;
     overflow-x: hidden !important;
   }
