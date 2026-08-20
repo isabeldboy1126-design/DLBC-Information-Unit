@@ -1,52 +1,190 @@
 """
-SQLite database connection configuration for DLBC Information Unit App (Phase 4).
+Database Connection Manager supporting SQLite (local/test) and Azure SQL / Cloud Databases (production).
 
-Uses aiosqlite for asynchronous SQLite access.
-The database file is stored in storage/app.db.
-
-TEST ISOLATION
---------------
-When the environment variable DLBC_TEST_DB_PATH is set, ALL database
-connections in this process will use that path instead of storage/app.db.
-This is used exclusively by the pytest test suite via tests/conftest.py.
-It must NEVER be set in production or development .env files.
-
-Production and development behavior is completely unchanged when the
-variable is absent.
+Architecture:
+- Development & Testing: Native SQLite via aiosqlite (storage/app.db or DLBC_TEST_DB_PATH).
+- Production: When DATABASE_URL is set (e.g. mssql+aioodbc://... for Azure SQL Database),
+  connects via async SQLAlchemy engine and adapts cursor/row access seamlessly without changing
+  any repository queries, workflow states, or data structures.
 """
 
 import os
+import re
 from contextlib import asynccontextmanager
-import aiosqlite
+from typing import Any, Dict, List, Optional, Sequence, Union
 
-APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BACKEND_DIR = os.path.dirname(APP_DIR)
-PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
-STORAGE_DIR = os.path.join(PROJECT_ROOT, "storage")
-os.makedirs(STORAGE_DIR, exist_ok=True)
+from app.config import DEFAULT_DB_PATH
 
-# Default production database path. Tests override this via DLBC_TEST_DB_PATH.
-DB_PATH = os.path.join(STORAGE_DIR, "app.db")
+# Default database path (local development)
+DB_PATH = os.environ.get("DATABASE_PATH", DEFAULT_DB_PATH)
+
+# Global async SQLAlchemy engine cache (only initialized when DATABASE_URL is present)
+_async_engine = None
+
+
+class AdaptedRow:
+    """Provides dictionary-like and index-based access matching aiosqlite.Row."""
+
+    def __init__(self, mapping: Dict[str, Any], values: Sequence[Any]):
+        self._mapping = dict(mapping)
+        self._values = list(values)
+
+    def __getitem__(self, key: Union[str, int]) -> Any:
+        if isinstance(key, int):
+            return self._values[key]
+        return self._mapping[key]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._mapping.get(key, default)
+
+    def keys(self):
+        return self._mapping.keys()
+
+    def values(self):
+        return self._mapping.values()
+
+    def items(self):
+        return self._mapping.items()
+
+    def __iter__(self):
+        return iter(self._mapping)
+
+    def __len__(self):
+        return len(self._mapping)
+
+    def __repr__(self):
+        return f"<AdaptedRow {self._mapping}>"
+
+
+class AsyncCursorAdapter:
+    """Wraps SQLAlchemy Result to match the aiosqlite async cursor interface."""
+
+    def __init__(self, result):
+        self._result = result
+
+    async def fetchone(self) -> Optional[AdaptedRow]:
+        row = self._result.fetchone()
+        if row is None:
+            return None
+        return AdaptedRow(row._mapping, row._data if hasattr(row, "_data") else row)
+
+    async def fetchall(self) -> List[AdaptedRow]:
+        rows = self._result.fetchall()
+        return [
+            AdaptedRow(r._mapping, r._data if hasattr(r, "_data") else r)
+            for r in rows
+        ]
+
+    @property
+    def rowcount(self) -> int:
+        return getattr(self._result, "rowcount", -1)
+
+
+class AsyncConnectionAdapter:
+    """Wraps SQLAlchemy AsyncConnection to provide an aiosqlite-compatible API."""
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def _convert_query_params(self, sql: str, params: Optional[Union[Sequence, Dict[str, Any]]]):
+        """Converts ? positional placeholders to :p_0, :p_1 for SQLAlchemy text()."""
+        import sqlalchemy
+
+        if params is None:
+            return sqlalchemy.text(sql), {}
+
+        if isinstance(params, (list, tuple)):
+            param_dict = {}
+            count = 0
+
+            def _replace_placeholder(match):
+                nonlocal count
+                p_name = f"p_{count}"
+                param_dict[p_name] = params[count]
+                count += 1
+                return f":{p_name}"
+
+            converted_sql = re.sub(r"\?", _replace_placeholder, sql)
+            return sqlalchemy.text(converted_sql), param_dict
+
+        if isinstance(params, dict):
+            return sqlalchemy.text(sql), params
+
+        return sqlalchemy.text(sql), params
+
+    async def execute(self, sql: str, params: Optional[Union[Sequence, Dict[str, Any]]] = None):
+        stmt, bound_params = self._convert_query_params(sql, params)
+        res = await self._conn.execute(stmt, bound_params)
+        return AsyncCursorAdapter(res)
+
+    async def executescript(self, script: str):
+        statements = [s.strip() for s in script.split(";") if s.strip()]
+        for stmt in statements:
+            await self.execute(stmt)
+
+    async def commit(self):
+        await self._conn.commit()
+
+    async def rollback(self):
+        await self._conn.rollback()
 
 
 def _get_db_path() -> str:
-    """
-    Returns the active database path for this process.
-
-    If DLBC_TEST_DB_PATH is set (only by tests/conftest.py), the test database
-    is used. Otherwise the production/development database is used.
-    This function is called at connection time so the path can be changed by
-    conftest.py before any connections are opened.
-    """
+    """Returns test database path if set, otherwise the default production/dev SQLite path."""
     override = os.environ.get("DLBC_TEST_DB_PATH")
     if override:
         return override
     return DB_PATH
 
 
+def _get_engine():
+    global _async_engine
+    if _async_engine is None:
+        from sqlalchemy.ext.asyncio import create_async_engine
+
+        db_url = os.environ.get("DATABASE_URL")
+        # Format normalization for async drivers
+        if db_url and db_url.startswith("mssql+pyodbc://"):
+            db_url = db_url.replace("mssql+pyodbc://", "mssql+aioodbc://")
+        elif db_url and db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql+asyncpg://")
+
+        _async_engine = create_async_engine(
+            db_url,
+            pool_pre_ping=True,
+            pool_recycle=300,
+        )
+    return _async_engine
+
+
 @asynccontextmanager
 async def get_db_connection():
-    """Asynchronous context manager returning an SQLite connection with row_factory set."""
+    """
+    Asynchronous context manager returning an SQLite connection (local/tests)
+    or an Azure SQL / cloud database adapter (when DATABASE_URL is configured).
+    """
+    # 1. Test isolation: If running unit/integration tests, ALWAYS use local SQLite
+    if os.environ.get("DLBC_TEST_DB_PATH"):
+        import aiosqlite
+
+        async with aiosqlite.connect(_get_db_path()) as conn:
+            conn.row_factory = aiosqlite.Row
+            await conn.execute("PRAGMA foreign_keys = ON;")
+            await conn.execute("PRAGMA journal_mode = WAL;")
+            yield conn
+        return
+
+    # 2. Production: If DATABASE_URL is set, connect to Azure SQL / Cloud DB
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url and not db_url.startswith("sqlite"):
+        engine = _get_engine()
+        async with engine.connect() as conn:
+            yield AsyncConnectionAdapter(conn)
+        return
+
+    # 3. Development Default: Native local SQLite
+    import aiosqlite
+
     async with aiosqlite.connect(_get_db_path()) as conn:
         conn.row_factory = aiosqlite.Row
         await conn.execute("PRAGMA foreign_keys = ON;")

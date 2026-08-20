@@ -12,12 +12,9 @@ import uuid
 from typing import Dict, Optional
 from app.audio.wav_writer import finalize_pcm_to_wav
 
-# Resolve project root and storage directory
-APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # backend/app
-BACKEND_DIR = os.path.dirname(APP_DIR) # backend
-PROJECT_ROOT = os.path.dirname(BACKEND_DIR) # Project root
-STORAGE_AUDIO_DIR = os.path.join(PROJECT_ROOT, "storage", "audio")
-os.makedirs(STORAGE_AUDIO_DIR, exist_ok=True)
+# Resolve storage directory from central config
+from app.config import STORAGE_AUDIO_DIR
+
 MANIFEST_FILE = os.path.join(STORAGE_AUDIO_DIR, "recordings_manifest.json")
 
 

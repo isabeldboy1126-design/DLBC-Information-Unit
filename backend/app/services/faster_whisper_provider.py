@@ -17,11 +17,7 @@ from app.services.transcription_provider import (
     TranscriptionSegment,
 )
 
-APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # backend/app
-BACKEND_DIR = os.path.dirname(APP_DIR)  # backend
-PROJECT_ROOT = os.path.dirname(BACKEND_DIR)  # Project root
-MODELS_DIR = os.path.join(PROJECT_ROOT, "storage", "models", "whisper")
-os.makedirs(MODELS_DIR, exist_ok=True)
+from app.config import STORAGE_MODELS_DIR as MODELS_DIR
 
 
 class FasterWhisperProvider(TranscriptionProvider):

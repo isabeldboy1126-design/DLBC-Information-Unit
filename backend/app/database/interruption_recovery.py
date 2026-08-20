@@ -16,17 +16,15 @@ from app.database.connection import get_db_connection
 from app.database.session_repo import session_repo
 
 
+from app.config import STORAGE_AUDIO_DIR
+
 async def recover_interrupted_sessions():
     """
     Executes upon application startup to inspect any sessions left in 'recording' or 'processing'
     states due to unexpected crashes, browser closures, or power interruptions.
     """
     await session_repo.init_db()
-
-    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    backend_dir = os.path.dirname(app_dir)
-    project_root = os.path.dirname(backend_dir)
-    storage_audio_dir = os.path.join(project_root, "storage", "audio")
+    storage_audio_dir = STORAGE_AUDIO_DIR
 
     async with get_db_connection() as conn:
         # Find any sessions that were left in active recording or processing state

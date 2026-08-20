@@ -20,6 +20,11 @@ from app.database.models import (
     PHASE8_MIGRATION_COLUMNS,
     PHASE9_MIGRATION_COLUMNS,
 )
+from app.config import (
+    STORAGE_AUDIO_DIR,
+    STORAGE_TRANSCRIPTS_DIR,
+    STORAGE_VERIFIED_DIR,
+)
 
 
 class SessionRepository:
@@ -399,12 +404,9 @@ class SessionRepository:
         Only creates a recording<->transcript link when unambiguous metadata exists.
         """
         await self.init_db()
-        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        backend_dir = os.path.dirname(app_dir)
-        project_root = os.path.dirname(backend_dir)
 
-        audio_manifest_path = os.path.join(project_root, "storage", "audio", "recordings_manifest.json")
-        transcripts_manifest_path = os.path.join(project_root, "storage", "transcripts", "transcripts_manifest.json")
+        audio_manifest_path = os.path.join(STORAGE_AUDIO_DIR, "recordings_manifest.json")
+        transcripts_manifest_path = os.path.join(STORAGE_TRANSCRIPTS_DIR, "transcripts_manifest.json")
 
         audio_recordings = []
         if os.path.exists(audio_manifest_path):
@@ -472,7 +474,7 @@ class SessionRepository:
                     continue
 
                 # Find corresponding transcript JSON file to extract segments & text
-                tr_file_path = os.path.join(project_root, "storage", "transcripts", f"{tr_id}.json")
+                tr_file_path = os.path.join(STORAGE_TRANSCRIPTS_DIR, f"{tr_id}.json")
                 tr_data = {}
                 if os.path.exists(tr_file_path):
                     try:
@@ -1141,12 +1143,8 @@ class SessionRepository:
 
     def _save_verified_transcript_file(self, session_id: str, data: Dict[str, Any]):
         """Saves verified transcript JSON to storage/verified_transcripts/."""
-        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        backend_dir = os.path.dirname(app_dir)
-        project_root = os.path.dirname(backend_dir)
-        verified_dir = os.path.join(project_root, "storage", "verified_transcripts")
-        os.makedirs(verified_dir, exist_ok=True)
-        file_path = os.path.join(verified_dir, f"{session_id}.json")
+        os.makedirs(STORAGE_VERIFIED_DIR, exist_ok=True)
+        file_path = os.path.join(STORAGE_VERIFIED_DIR, f"{session_id}.json")
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 

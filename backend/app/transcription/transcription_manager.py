@@ -22,15 +22,8 @@ from app.services.google_speech_provider import GoogleSpeechToTextProvider
 from app.services.transcription_provider import TranscriptionProvider, TranscriptionResult
 from app.transcription.audio_extractor import extract_audio_from_video, is_video_file, probe_media_duration
 
-# Storage paths
-APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # backend/app
-BACKEND_DIR = os.path.dirname(APP_DIR)  # backend
-PROJECT_ROOT = os.path.dirname(BACKEND_DIR)  # Project root
-STORAGE_UPLOADS_DIR = os.path.join(PROJECT_ROOT, "storage", "uploads")
-STORAGE_TRANSCRIPTS_DIR = os.path.join(PROJECT_ROOT, "storage", "transcripts")
-
-os.makedirs(STORAGE_UPLOADS_DIR, exist_ok=True)
-os.makedirs(STORAGE_TRANSCRIPTS_DIR, exist_ok=True)
+# Storage paths from central config
+from app.config import STORAGE_UPLOADS_DIR, STORAGE_TRANSCRIPTS_DIR
 
 TRANSCRIPTS_MANIFEST_FILE = os.path.join(STORAGE_TRANSCRIPTS_DIR, "transcripts_manifest.json")
 
