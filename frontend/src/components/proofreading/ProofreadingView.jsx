@@ -212,24 +212,24 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
 
   return (
     <div className="editing-workspace-container proofreading-workspace-container">
-      {/* Top Header Navigation Bar */}
-      <div className="editing-header-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem', borderBottom: '1px solid #e3e8ef' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+      {/* Top Header Navigation Bar Matching proofreading-workspace.png */}
+      <div className="proofreading-header-bar">
+        <div className="proofreading-header-left-col">
           <button type="button" className="btn btn--secondary btn--small" onClick={onBack}>
             ← Back to Editing
           </button>
-          <div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f2947', margin: '0 0 0.25rem 0' }}>
+          <div className="proofreading-header-text-block">
+            <h2 className="proofreading-header-title">
               {session?.title || 'Sunday Morning Worship & Sermon'}
             </h2>
-            <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem', color: '#64748b' }}>
+            <div className="proofreading-header-meta-row">
               <span>👤 Minister: <strong>{session?.minister_name || session?.speaker || 'Pst. Williams'}</strong></span>
               <span>📅 {session?.date_created ? new Date(session.date_created).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Oct 24, 2023'}</span>
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div className="proofreading-header-actions-group">
           <button
             type="button"
             className="btn btn--outline btn--small"

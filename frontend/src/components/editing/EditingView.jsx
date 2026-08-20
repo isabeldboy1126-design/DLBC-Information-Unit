@@ -226,27 +226,27 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
   return (
     <div className="editing-workspace-container">
       {/* Top Header Navigation Bar Matching editing-workspace.png */}
-      <div className="editing-header-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem', borderBottom: '1px solid #e3e8ef' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+      <div className="editing-header-bar">
+        <div className="editing-header-left-col">
           <button type="button" className="btn btn--secondary btn--small" onClick={onBack}>
             ← Back to Reporting
           </button>
-          <div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f2947', margin: '0 0 0.25rem 0' }}>
+          <div className="editing-header-text-block">
+            <h2 className="editing-header-title">
               {session?.title || 'Sunday Morning Worship & Sermon'}
             </h2>
-            <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem', color: '#64748b' }}>
+            <div className="editing-header-meta-row">
               <span>👤 Minister: <strong>{session?.minister_name || session?.speaker || 'Pst. Williams'}</strong></span>
               <span>📅 {session?.date_created ? new Date(session.date_created).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Oct 24, 2023'}</span>
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <span className="badge" style={{ background: '#eef4fa', color: '#163e73', fontWeight: 700, fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}>
+        <div className="editing-header-badge-group">
+          <span className="badge badge-editing-phase">
             🏷️ EDITING PHASE
           </span>
-          <div className="session-breadcrumbs" style={{ margin: 0 }}>
+          <div className="session-breadcrumbs">
             <span className="breadcrumb-item breadcrumb-item--done">1</span>
             <span className="breadcrumb-item breadcrumb-item--active">2</span>
             <span className="breadcrumb-item breadcrumb-item--future">3</span>

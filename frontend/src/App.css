@@ -7469,6 +7469,60 @@ textarea.form-control {
   gap: 1.5rem;
 }
 
+.editing-header-bar,
+.proofreading-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e3e8ef;
+  gap: 1.25rem;
+}
+
+.editing-header-left-col,
+.proofreading-header-left-col {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.editing-header-text-block,
+.proofreading-header-text-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.editing-header-title,
+.proofreading-header-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f2947;
+  margin: 0 0 0.25rem 0;
+}
+
+.editing-header-meta-row,
+.proofreading-header-meta-row {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.editing-header-badge-group,
+.proofreading-header-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.badge-editing-phase {
+  background: #eef4fa;
+  color: #163e73;
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.75rem;
+}
+
 .editing-top-subbar {
   background: #ffffff;
   border: 1px solid #e3e8ef;
@@ -8127,6 +8181,15 @@ textarea.form-control {
   align-items: center;
   gap: 0.35rem;
   color: #94a3b8;
+.archival-doc-footer-centered {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  color: #94a3b8;
   font-size: 0.8rem;
 }
 
@@ -8159,6 +8222,17 @@ textarea.form-control {
    TABLET & SMALL DESKTOP BREAKPOINT (<= 1024px)
    ========================================================================= */
 @media (max-width: 1024px) {
+  /* Viewport Containment */
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  .app-shell-container {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
   /* App Shell & Navigation */
   .mobile-menu-toggle {
     display: inline-flex !important;
@@ -8221,78 +8295,103 @@ textarea.form-control {
   }
 
   .app-main-column {
-    margin-left: 0;
-    width: 100%;
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
   }
 
   .app-topbar {
     padding: 0 1.25rem;
     height: 58px;
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
   }
 
   .app-content-body {
     padding: 1.25rem;
+    width: 100% !important;
+    max-width: 100vw !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
   }
 
   /* Dashboard View */
   .dashboard-hero-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
+    width: 100%;
   }
 
   .dashboard-hero-card {
     min-height: auto;
     padding: 1.75rem 1.5rem;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .hero-card--secondary {
     min-height: auto;
     padding: 1.5rem;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .recent-sessions-card {
+    width: 100%;
+    max-width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
   }
 
   .recent-sessions-table {
-    min-width: 620px;
+    min-width: 600px;
   }
 
   /* Sessions History Grid */
   .sessions-cards-grid-3col {
     grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
+    width: 100%;
   }
 
   /* Session Workspace (Detail) Grid */
   .workspace-artifacts-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.85rem;
+    width: 100%;
   }
 
   /* Reporting Workspace */
   .reporting-dual-cards-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
+    width: 100%;
   }
 
   /* Verification Workspace */
   .verification-workspace-grid {
     grid-template-columns: 1fr;
     gap: 1.25rem;
+    width: 100%;
   }
 
   /* Editing Workspace */
   .editing-two-col-grid {
     grid-template-columns: 1fr;
     gap: 1.25rem;
+    width: 100%;
   }
 
   /* Final Report Workspace */
   .final-report-page-grid {
     grid-template-columns: 1fr;
     gap: 1.25rem;
+    width: 100%;
   }
 }
 
@@ -8300,28 +8399,621 @@ textarea.form-control {
    MOBILE PORTRAIT & TABLET NARROW BREAKPOINT (<= 768px)
    ========================================================================= */
 @media (max-width: 768px) {
-  /* General Typography & Spacing */
+  /* General Typography, Containment & Spacing */
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
   .app-topbar {
     padding: 0 0.85rem;
     height: 54px;
+    width: 100%;
+  }
+
+  .topbar-left {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .topbar-nav-header {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
   }
 
   .topbar-screen-title {
     font-size: 1.05rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .app-content-body {
     padding: 1rem 0.85rem;
+    width: 100% !important;
+    max-width: 100vw !important;
+    min-width: 0 !important;
   }
 
-  /* Dashboard Adjustments */
+  /* Universal Card & Text Protections */
+  .card, .notice-card, .feedback-banner, .error-banner {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  h1, h2, h3, h4, p, span, div {
+    overflow-wrap: break-word;
+  }
+
+  /* =========================================================================
+     1. SETTINGS & STANDARDS SCREEN
+     ========================================================================= */
+  .settings-page-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    gap: 1.25rem !important;
+  }
+
+  .settings-page-header {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.85rem !important;
+    width: 100% !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  .settings-header-left {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .settings-page-title {
+    font-size: 1.35rem !important;
+    font-weight: 800 !important;
+    width: 100% !important;
+    word-break: break-word !important;
+    margin-bottom: 0.25rem !important;
+  }
+
+  .settings-page-subtitle {
+    font-size: 0.88rem !important;
+    width: 100% !important;
+    word-break: break-word !important;
+  }
+
+  .settings-header-actions {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+  }
+
+  .settings-refresh-label {
+    font-size: 0.75rem !important;
+    text-align: center !important;
+  }
+
+  .btn-refresh-settings {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 0.65rem 1rem !important;
+  }
+
+  .settings-cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+    width: 100% !important;
+  }
+
+  .settings-section-card,
+  .programmes-settings-card {
+    padding: 1.15rem 1rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .settings-form-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.4rem !important;
+    width: 100% !important;
+  }
+
+  .settings-form-row label {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .settings-form-row input,
+  .settings-form-row select {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .programmes-tree-container,
+  .programme-item-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .programme-item-header {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 0.65rem !important;
+    width: 100% !important;
+  }
+
+  .programme-item-title-group {
+    width: 100% !important;
+    min-width: 0 !important;
+    word-break: break-word !important;
+  }
+
+  .programme-item-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.4rem !important;
+    width: 100% !important;
+  }
+
+  .programme-item-actions button {
+    flex: 1 1 auto !important;
+    justify-content: center !important;
+  }
+
+  .programme-sessions-list {
+    width: 100% !important;
+  }
+
+  .programme-session-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    padding: 0.65rem !important;
+  }
+
+  .session-title-block {
+    width: 100% !important;
+    min-width: 0 !important;
+    word-break: break-word !important;
+  }
+
+  .session-row-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.35rem !important;
+    width: 100% !important;
+    justify-content: flex-end !important;
+  }
+
+  .settings-status-table {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .standards-modal-card {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    max-height: 90vh !important;
+    padding: 1rem !important;
+    overflow-y: auto !important;
+  }
+
+  /* =========================================================================
+     2. NEW LIVE SESSION SCREEN (STRICT SINGLE VERTICAL COLUMN)
+     ========================================================================= */
+  .new-session-view-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    gap: 1rem !important;
+  }
+
+  .new-session-header {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+  }
+
+  .new-session-header .btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .new-session-title {
+    font-size: 1.35rem !important;
+    word-break: break-word !important;
+  }
+
+  .new-session-subtitle {
+    font-size: 0.88rem !important;
+    word-break: break-word !important;
+  }
+
+  .new-session-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    gap: 1rem !important;
+  }
+
+  .new-session-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .new-session-card-header {
+    padding: 0.65rem 1rem !important;
+  }
+
+  .new-session-card-body {
+    padding: 0.85rem 1rem !important;
+    width: 100% !important;
+  }
+
+  .form-row-2col {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 0.85rem !important;
+    width: 100% !important;
+  }
+
+  .new-session-right-col {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    gap: 1rem !important;
+  }
+
+  .start-recording-card {
+    width: 100% !important;
+    padding: 1.15rem 1rem !important;
+  }
+
+  .btn--start-recording {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 0.85rem 1rem !important;
+    font-size: 0.95rem !important;
+  }
+
+  /* =========================================================================
+     3. EDITING SCREEN (ZERO HORIZONTAL OVERFLOW, RESPONSIVE COMPILATION)
+     ========================================================================= */
+  .editing-workspace-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .editing-header-bar {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.85rem !important;
+    width: 100% !important;
+    padding-bottom: 0.85rem !important;
+  }
+
+  .editing-header-bar > div:first-child {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.65rem !important;
+    width: 100% !important;
+  }
+
+  .editing-header-bar > div:first-child .btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .editing-top-subbar {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+    padding: 0.85rem 1rem !important;
+    width: 100% !important;
+  }
+
+  .editing-standard-label-group {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+    width: 100% !important;
+  }
+
+  .editing-status-pill-save {
+    width: 100% !important;
+    word-break: break-word !important;
+  }
+
+  .editing-actions-group {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+  }
+
+  .editing-actions-group button,
+  .btn-save-changes,
+  .btn-complete-editing-dark,
+  .btn-continue-proofreading {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+
+  .editing-two-col-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    gap: 1.25rem !important;
+  }
+
+  .editing-editor-col,
+  .editing-right-sidebar-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .editor-empty-card,
+  .editor-empty-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 1.5rem 1rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .editor-empty-content h3 {
+    font-size: 1.25rem !important;
+    word-break: break-word !important;
+  }
+
+  .editor-empty-content p {
+    font-size: 0.88rem !important;
+    word-break: break-word !important;
+  }
+
+  #btn-generate-editor-draft,
+  .btn-generate-editor-draft {
+    width: 100% !important;
+    white-space: normal !important;
+    text-align: center !important;
+    padding: 0.85rem 1rem !important;
+    font-size: 0.95rem !important;
+  }
+
+  .editing-paper-surface {
+    padding: 1.25rem 0.85rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .editing-paper-title-input {
+    font-size: 1.15rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    word-break: break-word !important;
+  }
+
+  .editing-paper-textarea {
+    font-size: 0.92rem !important;
+    min-height: 320px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    word-break: break-word !important;
+    white-space: pre-wrap !important;
+  }
+
+  .editing-paper-toolbar {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.4rem !important;
+    width: 100% !important;
+  }
+
+  .editing-paper-toolbar button {
+    flex: 1 1 auto !important;
+    justify-content: center !important;
+    font-size: 0.78rem !important;
+  }
+
+  .source-reference-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .source-reference-card .card-header {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.65rem !important;
+    width: 100% !important;
+  }
+
+  .source-reference-card .card-header button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .source-tabs-bar {
+    display: flex !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    flex-wrap: nowrap !important;
+    gap: 0.35rem !important;
+    padding: 0.35rem 0.5rem !important;
+  }
+
+  .source-tab {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    font-size: 0.78rem !important;
+    padding: 0.45rem 0.65rem !important;
+  }
+
+  .source-content-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .source-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .source-pre {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    font-size: 0.85rem !important;
+    line-height: 1.6 !important;
+  }
+
+  .ai-review-notes-alert-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  /* =========================================================================
+     4. PROOFREADING SCREEN
+     ========================================================================= */
+  .proofreading-workspace-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .proofreading-header-bar {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.85rem !important;
+    width: 100% !important;
+  }
+
+  .proofreading-header-bar > div:first-child {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.65rem !important;
+    width: 100% !important;
+  }
+
+  .proofreading-header-bar > div:first-child .btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .proofreading-pre-run-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 2rem 1rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .proofreading-pre-run-title {
+    font-size: 1.35rem !important;
+    word-break: break-word !important;
+  }
+
+  .proofreading-pre-run-desc {
+    font-size: 0.88rem !important;
+    word-break: break-word !important;
+    width: 100% !important;
+  }
+
+  .btn-start-proofreading-large {
+    width: 100% !important;
+    justify-content: center !important;
+    white-space: normal !important;
+    text-align: center !important;
+    padding: 0.85rem 1rem !important;
+  }
+
+  .proofreading-review-top-banner {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+    padding: 0.85rem 1rem !important;
+    width: 100% !important;
+  }
+
+  .proofreading-review-top-banner button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .proofreading-two-col-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    gap: 1.25rem !important;
+  }
+
+  .proofreading-changes-panel,
+  .proofreading-editor-col {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* =========================================================================
+     5. DASHBOARD & HISTORY SCREENS
+     ========================================================================= */
   .dashboard-view-container {
-    gap: 1.5rem;
+    gap: 1.25rem;
+    width: 100%;
   }
 
   .hero-card-desc {
     margin-bottom: 1rem;
     font-size: 0.88rem;
+    word-break: break-word;
   }
 
   .attention-row {
@@ -8329,6 +9021,7 @@ textarea.form-control {
     align-items: flex-start;
     gap: 0.75rem;
     padding: 12px 14px;
+    width: 100%;
   }
 
   .attention-row-action {
@@ -8341,29 +9034,77 @@ textarea.form-control {
     justify-content: center;
   }
 
-  /* New Live Session Setup View */
-  .form-row-2col {
+  .sessions-cards-grid-3col {
     grid-template-columns: 1fr;
+    gap: 0.85rem;
+    width: 100%;
   }
 
-  .new-session-card-header {
-    padding: 0.65rem 1rem;
+  .filter-top-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    width: 100%;
   }
 
-  .new-session-card-body {
-    padding: 0.85rem 1rem;
+  .filter-search-box {
+    width: 100%;
   }
 
-  .btn--start-recording {
-    padding: 0.85rem 1rem;
-    font-size: 0.95rem;
+  .filter-tabs-group {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    padding-bottom: 0.25rem;
   }
 
-  /* Live Recording View */
+  .filter-tab-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.80rem;
+  }
+
+  .filter-sub-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    width: 100%;
+  }
+
+  .filter-dropdowns {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .filter-select {
+    width: 100%;
+  }
+
+  .sessions-history-header {
+    flex-direction: column;
+    gap: 0.65rem;
+    width: 100%;
+  }
+
+  .sessions-header-actions {
+    width: 100%;
+  }
+
+  .sessions-header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* =========================================================================
+     6. LIVE RECORDING SCREEN
+     ========================================================================= */
   .live-recording-view-container {
     height: auto;
     min-height: calc(100vh - 80px);
     gap: 0.75rem;
+    width: 100%;
   }
 
   .live-top-recording-bar {
@@ -8371,12 +9112,14 @@ textarea.form-control {
     align-items: stretch;
     gap: 0.65rem;
     padding: 0.75rem 1rem;
+    width: 100%;
   }
 
   .live-bar-left {
     flex-wrap: wrap;
     justify-content: space-between;
     gap: 0.5rem;
+    width: 100%;
   }
 
   .live-bar-signal-group {
@@ -8403,11 +9146,13 @@ textarea.form-control {
     padding: 1.25rem 1rem;
     gap: 1rem;
     min-height: 380px;
+    width: 100%;
   }
 
   .segment-text {
     font-size: 24px;
     line-height: 1.45;
+    word-break: break-word;
   }
 
   .segment-timestamp {
@@ -8419,31 +9164,67 @@ textarea.form-control {
   .transcript-stream-segment {
     gap: 0.75rem;
     padding: 0.35rem 0.5rem;
+    width: 100%;
   }
 
-  /* Session Workspace (Detail) */
+  /* =========================================================================
+     7. SESSION WORKSPACE & REPORTING & VERIFICATION & FINAL REPORT
+     ========================================================================= */
   .session-workspace-page-container {
     gap: 0.85rem;
+    width: 100%;
   }
 
   .session-workspace-header {
     gap: 0.4rem;
+    width: 100%;
+  }
+
+  .session-header-top-row {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+  }
+
+  .session-id-group {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+  }
+
+  .session-actions-top {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+  }
+
+  .session-actions-top .btn {
+    width: 100% !important;
+    justify-content: center !important;
   }
 
   .session-workspace-title {
     font-size: 1.25rem;
+    word-break: break-word;
   }
 
   .session-workspace-meta-line {
     flex-wrap: wrap;
     gap: 0.65rem;
     font-size: 0.78rem;
+    width: 100%;
   }
 
   .lifecycle-stepper-container {
     height: auto;
     min-height: 76px;
     padding: 0.65rem 0.85rem;
+    width: 100%;
   }
 
   .lifecycle-stepper-track {
@@ -8451,6 +9232,7 @@ textarea.form-control {
     -webkit-overflow-scrolling: touch;
     padding-bottom: 0.35rem;
     justify-content: flex-start;
+    width: 100%;
   }
 
   .lifecycle-step-btn {
@@ -8465,6 +9247,7 @@ textarea.form-control {
     align-items: flex-start;
     gap: 0.75rem;
     padding: 0.95rem 1rem;
+    width: 100%;
   }
 
   .btn--action-hero {
@@ -8476,82 +9259,151 @@ textarea.form-control {
   .workspace-artifacts-grid {
     grid-template-columns: 1fr;
     gap: 0.75rem;
+    width: 100%;
   }
 
   .artifact-tile {
     min-height: auto;
     padding: 0.95rem 1.1rem;
-  }
-
-  /* Sessions History View */
-  .sessions-cards-grid-3col {
-    grid-template-columns: 1fr;
-    gap: 0.85rem;
-  }
-
-  .filter-top-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.65rem;
-  }
-
-  .filter-search-box {
     width: 100%;
   }
 
-  .filter-tabs-group {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    width: 100%;
-    padding-bottom: 0.25rem;
+  /* RAW TRANSCRIPT VIEWER */
+  .raw-transcript-view-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 1.25rem 0.85rem !important;
   }
 
-  .filter-tab-btn {
-    white-space: nowrap;
-    flex-shrink: 0;
-    padding: 0.45rem 0.75rem;
-    font-size: 0.80rem;
+  .raw-transcript-header {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
   }
 
-  .filter-sub-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.65rem;
+  .raw-transcript-header-left {
+    width: 100% !important;
+    min-width: 0 !important;
   }
 
-  .filter-dropdowns {
-    flex-direction: column;
-    width: 100%;
-    gap: 0.5rem;
+  .raw-transcript-title-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
   }
 
-  .filter-select {
-    width: 100%;
+  .raw-transcript-title {
+    font-size: 1.25rem !important;
+    word-break: break-word !important;
   }
 
-  .sessions-history-header {
-    flex-direction: column;
-    gap: 0.65rem;
+  .copy-transcript-btn {
+    width: 100% !important;
+    justify-content: center !important;
   }
 
-  .sessions-header-actions {
-    width: 100%;
+  .raw-transcript-flag-banner {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+    padding: 0.85rem 1rem !important;
   }
 
-  .sessions-header-actions .btn {
-    width: 100%;
-    justify-content: center;
+  .flag-banner-left {
+    display: flex !important;
+    gap: 0.65rem !important;
+    align-items: flex-start !important;
   }
 
-  /* Reporting Workspace */
+  .flag-banner-cta-btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .raw-segment-row {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.35rem !important;
+    width: 100% !important;
+    padding: 0.65rem 0.5rem !important;
+  }
+
+  /* VERIFIED TRANSCRIPT VIEWER */
+  .verified-transcript-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 1.25rem 0.85rem !important;
+  }
+
+  .verified-transcript-top-header {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+  }
+
+  .verified-top-actions {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+  }
+
+  .verified-top-actions .btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .verified-body-toolbar {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+  }
+
+  .verified-body-toolbar button {
+    flex: 1 1 auto !important;
+    justify-content: center !important;
+  }
+
+  .verified-text-canvas {
+    width: 100% !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+  }
+
+  .verified-continuous-text {
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    line-height: 1.6 !important;
+  }
+
+  /* REPORTING WORKSPACE */
   .reporting-hero-banner {
     padding: 1rem 1.15rem;
+    width: 100%;
   }
 
   .reporting-hero-top {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.65rem;
+    width: 100%;
+  }
+
+  .reporting-hero-title {
+    font-size: 1.25rem;
+    word-break: break-word;
   }
 
   .reporting-status-ribbon {
@@ -8559,12 +9411,14 @@ textarea.form-control {
     align-items: flex-start;
     gap: 0.75rem;
     padding: 0.85rem 1rem;
+    width: 100%;
   }
 
   .reporting-ribbon-meta-group {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
+    width: 100%;
   }
 
   .btn-generate-reports-primary {
@@ -8577,6 +9431,7 @@ textarea.form-control {
     align-items: flex-start;
     gap: 0.75rem;
     padding: 0.85rem 1rem;
+    width: 100%;
   }
 
   .ready-card-actions {
@@ -8593,40 +9448,53 @@ textarea.form-control {
 
   .stitch-report-card {
     padding: 1rem 1.15rem;
+    width: 100%;
   }
 
-  /* Verification Workspace */
+  .report-text-natural-container {
+    width: 100%;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  /* VERIFICATION WORKSPACE */
   .verification-workspace-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.65rem;
+    width: 100%;
   }
 
   .verification-main-title {
     font-size: 1.35rem;
+    word-break: break-word;
   }
 
   .master-audio-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
+    width: 100%;
   }
 
   .audio-scrubber-controls {
     flex-direction: column;
     align-items: stretch;
     gap: 0.65rem;
+    width: 100%;
   }
 
   .scrubber-play-row {
     display: flex;
     align-items: center;
     gap: 0.65rem;
+    width: 100%;
   }
 
   .verification-actions-bar {
     flex-direction: column;
     gap: 0.5rem;
+    width: 100%;
   }
 
   .verification-actions-bar .btn {
@@ -8634,89 +9502,100 @@ textarea.form-control {
     justify-content: center;
   }
 
-  /* Editing Workspace */
-  .editing-top-subbar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 0.85rem 1rem;
+  .active-segment-header {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
   }
 
-  .editing-actions-group {
-    width: 100%;
-    flex-direction: column;
-    gap: 0.5rem;
+  .btn-replay-segment {
+    width: 100% !important;
+    justify-content: center !important;
   }
 
-  .editing-actions-group button {
-    width: 100%;
-    justify-content: center;
+  .segment-actions-row {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
   }
 
-  .editing-paper-surface {
-    padding: 1.25rem 1rem;
-    min-height: auto;
+  .btn--save-correction,
+  .btn--original-correct {
+    width: 100% !important;
+    justify-content: center !important;
   }
 
-  .editing-paper-title-input {
-    font-size: 1.2rem;
+  .verification-finalize-ready-box {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+    padding: 0.85rem 1rem !important;
   }
 
-  .editing-paper-textarea {
-    font-size: 0.92rem;
-    min-height: 320px;
+  .btn--finalize-action {
+    width: 100% !important;
+    justify-content: center !important;
   }
 
-  .editing-paper-toolbar {
-    flex-wrap: wrap;
-    gap: 0.5rem;
+  /* FINAL REPORT WORKSPACE */
+  .final-report-header-bar {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.85rem !important;
+    width: 100% !important;
   }
 
-  /* Proofreading Workspace */
-  .proofreading-review-top-banner {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 0.85rem 1rem;
+  .btn-download-docx-gold {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 0.75rem 1rem !important;
   }
 
-  .proofreading-review-top-banner button {
-    width: 100%;
-    justify-content: center;
+  .final-report-meta-sidebar {
+    width: 100% !important;
   }
 
-  .proofreading-pre-run-box {
-    padding: 2.5rem 1.25rem;
-  }
-
-  /* Final Report Workspace */
   .final-archival-paper-card {
-    padding: 1.75rem 1.25rem;
+    padding: 1.5rem 1rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
   }
 
   .archival-doc-main-title {
-    font-size: 1.5rem;
+    font-size: 1.4rem !important;
+    word-break: break-word !important;
   }
 
   .archival-body-text {
     font-size: 0.95rem;
     line-height: 1.65;
+    word-break: break-word;
   }
 
-  /* Settings View */
-  .settings-form-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.35rem;
+  .archival-meta-line {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
   }
 
-  .settings-section-card {
-    padding: 1.15rem 1rem;
+  .archival-scriptures-box {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.35rem !important;
+    width: 100% !important;
   }
 }
 
 /* =========================================================================
-   EXTRA SMALL MOBILE BREAKPOINT (<= 430px)
+   EXTRA SMALL MOBILE BREAKPOINT (<= 430px & 360px & 390px)
    ========================================================================= */
 @media (max-width: 430px) {
   .app-topbar {
@@ -8768,7 +9647,7 @@ textarea.form-control {
   }
 
   .archival-doc-main-title {
-    font-size: 1.3rem;
+    font-size: 1.25rem;
   }
 
   .btn {
