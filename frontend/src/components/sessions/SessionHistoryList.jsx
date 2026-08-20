@@ -26,7 +26,6 @@ export function SessionHistoryList({
   initialStatusFilter = 'all',
 }) {
   const [searchTerm, setSearchTerm] = useState('')
-  const [activeTab, setActiveTab] = useState('all') // 'all' | 'in_progress' | 'completed' | 'needs_attention'
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter)
   const [dateFilter, setDateFilter] = useState('all')
 
@@ -94,17 +93,7 @@ export function SessionHistoryList({
     const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
     const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress') && !isReportsReady && !isEditingComplete && !isEditingDraft && !isProofreadComplete && !isProofreadingReview && !isFinalComplete
 
-    // 2. Tab Filter (All, In Progress, Completed, Needs Attention)
-    let matchesTab = true
-    if (activeTab === 'in_progress') {
-      matchesTab = isLive || (!isFinalComplete && !isInterrupted)
-    } else if (activeTab === 'completed') {
-      matchesTab = isFinalComplete
-    } else if (activeTab === 'needs_attention') {
-      matchesTab = isInterrupted || needsVerification
-    }
-
-    // 3. Status Dropdown Filter
+    // 2. Status Dropdown Filter
     let matchesStatus = true
     if (statusFilter !== 'all') {
       if (statusFilter === 'interrupted') {
@@ -120,7 +109,7 @@ export function SessionHistoryList({
       }
     }
 
-    // 4. Date Dropdown Filter
+    // 3. Date Dropdown Filter
     let matchesDate = true
     if (dateFilter !== 'all' && s.date_created) {
       const now = new Date().getTime()
@@ -133,7 +122,7 @@ export function SessionHistoryList({
       }
     }
 
-    return matchesSearch && matchesTab && matchesStatus && matchesDate
+    return matchesSearch && matchesStatus && matchesDate
   })
 
   const activeSessionsCount = sessions.filter((s) => s.final_report_status !== 'complete').length
@@ -181,7 +170,6 @@ export function SessionHistoryList({
       {/* 2. FILTER & SEARCH CONTROLS                                   */}
       {/* ------------------------------------------------------------- */}
       <div className="sessions-filter-panel">
-        {/* Top Filter Row: Search + Status Tabs */}
         <div className="filter-top-row">
           <div className="filter-search-box">
             <span className="search-icon">🔍</span>
@@ -194,44 +182,6 @@ export function SessionHistoryList({
             />
           </div>
 
-          <div className="filter-tabs-group">
-            <button
-              type="button"
-              className={`filter-tab-btn ${activeTab === 'all' ? 'filter-tab-btn--active' : ''}`}
-              onClick={() => setActiveTab('all')}
-            >
-              All Sessions
-            </button>
-
-            <button
-              type="button"
-              className={`filter-tab-btn ${activeTab === 'in_progress' ? 'filter-tab-btn--active' : ''}`}
-              onClick={() => setActiveTab('in_progress')}
-            >
-              In Progress
-            </button>
-
-            <button
-              type="button"
-              className={`filter-tab-btn ${activeTab === 'completed' ? 'filter-tab-btn--active' : ''}`}
-              onClick={() => setActiveTab('completed')}
-            >
-              Completed
-            </button>
-
-            <button
-              type="button"
-              className={`filter-tab-btn filter-tab-btn--attention ${activeTab === 'needs_attention' ? 'filter-tab-btn--active-attention' : ''
-                }`}
-              onClick={() => setActiveTab('needs_attention')}
-            >
-              ⚠️ Needs Attention
-            </button>
-          </div>
-        </div>
-
-        {/* Secondary Filter Row: Dropdowns & Reset */}
-        <div className="filter-sub-row">
           <div className="filter-dropdowns">
             <select
               className="form-control filter-select"
@@ -255,22 +205,21 @@ export function SessionHistoryList({
               <option value="7days">Last 7 Days</option>
               <option value="30days">Last 30 Days</option>
             </select>
-          </div>
 
-          {(searchTerm || activeTab !== 'all' || statusFilter !== 'all' || dateFilter !== 'all') && (
-            <button
-              type="button"
-              className="btn-clear-filters"
-              onClick={() => {
-                setSearchTerm('')
-                setActiveTab('all')
-                setStatusFilter('all')
-                setDateFilter('all')
-              }}
-            >
-              Clear Filters
-            </button>
-          )}
+            {(searchTerm || statusFilter !== 'all' || dateFilter !== 'all') && (
+              <button
+                type="button"
+                className="btn-clear-filters"
+                onClick={() => {
+                  setSearchTerm('')
+                  setStatusFilter('all')
+                  setDateFilter('all')
+                }}
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
