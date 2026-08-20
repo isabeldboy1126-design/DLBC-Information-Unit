@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { getApiUrl } from '../../config'
 import { ProofreadingStandardsModal } from './ProofreadingStandardsModal'
 import { ProofreadingChangesList } from './ProofreadingChangesList'
 
@@ -39,7 +40,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/proofreading/status')
+      const res = await fetch(getApiUrl('/api/proofreading/status'))
       if (res.ok) {
         const data = await res.json()
         setAiStatus(data)
@@ -52,7 +53,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
   const fetchProofreadReport = useCallback(async () => {
     if (!sessionId) return
     try {
-      const res = await fetch(`http://localhost:8000/api/proofreading/sessions/${sessionId}/report`)
+      const res = await fetch(getApiUrl(`/api/proofreading/sessions/${sessionId}/report`))
       if (res.ok) {
         const data = await res.json()
         setProofreadingData(data)
@@ -97,7 +98,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
       setIsGenerating(true)
       setShowRerunConfirm(false)
 
-      const res = await fetch(`http://localhost:8000/api/proofreading/sessions/${sessionId}/run`, {
+      const res = await fetch(getApiUrl(`/api/proofreading/sessions/${sessionId}/run`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -127,7 +128,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
     try {
       setErrorBanner(null)
       setIsSaving(true)
-      const res = await fetch(`http://localhost:8000/api/proofreading/sessions/${sessionId}/save`, {
+      const res = await fetch(getApiUrl(`/api/proofreading/sessions/${sessionId}/save`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -161,7 +162,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
     }
 
     try {
-      const res = await fetch(`http://localhost:8000/api/proofreading/sessions/${sessionId}/accept`, {
+      const res = await fetch(getApiUrl(`/api/proofreading/sessions/${sessionId}/accept`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -181,7 +182,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
 
   const handleActivateRevision = async (revId) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/proofreading/sessions/${sessionId}/revisions/${revId}/activate`, {
+      const res = await fetch(getApiUrl(`/api/proofreading/sessions/${sessionId}/revisions/${revId}/activate`), {
         method: 'POST',
       })
       if (res.ok) {

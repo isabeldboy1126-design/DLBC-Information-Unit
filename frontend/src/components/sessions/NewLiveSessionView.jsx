@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { getApiUrl } from '../../config'
 
 /**
  * NewLiveSessionView — Pre-recording configuration matching new-live-session.png.
@@ -31,7 +32,7 @@ export function NewLiveSessionView({
     async function loadProgrammes() {
       try {
         setIsLoadingProgrammes(true)
-        const res = await fetch('http://localhost:8000/api/programmes?include_archived=false')
+        const res = await fetch(getApiUrl('/api/programmes?include_archived=false'))
         if (res.ok && isMounted) {
           const data = await res.json()
           setProgrammes(data)

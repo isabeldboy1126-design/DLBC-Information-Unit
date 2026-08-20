@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { getApiUrl } from '../../config'
 
 export function EditorStandardsModal({ isOpen, onClose, onStandardUpdated }) {
   const [standardsList, setStandardsList] = useState([])
@@ -18,7 +19,7 @@ export function EditorStandardsModal({ isOpen, onClose, onStandardUpdated }) {
   const fetchStandards = async () => {
     try {
       setLoading(true)
-      const res = await fetch('http://localhost:8000/api/editing/standards')
+      const res = await fetch(getApiUrl('/api/editing/standards'))
       if (res.ok) {
         const data = await res.json()
         const list = data.standards || []
@@ -60,7 +61,7 @@ export function EditorStandardsModal({ isOpen, onClose, onStandardUpdated }) {
     try {
       setSaving(true)
       setFeedbackMsg(null)
-      const res = await fetch('http://localhost:8000/api/editing/standards', {
+      const res = await fetch(getApiUrl('/api/editing/standards'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -92,7 +93,7 @@ export function EditorStandardsModal({ isOpen, onClose, onStandardUpdated }) {
   const handleActivateVersion = async (version) => {
     try {
       setSaving(true)
-      const res = await fetch(`http://localhost:8000/api/editing/standards/${version}/activate`, {
+      const res = await fetch(getApiUrl(`/api/editing/standards/${version}/activate`), {
         method: 'POST',
       })
       if (res.ok) {

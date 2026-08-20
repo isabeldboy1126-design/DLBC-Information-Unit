@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
+import { getApiUrl } from '../config'
 
-const API_BASE = 'http://localhost:8000/api/sessions'
+const API_BASE = getApiUrl('/api/sessions')
 
 export function useSessions() {
   const [sessions, setSessions] = useState([])

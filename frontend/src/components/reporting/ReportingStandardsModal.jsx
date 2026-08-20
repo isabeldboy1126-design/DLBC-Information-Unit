@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { getApiUrl } from '../../config'
 
 export function ReportingStandardsModal({ isOpen, onClose, onStandardUpdated }) {
   const [standardsList, setStandardsList] = useState([])
@@ -19,7 +20,7 @@ export function ReportingStandardsModal({ isOpen, onClose, onStandardUpdated }) 
   const fetchStandards = async () => {
     try {
       setLoading(true)
-      const res = await fetch('http://localhost:8000/api/reporting/standards')
+      const res = await fetch(getApiUrl('/api/reporting/standards'))
       if (res.ok) {
         const data = await res.json()
         const list = data.standards || []
@@ -62,7 +63,7 @@ export function ReportingStandardsModal({ isOpen, onClose, onStandardUpdated }) 
     try {
       setSaving(true)
       setFeedbackMsg(null)
-      const res = await fetch('http://localhost:8000/api/reporting/standards', {
+      const res = await fetch(getApiUrl('/api/reporting/standards'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -95,7 +96,7 @@ export function ReportingStandardsModal({ isOpen, onClose, onStandardUpdated }) 
   const handleActivateVersion = async (version) => {
     try {
       setSaving(true)
-      const res = await fetch(`http://localhost:8000/api/reporting/standards/${version}/activate`, {
+      const res = await fetch(getApiUrl(`/api/reporting/standards/${version}/activate`), {
         method: 'POST',
       })
       if (res.ok) {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { getWsUrl } from '../config'
 
-const WS_BASE_URL = 'ws://localhost:8000/api/audio/stream'
+const WS_BASE_URL = getWsUrl('/api/audio/stream')
 
 export function useAudioCapture() {
   // Device management

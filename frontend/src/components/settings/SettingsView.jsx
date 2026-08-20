@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { getApiUrl, API_BASE_URL } from '../../config'
 import { ReportingStandardsModal } from '../reporting/ReportingStandardsModal'
 import { EditorStandardsModal } from '../editing/EditorStandardsModal'
 import { ProofreadingStandardsModal } from '../proofreading/ProofreadingStandardsModal'
@@ -21,10 +22,10 @@ export function SettingsView({ onBack }) {
     setError(null)
     try {
       const [transRes, repRes, editRes, proofRes] = await Promise.all([
-        fetch('http://localhost:8000/api/transcribe/config-status').catch(() => null),
-        fetch('http://localhost:8000/api/reporting/status').catch(() => null),
-        fetch('http://localhost:8000/api/editing/status').catch(() => null),
-        fetch('http://localhost:8000/api/proofreading/status').catch(() => null),
+        fetch(getApiUrl('/api/transcribe/config-status')).catch(() => null),
+        fetch(getApiUrl('/api/reporting/status')).catch(() => null),
+        fetch(getApiUrl('/api/editing/status')).catch(() => null),
+        fetch(getApiUrl('/api/proofreading/status')).catch(() => null),
       ])
 
       if (transRes && transRes.ok) {
@@ -43,7 +44,7 @@ export function SettingsView({ onBack }) {
       setLastRefreshed(new Date().toLocaleTimeString())
     } catch (err) {
       console.error('Error loading settings status:', err)
-      setError('Could not connect to backend server at http://localhost:8000.')
+      setError(`Could not connect to backend server at ${API_BASE_URL}.`)
     } finally {
       setIsLoading(false)
     }

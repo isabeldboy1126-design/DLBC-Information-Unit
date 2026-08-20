@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { getApiUrl } from '../../config'
 
 /**
  * RawTranscriptViewer — Immutable Raw Transcript View matching raw-transcript.png.
@@ -73,7 +74,7 @@ export function RawTranscriptViewer({
     transcript.saved_filename ||
     transcript.original_filename
 
-  const mediaUrl = `http://localhost:8000/api/transcription/media/${encodeURIComponent(mediaId)}`
+  const mediaUrl = getApiUrl(`/api/transcription/media/${encodeURIComponent(mediaId)}`)
 
   // Handle media timeupdate
   const handleTimeUpdate = (e) => {

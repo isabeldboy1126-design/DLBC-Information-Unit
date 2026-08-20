@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { getApiUrl } from '../config'
 
 export function CompletedRecordingPlayer({ latestRecording }) {
   const [allRecordings, setAllRecordings] = useState([])
@@ -8,7 +9,7 @@ export function CompletedRecordingPlayer({ latestRecording }) {
   const fetchRecordings = async () => {
     try {
       setLoading(true)
-      const res = await fetch('http://localhost:8000/api/audio/recordings')
+      const res = await fetch(getApiUrl('/api/audio/recordings'))
       if (res.ok) {
         const data = await res.json()
         setAllRecordings(data.recordings || [])
@@ -33,7 +34,7 @@ export function CompletedRecordingPlayer({ latestRecording }) {
   const handleDelete = async (recId) => {
     if (!window.confirm('Delete this test recording?')) return
     try {
-      const res = await fetch(`http://localhost:8000/api/audio/recordings/${recId}`, {
+      const res = await fetch(getApiUrl(`/api/audio/recordings/${recId}`), {
         method: 'DELETE',
       })
       if (res.ok) {
@@ -83,7 +84,7 @@ export function CompletedRecordingPlayer({ latestRecording }) {
               <audio
                 controls
                 key={activeRec.recording_id}
-                src={`http://localhost:8000/api/audio/recordings/${activeRec.recording_id}`}
+                src={getApiUrl(`/api/audio/recordings/${activeRec.recording_id}`)}
                 className="native-audio-player"
                 id="audio-player"
               >
@@ -124,7 +125,7 @@ export function CompletedRecordingPlayer({ latestRecording }) {
 
             <div className="player-actions">
               <a
-                href={`http://localhost:8000/api/audio/recordings/${activeRec.recording_id}/download`}
+                href={getApiUrl(`/api/audio/recordings/${activeRec.recording_id}/download`)}
                 className="btn btn--outline btn--small"
                 download
                 id="btn-download-wav"

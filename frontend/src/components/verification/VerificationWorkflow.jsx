@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { getApiUrl } from '../../config'
 
 /**
  * VerificationWorkflow — Human verification workspace matching verification-workspace.png.
@@ -106,7 +107,7 @@ export function VerificationWorkflow({
     session?.recording_id ||
     session?.audio_filename ||
     session?.session_id
-  const mediaUrl = `http://localhost:8000/api/transcription/media/${encodeURIComponent(mediaId)}`
+  const mediaUrl = getApiUrl(`/api/transcription/media/${encodeURIComponent(mediaId)}`)
 
   // Bounded Segment Playback: Plays strictly between segment start_time and end_time, then automatically pauses
   const handleReplaySegment = (startTime, endTime) => {

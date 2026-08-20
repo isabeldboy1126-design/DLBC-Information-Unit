@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { getApiUrl } from '../config'
 
-const API_BASE = 'http://localhost:8000/api/transcription'
+const API_BASE = getApiUrl('/api/transcription')
 
 export function useRecordedTranscription() {
   const [fileType, setFileType] = useState('audio') // 'audio' | 'video'

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { getApiUrl } from '../../config'
 
 export function FinalReportView({ session, onBack }) {
   const [finalReportData, setFinalReportData] = useState({
@@ -28,7 +29,7 @@ export function FinalReportView({ session, onBack }) {
   const fetchFinalReportData = useCallback(async () => {
     if (!sessionId) return
     try {
-      const res = await fetch(`http://localhost:8000/api/final-report/sessions/${sessionId}`)
+      const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}`))
       if (res.ok) {
         const data = await res.json()
         setFinalReportData(data)
@@ -53,7 +54,7 @@ export function FinalReportView({ session, onBack }) {
     try {
       setErrorBanner(null)
       setIsFinalizing(true)
-      const res = await fetch(`http://localhost:8000/api/final-report/sessions/${sessionId}/finalize`, {
+      const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/finalize`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -84,7 +85,7 @@ export function FinalReportView({ session, onBack }) {
     try {
       setErrorBanner(null)
       setIsSavingRevision(true)
-      const res = await fetch(`http://localhost:8000/api/final-report/sessions/${sessionId}/save-revision`, {
+      const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/save-revision`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -111,7 +112,7 @@ export function FinalReportView({ session, onBack }) {
 
   const handleDownloadDocx = () => {
     if (!activeFinal) return
-    window.location.href = `http://localhost:8000/api/final-report/sessions/${sessionId}/download`
+    window.location.href = getApiUrl(`/api/final-report/sessions/${sessionId}/download`)
   }
 
   const handleCopyReport = () => {
@@ -123,7 +124,7 @@ export function FinalReportView({ session, onBack }) {
 
   const handleActivateRevision = async (revId) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/final-report/sessions/${sessionId}/revisions/${revId}/activate`, {
+      const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/revisions/${revId}/activate`), {
         method: 'POST',
       })
       if (res.ok) {

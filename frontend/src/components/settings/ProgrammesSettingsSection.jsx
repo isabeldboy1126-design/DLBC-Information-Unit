@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { getApiUrl, API_BASE_URL } from '../../config'
 
 export function ProgrammesSettingsSection() {
   const [programmes, setProgrammes] = useState([])
@@ -32,7 +33,7 @@ export function ProgrammesSettingsSection() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch('http://localhost:8000/api/programmes?include_archived=true')
+      const res = await fetch(getApiUrl('/api/programmes?include_archived=true'))
       if (res.ok) {
         const data = await res.json()
         setProgrammes(data)
@@ -41,7 +42,7 @@ export function ProgrammesSettingsSection() {
       }
     } catch (err) {
       console.error('Error fetching programmes:', err)
-      setError('Could not connect to backend server at http://localhost:8000.')
+      setError(`Could not connect to backend server at ${API_BASE_URL}.`)
     } finally {
       setIsLoading(false)
     }
@@ -70,7 +71,7 @@ export function ProgrammesSettingsSection() {
     if (!newProgName.trim()) return
     try {
       setError(null)
-      const res = await fetch('http://localhost:8000/api/programmes', {
+      const res = await fetch(getApiUrl('/api/programmes'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newProgName.trim() }),
@@ -97,7 +98,7 @@ export function ProgrammesSettingsSection() {
     if (!editingProgName.trim()) return
     try {
       setError(null)
-      const res = await fetch(`http://localhost:8000/api/programmes/${progId}`, {
+      const res = await fetch(getApiUrl(`/api/programmes/${progId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editingProgName.trim() }),
@@ -120,7 +121,7 @@ export function ProgrammesSettingsSection() {
     const actionName = prog.is_archived ? 'unarchive' : 'archive'
     try {
       setError(null)
-      const res = await fetch(`http://localhost:8000/api/programmes/${prog.id}`, {
+      const res = await fetch(getApiUrl(`/api/programmes/${prog.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_archived: !prog.is_archived }),
@@ -142,7 +143,7 @@ export function ProgrammesSettingsSection() {
     if (!newSessionName.trim()) return
     try {
       setError(null)
-      const res = await fetch(`http://localhost:8000/api/programmes/${progId}/sessions`, {
+      const res = await fetch(getApiUrl(`/api/programmes/${progId}/sessions`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newSessionName.trim() }),
@@ -166,7 +167,7 @@ export function ProgrammesSettingsSection() {
     if (!editingSessionName.trim()) return
     try {
       setError(null)
-      const res = await fetch(`http://localhost:8000/api/programmes/${progId}/sessions/${sessionId}`, {
+      const res = await fetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editingSessionName.trim() }),
@@ -188,7 +189,7 @@ export function ProgrammesSettingsSection() {
   const handleArchiveSession = async (progId, sessionId) => {
     try {
       setError(null)
-      const res = await fetch(`http://localhost:8000/api/programmes/${progId}/sessions/${sessionId}`, {
+      const res = await fetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
         method: 'DELETE',
       })
       if (res.ok) {
@@ -216,7 +217,7 @@ export function ProgrammesSettingsSection() {
     const sessionIds = newOrder.map((s) => s.id)
 
     try {
-      const res = await fetch(`http://localhost:8000/api/programmes/${prog.id}/sessions/reorder`, {
+      const res = await fetch(getApiUrl(`/api/programmes/${prog.id}/sessions/reorder`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_ids: sessionIds }),
