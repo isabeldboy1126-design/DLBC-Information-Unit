@@ -113,7 +113,7 @@ class EditingProvider(ABC):
 
 class GeminiEditingProvider(EditingProvider):
     def __init__(self):
-        self._default_model = os.getenv("GEMINI_EDITING_MODEL", os.getenv("GEMINI_REPORTING_MODEL", "gemini-3.7-flash"))
+        self._default_model = os.getenv("GEMINI_EDITING_MODEL", os.getenv("GEMINI_REPORTING_MODEL", "gemini-3.5-flash-lite"))
 
     def is_configured(self) -> bool:
         key = os.getenv("GEMINI_API_KEY", "").strip()
@@ -280,14 +280,31 @@ INSTRUCTIONS FOR FINAL EDITED REPORT:
                 temperature=0.2, # Low temperature for factual precision
                 response_mime_type="application/json",
                 response_schema=EditingOutputSchema,
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
             )
 
-            response = await client.aio.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=config,
-            )
+            # Use non-blocking async generation with fallback
+            models_to_try = [model_name]
+            for fb in ["gemini-3.5-flash-lite", "gemini-3.6-flash"]:
+                if fb not in models_to_try:
+                    models_to_try.append(fb)
+
+            response = None
+            last_err = None
+            for m in models_to_try:
+                try:
+                    response = await client.aio.models.generate_content(
+                        model=m,
+                        contents=prompt,
+                        config=config,
+                    )
+                    model_name = m
+                    break
+                except Exception as ex:
+                    last_err = ex
+                    continue
+
+            if response is None:
+                raise last_err or RuntimeError("All Gemini models failed.")
 
             response_text = response.text or "{}"
             parsed_json = json.loads(response_text)
