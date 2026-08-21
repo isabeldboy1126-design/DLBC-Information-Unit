@@ -1,4 +1,4 @@
-name: Build and Push Backend to Azure Container Registry
+name: Build and Push Backend Container
 
 on:
   push:
@@ -8,9 +8,9 @@ on:
       - '.github/workflows/deploy-backend-azure.yml'
   workflow_dispatch:
 
-env:
-  ACR_LOGIN_SERVER: dlbcregistry839201.azurecr.io
-  CONTAINER_IMAGE_NAME: dlbc-backend
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build-and-push:
@@ -20,15 +20,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Log in to Azure Container Registry
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push to GHCR
+        run: |
+          IMAGE_GHCR=ghcr.io/${{ github.repository_owner }}/dlbc-backend
+          docker build -t ${IMAGE_GHCR}:latest -t ${IMAGE_GHCR}:v1 ./backend
+          docker push ${IMAGE_GHCR}:latest
+          docker push ${IMAGE_GHCR}:v1
+
+      - name: Log in and push to Azure Container Registry (if configured)
+        if: "${{ secrets.ACR_PASSWORD != '' }}"
         uses: azure/docker-login@v2
         with:
-          login-server: ${{ env.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
+          login-server: dlbcregistry839201.azurecr.io
+          username: dlbcregistry839201
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Build and push Docker image
+      - name: Push to ACR (if configured)
+        if: "${{ secrets.ACR_PASSWORD != '' }}"
         run: |
-          docker build -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:latest -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:v1 ./backend
-          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:latest
-          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:v1
+          IMAGE_ACR=dlbcregistry839201.azurecr.io/dlbc-backend
+          docker tag ghcr.io/${{ github.repository_owner }}/dlbc-backend:v1 ${IMAGE_ACR}:v1
+          docker tag ghcr.io/${{ github.repository_owner }}/dlbc-backend:latest ${IMAGE_ACR}:latest
+          docker push ${IMAGE_ACR}:v1
+          docker push ${IMAGE_ACR}:latest
