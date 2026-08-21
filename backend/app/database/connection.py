@@ -126,6 +126,11 @@ class AsyncConnectionAdapter:
             converted_sql = re.sub(r"\bTEXT\b", "NVARCHAR(MAX)", converted_sql, flags=re.IGNORECASE)
             converted_sql = re.sub(r"\bINTEGER\b", "INT", converted_sql, flags=re.IGNORECASE)
 
+        # Strip LIMIT for T-SQL queries (top row is fetched by fetchone() or TOP)
+        if re.search(r"\bLIMIT\s+\d+\b", converted_sql, flags=re.IGNORECASE):
+            converted_sql = re.sub(r"\s+LIMIT\s+\d+\s*$", "", converted_sql, flags=re.IGNORECASE)
+            converted_sql = re.sub(r"\bLIMIT\s+\d+\b", "", converted_sql, flags=re.IGNORECASE)
+
         if params is None:
             return sqlalchemy.text(converted_sql), {}
 

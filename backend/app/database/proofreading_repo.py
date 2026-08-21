@@ -147,7 +147,6 @@ class ProofreadingRepository:
                 FROM proofreading_standards
                 WHERE is_active = 1
                 ORDER BY version DESC
-                LIMIT 1
                 """
             )
             row = await cursor.fetchone()
@@ -161,7 +160,6 @@ class ProofreadingRepository:
                        guidelines, terminology, formatting_rules, notes, created_at
                 FROM proofreading_standards
                 ORDER BY version DESC
-                LIMIT 1
                 """
             )
             row = await cursor.fetchone()
@@ -375,7 +373,6 @@ class ProofreadingRepository:
                        is_active, is_accepted, created_at, updated_at
                 FROM proofread_reports
                 WHERE session_id = ? AND is_active = 1
-                LIMIT 1
                 """,
                 (session_id,),
             )
@@ -394,7 +391,6 @@ class ProofreadingRepository:
                 FROM proofread_reports
                 WHERE session_id = ?
                 ORDER BY revision_number DESC
-                LIMIT 1
                 """,
                 (session_id,),
             )

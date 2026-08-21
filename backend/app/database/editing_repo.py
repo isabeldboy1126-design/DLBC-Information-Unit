@@ -174,7 +174,6 @@ class EditingRepository:
                 FROM editor_standards
                 WHERE is_active = 1
                 ORDER BY version DESC
-                LIMIT 1
                 """
             )
             row = await cursor.fetchone()
@@ -189,7 +188,6 @@ class EditingRepository:
                        terminology, approved_examples, notes, created_at
                 FROM editor_standards
                 ORDER BY version DESC
-                LIMIT 1
                 """
             )
             row = await cursor.fetchone()
@@ -411,7 +409,6 @@ class EditingRepository:
                        is_active, created_at, updated_at
                 FROM edited_reports
                 WHERE session_id = ? AND is_active = 1
-                LIMIT 1
                 """,
                 (session_id,),
             )
@@ -430,7 +427,6 @@ class EditingRepository:
                 FROM edited_reports
                 WHERE session_id = ?
                 ORDER BY revision_number DESC
-                LIMIT 1
                 """,
                 (session_id,),
             )

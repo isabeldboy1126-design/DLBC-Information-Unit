@@ -181,7 +181,6 @@ class ReportingRepository:
                 FROM reporting_standards
                 WHERE is_active = 1
                 ORDER BY version DESC
-                LIMIT 1
                 """
             )
             row = await cursor.fetchone()
@@ -197,7 +196,6 @@ class ReportingRepository:
                        notes, created_at
                 FROM reporting_standards
                 ORDER BY version DESC
-                LIMIT 1
                 """
             )
             row = await cursor.fetchone()

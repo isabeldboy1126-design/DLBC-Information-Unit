@@ -22,7 +22,7 @@ export function SettingsView({ onBack }) {
     setError(null)
     try {
       const [transRes, repRes, editRes, proofRes] = await Promise.all([
-        fetch(getApiUrl('/api/transcribe/config-status')).catch(() => null),
+        fetch(getApiUrl('/api/transcription/config-status')).catch(() => null),
         fetch(getApiUrl('/api/reporting/status')).catch(() => null),
         fetch(getApiUrl('/api/editing/status')).catch(() => null),
         fetch(getApiUrl('/api/proofreading/status')).catch(() => null),

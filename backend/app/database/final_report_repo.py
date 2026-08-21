@@ -170,7 +170,6 @@ class FinalReportRepository:
                        is_active, created_at, updated_at
                 FROM final_reports
                 WHERE session_id = ? AND is_active = 1
-                LIMIT 1
                 """,
                 (session_id,),
             )
@@ -189,7 +188,6 @@ class FinalReportRepository:
                 FROM final_reports
                 WHERE session_id = ?
                 ORDER BY revision_number DESC
-                LIMIT 1
                 """,
                 (session_id,),
             )

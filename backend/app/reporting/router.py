@@ -147,15 +147,20 @@ async def generate_reports(session_id: str, payload: GenerateReportsRequest):
     # 1. Require Verified Transcript
     verified_text = session.get("verified_text", "")
     if not verified_text or not verified_text.strip():
-        # Fallback: check if segments can construct raw text or if verification is incomplete
-        if session.get("raw_text"):
-            # If verification wasn't completed, advise completing verification first
-            raise HTTPException(
-                status_code=400,
-                detail="A Verified Transcript is required before generating reports. Please complete verification first.",
-            )
-        else:
-            raise HTTPException(status_code=400, detail="No transcript found for this session.")
+        # If clean session (0 flags) or raw_text exists with 0 flags, auto-confirm raw as verified
+        if session.get("raw_text") and (session.get("flag_count", 0) == 0 or session.get("verification_status") == "complete"):
+            await session_repo.confirm_raw_as_verified(session_id)
+            session = await session_repo.get_session(session_id)
+            verified_text = session.get("verified_text", "")
+
+        if not verified_text or not verified_text.strip():
+            if session.get("raw_text"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="A Verified Transcript is required before generating reports. Please complete verification first.",
+                )
+            else:
+                raise HTTPException(status_code=400, detail="No transcript found for this session.")
 
     # 2. Check AI Configuration
     if not gemini_reporting_provider.is_configured():
