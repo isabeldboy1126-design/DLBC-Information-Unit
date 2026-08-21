@@ -14,11 +14,17 @@ from typing import Any, Dict, List, Optional
 from app.database.connection import DB_PATH, get_db_connection
 from app.database.models import (
     INIT_SCHEMA_SQL,
+    INIT_SCHEMA_MSSQL,
     PHASE5_MIGRATION_COLUMNS,
+    PHASE5_MIGRATION_COLUMNS_MSSQL,
     PHASE6_MIGRATION_COLUMNS,
+    PHASE6_MIGRATION_COLUMNS_MSSQL,
     PHASE7_MIGRATION_COLUMNS,
+    PHASE7_MIGRATION_COLUMNS_MSSQL,
     PHASE8_MIGRATION_COLUMNS,
+    PHASE8_MIGRATION_COLUMNS_MSSQL,
     PHASE9_MIGRATION_COLUMNS,
+    PHASE9_MIGRATION_COLUMNS_MSSQL,
 )
 from app.config import (
     STORAGE_AUDIO_DIR,
@@ -33,38 +39,54 @@ class SessionRepository:
 
     async def init_db(self):
         """Initializes the database schema if not already initialized."""
+        is_mssql = bool(os.environ.get("DATABASE_URL") and not os.environ.get("DATABASE_URL").startswith("sqlite"))
+
         async with get_db_connection() as conn:
-            await conn.executescript(INIT_SCHEMA_SQL)
-            # Phase 5 migration: add verification columns (safe if already exist)
-            for alter_sql in PHASE5_MIGRATION_COLUMNS:
-                try:
-                    await conn.execute(alter_sql)
-                except Exception:
-                    pass  # Column already exists
-            # Phase 6 migration: add reporting columns (safe if already exist)
-            for alter_sql in PHASE6_MIGRATION_COLUMNS:
-                try:
-                    await conn.execute(alter_sql)
-                except Exception:
-                    pass  # Column already exists
-            # Phase 7 migration: add editing columns (safe if already exist)
-            for alter_sql in PHASE7_MIGRATION_COLUMNS:
-                try:
-                    await conn.execute(alter_sql)
-                except Exception:
-                    pass  # Column already exists
-            # Phase 8 migration: add proofreading columns (safe if already exist)
-            for alter_sql in PHASE8_MIGRATION_COLUMNS:
-                try:
-                    await conn.execute(alter_sql)
-                except Exception:
-                    pass  # Column already exists
-            # Phase 9 migration: add final report columns (safe if already exist)
-            for alter_sql in PHASE9_MIGRATION_COLUMNS:
-                try:
-                    await conn.execute(alter_sql)
-                except Exception:
-                    pass  # Column already exists
+            if is_mssql:
+                await conn.executescript(INIT_SCHEMA_MSSQL)
+                for alter_sql in (
+                    PHASE5_MIGRATION_COLUMNS_MSSQL
+                    + PHASE6_MIGRATION_COLUMNS_MSSQL
+                    + PHASE7_MIGRATION_COLUMNS_MSSQL
+                    + PHASE8_MIGRATION_COLUMNS_MSSQL
+                    + PHASE9_MIGRATION_COLUMNS_MSSQL
+                ):
+                    try:
+                        await conn.execute(alter_sql)
+                    except Exception:
+                        pass
+            else:
+                await conn.executescript(INIT_SCHEMA_SQL)
+                # Phase 5 migration: add verification columns (safe if already exist)
+                for alter_sql in PHASE5_MIGRATION_COLUMNS:
+                    try:
+                        await conn.execute(alter_sql)
+                    except Exception:
+                        pass  # Column already exists
+                # Phase 6 migration: add reporting columns (safe if already exist)
+                for alter_sql in PHASE6_MIGRATION_COLUMNS:
+                    try:
+                        await conn.execute(alter_sql)
+                    except Exception:
+                        pass  # Column already exists
+                # Phase 7 migration: add editing columns (safe if already exist)
+                for alter_sql in PHASE7_MIGRATION_COLUMNS:
+                    try:
+                        await conn.execute(alter_sql)
+                    except Exception:
+                        pass  # Column already exists
+                # Phase 8 migration: add proofreading columns (safe if already exist)
+                for alter_sql in PHASE8_MIGRATION_COLUMNS:
+                    try:
+                        await conn.execute(alter_sql)
+                    except Exception:
+                        pass  # Column already exists
+                # Phase 9 migration: add final report columns (safe if already exist)
+                for alter_sql in PHASE9_MIGRATION_COLUMNS:
+                    try:
+                        await conn.execute(alter_sql)
+                    except Exception:
+                        pass  # Column already exists
             await conn.commit()
         self._initialized = True
 

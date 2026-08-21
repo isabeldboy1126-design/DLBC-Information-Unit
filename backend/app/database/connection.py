@@ -116,11 +116,18 @@ class AsyncConnectionAdapter:
         self._conn = conn
 
     def _convert_query_params(self, sql: str, params: Optional[Union[Sequence, Dict[str, Any]]]):
-        """Converts ? positional placeholders to :p_0, :p_1 for SQLAlchemy text()."""
+        """Converts ? positional placeholders to :p_0, :p_1 for SQLAlchemy text() and adapts DDL for Azure SQL."""
         import sqlalchemy
 
+        converted_sql = sql
+        # Adapt SQLite ALTER TABLE ... ADD COLUMN ... syntax for T-SQL (MSSQL uses ALTER TABLE ... ADD ...)
+        if "ADD COLUMN" in converted_sql.upper():
+            converted_sql = re.sub(r"\bADD\s+COLUMN\b", "ADD", converted_sql, flags=re.IGNORECASE)
+            converted_sql = re.sub(r"\bTEXT\b", "NVARCHAR(MAX)", converted_sql, flags=re.IGNORECASE)
+            converted_sql = re.sub(r"\bINTEGER\b", "INT", converted_sql, flags=re.IGNORECASE)
+
         if params is None:
-            return sqlalchemy.text(sql), {}
+            return sqlalchemy.text(converted_sql), {}
 
         if isinstance(params, (list, tuple)):
             param_dict = {}
@@ -133,19 +140,25 @@ class AsyncConnectionAdapter:
                 count += 1
                 return f":{p_name}"
 
-            converted_sql = re.sub(r"\?", _replace_placeholder, sql)
+            converted_sql = re.sub(r"\?", _replace_placeholder, converted_sql)
             return sqlalchemy.text(converted_sql), param_dict
 
         if isinstance(params, dict):
-            return sqlalchemy.text(sql), params
+            return sqlalchemy.text(converted_sql), params
 
-        return sqlalchemy.text(sql), params
+        return sqlalchemy.text(converted_sql), params
 
     def execute(self, sql: str, params: Optional[Union[Sequence, Dict[str, Any]]] = None):
         return _ExecuteContext(self, sql, params)
 
     async def executescript(self, script: str):
-        statements = [s.strip() for s in script.split(";") if s.strip()]
+        from app.database.models import INIT_SCHEMA_MSSQL
+        if "CREATE TABLE IF NOT EXISTS" in script:
+            script_to_run = INIT_SCHEMA_MSSQL
+        else:
+            script_to_run = script
+
+        statements = [s.strip() for s in script_to_run.split(";") if s.strip()]
         for stmt in statements:
             await self.execute(stmt)
 
