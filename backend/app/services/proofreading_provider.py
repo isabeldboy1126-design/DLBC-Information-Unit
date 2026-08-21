@@ -252,12 +252,13 @@ TASK INSTRUCTIONS FOR THE PROOFREADER:
             from google import genai
             from google.genai import types
 
-            client = genai.Client(api_key=api_key)
+            client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=120000))
 
             config = types.GenerateContentConfig(
                 temperature=0.1,  # Very low temperature for conservative proofreading
                 response_mime_type="application/json",
                 response_schema=ProofreadingOutputSchema,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
             )
 
             response = await client.aio.models.generate_content(

@@ -274,12 +274,13 @@ INSTRUCTIONS FOR FINAL EDITED REPORT:
             from google import genai
             from google.genai import types
 
-            client = genai.Client(api_key=api_key)
+            client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=120000))
 
             config = types.GenerateContentConfig(
                 temperature=0.2, # Low temperature for factual precision
                 response_mime_type="application/json",
                 response_schema=EditingOutputSchema,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
             )
 
             response = await client.aio.models.generate_content(

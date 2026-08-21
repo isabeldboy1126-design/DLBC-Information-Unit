@@ -281,13 +281,14 @@ Remember: Do not fabricate or extrapolate beyond what is in the verified transcr
             from google import genai
             from google.genai import types
 
-            client = genai.Client(api_key=api_key)
+            client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=120000))
 
             # Request structured JSON output
             config = types.GenerateContentConfig(
                 temperature=0.2, # Low temperature for factual precision
                 response_mime_type="application/json",
                 response_schema=ReportOutputSchema,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
             )
 
             # Use non-blocking async generation
