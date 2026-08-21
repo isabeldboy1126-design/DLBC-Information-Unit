@@ -233,6 +233,20 @@ function App() {
               setCurrentView('sessions')
             }
           }}
+          onGoToReporting={async () => {
+            setShowCompletionModal(false)
+            const targetSession =
+              sessionsHook.activeSession ||
+              sessionsHook.sessions.find((s) => s.session_id === completedSessionId) ||
+              sessionsHook.sessions[0]
+            if (targetSession) {
+              if (targetSession.flag_count === 0 && !targetSession.verified_text) {
+                await sessionsHook.confirmRawAsVerified(targetSession.session_id)
+              }
+              await sessionsHook.loadSession(targetSession.session_id)
+              setCurrentView('sessions')
+            }
+          }}
           onFinishForNow={() => {
             setShowCompletionModal(false)
             setCurrentView('dashboard')

@@ -15,6 +15,7 @@ export function SessionCompletionView({
   session,
   latestRecording,
   onBeginVerification,
+  onGoToReporting,
   onFinishForNow,
   onViewSessionDetails,
 }) {
@@ -116,26 +117,40 @@ export function SessionCompletionView({
               <span className="verify-icon">📑</span>
               <div className="verify-text">
                 <strong className="verify-heading">
-                  {flagCount > 0 ? 'Verification Required' : 'Verification Ready'}
+                  {flagCount > 0 ? 'Verification Required' : 'No Verification Required'}
                 </strong>
                 <p className="verify-desc">
                   {flagCount > 0
                     ? `The AI transcript flagged ${flagCount} section${flagCount !== 1 ? 's' : ''} requiring human review for theological accuracy or spelling.`
-                    : 'All transcript sections met high confidence thresholds. You can proceed directly or review if desired.'}
+                    : 'All transcript sections met high confidence thresholds. Ready to proceed directly to Information Unit Reporting.'}
                 </p>
               </div>
             </div>
 
-            {onBeginVerification && (
-              <button
-                type="button"
-                className="btn btn--primary btn--begin-verify"
-                onClick={onBeginVerification}
-                id="btn-begin-verification-completion"
-              >
-                <span>{flagCount > 0 ? `Begin Verification (${flagCount})` : 'Review Transcript'}</span>
-                <span>→</span>
-              </button>
+            {flagCount > 0 ? (
+              onBeginVerification && (
+                <button
+                  type="button"
+                  className="btn btn--primary btn--begin-verify"
+                  onClick={onBeginVerification}
+                  id="btn-begin-verification-completion"
+                >
+                  <span>Begin Verification ({flagCount})</span>
+                  <span>→</span>
+                </button>
+              )
+            ) : (
+              (onGoToReporting || onBeginVerification) && (
+                <button
+                  type="button"
+                  className="btn btn--primary btn--begin-verify"
+                  onClick={onGoToReporting || onBeginVerification}
+                  id="btn-go-to-reporting-completion"
+                >
+                  <span>Go to Reporting</span>
+                  <span>→</span>
+                </button>
+              )
             )}
           </div>
 

@@ -301,6 +301,11 @@ export function SessionHistoryList({
               badgeComponent = <span className="status-badge badge--verified">✓ Verified</span>
               actionBtnText = 'Continue to Reporting'
               actionBtnClass = 'btn--primary'
+            } else if (!isVerified && (s.flag_count === 0 || s.flag_count === undefined)) {
+              accentClass = 'session-card-accent--verified'
+              badgeComponent = <span className="status-badge badge--verified">✓ Ready for Reporting</span>
+              actionBtnText = 'Go to Reporting'
+              actionBtnClass = 'btn--primary'
             } else if (needsVerification) {
               accentClass = 'session-card-accent--verification'
               badgeComponent = <span className="status-badge badge--verification">Needs Verification</span>

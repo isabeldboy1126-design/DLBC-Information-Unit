@@ -478,21 +478,30 @@ export function SessionDetailView({
               <span>→</span>
             </button>
           </div>
-        ) : isVerified && rStatus !== 'reports_ready' ? (
+        ) : (isVerified || flagCount === 0) && rStatus !== 'reports_ready' ? (
           <div className="workspace-action-hero hero--reporting">
             <div className="action-hero-text">
-              <h2 className="action-hero-title">Verified Transcript Approved</h2>
+              <h2 className="action-hero-title">
+                {isVerified ? 'Verified Transcript Approved' : 'No Verification Required'}
+              </h2>
               <p className="action-hero-desc">
-                Ready to run dual independent Information Unit reporting drafts (Reporter A &amp; B).
+                {isVerified
+                  ? 'Ready to run dual independent Information Unit reporting drafts (Reporter A & B).'
+                  : 'All transcript sections met high confidence thresholds. Ready to run Information Unit reporting drafts.'}
               </p>
             </div>
             <button
               type="button"
               className="btn btn--primary btn--action-hero"
-              onClick={() => setActiveView('reporting')}
-              id="btn-workspace-open-reporting"
+              onClick={async () => {
+                if (!isVerified && flagCount === 0 && onConfirmRawAsVerified) {
+                  await onConfirmRawAsVerified(session.session_id)
+                }
+                setActiveView('reporting')
+              }}
+              id="btn-workspace-go-to-reporting"
             >
-              <span>Open Reporting Workspace</span>
+              <span>Go to Reporting</span>
               <span>→</span>
             </button>
           </div>
@@ -618,24 +627,29 @@ export function SessionDetailView({
           </div>
 
           {/* Tile 4: Reporter Drafts */}
-          <div className={`card artifact-tile ${rStatus !== 'reports_ready' ? 'artifact-tile--locked' : ''}`}>
+          <div className={`card artifact-tile ${rStatus !== 'reports_ready' && !isVerified && flagCount > 0 ? 'artifact-tile--locked' : ''}`}>
             <div className="artifact-tile-header">
               <span className="tile-icon">◈</span>
-              <span className={`badge ${rStatus === 'reports_ready' ? 'badge--success' : 'badge--secondary'}`}>
-                {rStatus === 'reports_ready' ? '✓ Ready' : '⊘ Locked'}
+              <span className={`badge ${rStatus === 'reports_ready' ? 'badge--success' : (isVerified || flagCount === 0) ? 'badge--info' : 'badge--secondary'}`}>
+                {rStatus === 'reports_ready' ? '✓ Ready' : (isVerified || flagCount === 0) ? '◎ Ready to Generate' : '⊘ Locked'}
               </span>
             </div>
             <div className="artifact-tile-body">
               <h4 className="artifact-tile-title">Reporter Drafts</h4>
-              <p className="artifact-tile-desc">{rStatus === 'reports_ready' ? 'Reporter A & B Complete' : 'Verification Required'}</p>
+              <p className="artifact-tile-desc">{rStatus === 'reports_ready' ? 'Reporter A & B Complete' : (isVerified || flagCount === 0) ? 'Ready for Reporting' : 'Verification Required'}</p>
             </div>
             <button
               type="button"
               className="btn-tile-action"
-              onClick={() => isVerified && setActiveView('reporting')}
-              disabled={!isVerified}
+              onClick={async () => {
+                if (!isVerified && flagCount === 0 && onConfirmRawAsVerified) {
+                  await onConfirmRawAsVerified(session.session_id)
+                }
+                setActiveView('reporting')
+              }}
+              disabled={!isVerified && flagCount > 0}
             >
-              {rStatus === 'reports_ready' ? 'View Reports' : 'Reports Locked'}
+              {rStatus === 'reports_ready' ? 'View Reports' : (isVerified || flagCount === 0) ? 'Go to Reporting' : 'Reports Locked'}
             </button>
           </div>
 
