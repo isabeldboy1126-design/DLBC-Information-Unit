@@ -79,6 +79,35 @@ class AsyncCursorAdapter:
     def rowcount(self) -> int:
         return getattr(self._result, "rowcount", -1)
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
+class _ExecuteContext:
+    """Supports both 'cursor = await conn.execute(...)' and 'async with conn.execute(...) as cursor:'."""
+
+    def __init__(self, conn_adapter: "AsyncConnectionAdapter", sql: str, params: Optional[Union[Sequence, Dict[str, Any]]] = None):
+        self._conn_adapter = conn_adapter
+        self._sql = sql
+        self._params = params
+
+    def __await__(self):
+        return self._execute().__await__()
+
+    async def _execute(self) -> AsyncCursorAdapter:
+        stmt, bound_params = self._conn_adapter._convert_query_params(self._sql, self._params)
+        res = await self._conn_adapter._conn.execute(stmt, bound_params)
+        return AsyncCursorAdapter(res)
+
+    async def __aenter__(self) -> AsyncCursorAdapter:
+        return await self._execute()
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
+
 
 class AsyncConnectionAdapter:
     """Wraps SQLAlchemy AsyncConnection to provide an aiosqlite-compatible API."""
@@ -112,10 +141,8 @@ class AsyncConnectionAdapter:
 
         return sqlalchemy.text(sql), params
 
-    async def execute(self, sql: str, params: Optional[Union[Sequence, Dict[str, Any]]] = None):
-        stmt, bound_params = self._convert_query_params(sql, params)
-        res = await self._conn.execute(stmt, bound_params)
-        return AsyncCursorAdapter(res)
+    def execute(self, sql: str, params: Optional[Union[Sequence, Dict[str, Any]]] = None):
+        return _ExecuteContext(self, sql, params)
 
     async def executescript(self, script: str):
         statements = [s.strip() for s in script.split(";") if s.strip()]
