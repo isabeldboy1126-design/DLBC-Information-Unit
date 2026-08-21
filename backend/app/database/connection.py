@@ -79,6 +79,15 @@ class AsyncCursorAdapter:
     def rowcount(self) -> int:
         return getattr(self._result, "rowcount", -1)
 
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self) -> AdaptedRow:
+        row = await self.fetchone()
+        if row is None:
+            raise StopAsyncIteration
+        return row
+
     async def __aenter__(self):
         return self
 

@@ -18,6 +18,8 @@ class CreateSessionRequest(BaseModel):
     title: Optional[str] = None
     provider_name: Optional[str] = "azure_speech"
     language_code: Optional[str] = "en-NG"
+    raw_text: Optional[str] = None
+    verified_text: Optional[str] = None
 
 
 class UpdateTitleRequest(BaseModel):
@@ -41,6 +43,8 @@ async def create_session(payload: CreateSessionRequest):
         title=payload.title,
         provider_name=payload.provider_name or "azure_speech",
         language_code=payload.language_code or "en-NG",
+        raw_text=payload.raw_text,
+        verified_text=payload.verified_text,
     )
     return {"session": session}
 

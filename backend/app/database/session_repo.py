@@ -100,6 +100,8 @@ class SessionRepository:
         language_code: str = "en-NG",
         start_time: Optional[float] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        raw_text: Optional[str] = None,
+        verified_text: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Creates a new durable Session record."""
         await self.init_db()
@@ -111,6 +113,9 @@ class SessionRepository:
         if not title or not title.strip():
             formatted_date = time.strftime("%d %b %Y, %I:%M %p", time.localtime(start_ts))
             title = f"Live Session — {formatted_date}"
+
+        v_text = verified_text or (raw_text if verified_text is None and raw_text else None)
+        v_status = "complete" if v_text else "not_started"
 
         session_record = {
             "session_id": session_id,
@@ -126,7 +131,9 @@ class SessionRepository:
             "audio_file_size": 0,
             "audio_duration_seconds": 0.0,
             "transcript_id": f"tr_{recording_id or session_id}",
-            "raw_text": "",
+            "raw_text": raw_text or "",
+            "verified_text": v_text,
+            "verification_status": v_status,
             "provider_name": provider_name,
             "language_code": language_code,
             "segment_count": 0,
@@ -150,10 +157,11 @@ class SessionRepository:
                         date_created = ?,
                         start_time = ?,
                         status = ?,
-                        recording_id = ?,
-                        audio_filename = ?,
                         provider_name = ?,
                         language_code = ?,
+                        raw_text = ?,
+                        verified_text = ?,
+                        verification_status = ?,
                         metadata_json = ?
                     WHERE session_id = ?
                     """,
@@ -162,10 +170,11 @@ class SessionRepository:
                         session_record["date_created"],
                         session_record["start_time"],
                         session_record["status"],
-                        session_record["recording_id"],
-                        session_record["audio_filename"],
                         session_record["provider_name"],
                         session_record["language_code"],
+                        session_record["raw_text"],
+                        session_record["verified_text"],
+                        session_record["verification_status"],
                         session_record["metadata_json"],
                         session_id,
                     ),
@@ -174,13 +183,19 @@ class SessionRepository:
                 await conn.execute(
                     """
                     INSERT INTO sessions (
-                        session_id, title, date_created, start_time, end_time, duration_seconds,
-                        status, recording_id, audio_filename, audio_file_path, audio_file_size,
-                        audio_duration_seconds, transcript_id, raw_text, provider_name,
-                        language_code, segment_count, flag_count, is_interrupted,
-                        recovery_notes, metadata_json
+                        session_id, title, date_created, start_time, end_time,
+                        duration_seconds, status, recording_id, audio_filename,
+                        audio_file_path, audio_file_size, audio_duration_seconds,
+                        transcript_id, raw_text, verified_text, verification_status,
+                        provider_name, language_code, segment_count, flag_count,
+                        is_interrupted, recovery_notes, metadata_json
                     ) VALUES (
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                        ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?,
+                        ?, ?, ?,
+                        ?, ?, ?, ?,
+                        ?, ?, ?, ?,
+                        ?, ?, ?
                     )
                     """,
                     (
@@ -198,6 +213,8 @@ class SessionRepository:
                         session_record["audio_duration_seconds"],
                         session_record["transcript_id"],
                         session_record["raw_text"],
+                        session_record["verified_text"],
+                        session_record["verification_status"],
                         session_record["provider_name"],
                         session_record["language_code"],
                         session_record["segment_count"],
@@ -209,7 +226,7 @@ class SessionRepository:
                 )
             await conn.commit()
 
-        return session_record
+        return await self.get_session(session_id)
 
     async def append_segment(
         self,
@@ -1109,9 +1126,8 @@ class SessionRepository:
                 """,
                 (session_id,),
             )
-            corrections = {}
-            async for vi in vi_cursor:
-                corrections[vi["segment_index"]] = vi["verified_text"]
+            vi_rows = await vi_cursor.fetchall()
+            corrections = {vi["segment_index"]: vi["verified_text"] for vi in vi_rows}
 
             # Get ALL raw segments in order
             seg_cursor = await conn.execute(
