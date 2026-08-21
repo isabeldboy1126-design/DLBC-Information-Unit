@@ -137,24 +137,76 @@ class SessionRepository:
         }
 
         async with get_db_connection() as conn:
-            await conn.execute(
-                """
-                INSERT OR REPLACE INTO sessions (
-                    session_id, title, date_created, start_time, end_time, duration_seconds,
-                    status, recording_id, audio_filename, audio_file_path, audio_file_size,
-                    audio_duration_seconds, transcript_id, raw_text, provider_name,
-                    language_code, segment_count, flag_count, is_interrupted,
-                    recovery_notes, metadata_json
-                ) VALUES (
-                    :session_id, :title, :date_created, :start_time, :end_time, :duration_seconds,
-                    :status, :recording_id, :audio_filename, :audio_file_path, :audio_file_size,
-                    :audio_duration_seconds, :transcript_id, :raw_text, :provider_name,
-                    :language_code, :segment_count, :flag_count, :is_interrupted,
-                    :recovery_notes, :metadata_json
-                )
-                """,
-                session_record,
+            cursor = await conn.execute(
+                "SELECT session_id FROM sessions WHERE session_id = ?",
+                (session_id,),
             )
+            existing = await cursor.fetchone()
+            if existing:
+                await conn.execute(
+                    """
+                    UPDATE sessions SET
+                        title = ?,
+                        date_created = ?,
+                        start_time = ?,
+                        status = ?,
+                        recording_id = ?,
+                        audio_filename = ?,
+                        provider_name = ?,
+                        language_code = ?,
+                        metadata_json = ?
+                    WHERE session_id = ?
+                    """,
+                    (
+                        session_record["title"],
+                        session_record["date_created"],
+                        session_record["start_time"],
+                        session_record["status"],
+                        session_record["recording_id"],
+                        session_record["audio_filename"],
+                        session_record["provider_name"],
+                        session_record["language_code"],
+                        session_record["metadata_json"],
+                        session_id,
+                    ),
+                )
+            else:
+                await conn.execute(
+                    """
+                    INSERT INTO sessions (
+                        session_id, title, date_created, start_time, end_time, duration_seconds,
+                        status, recording_id, audio_filename, audio_file_path, audio_file_size,
+                        audio_duration_seconds, transcript_id, raw_text, provider_name,
+                        language_code, segment_count, flag_count, is_interrupted,
+                        recovery_notes, metadata_json
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    )
+                    """,
+                    (
+                        session_record["session_id"],
+                        session_record["title"],
+                        session_record["date_created"],
+                        session_record["start_time"],
+                        session_record["end_time"],
+                        session_record["duration_seconds"],
+                        session_record["status"],
+                        session_record["recording_id"],
+                        session_record["audio_filename"],
+                        session_record["audio_file_path"],
+                        session_record["audio_file_size"],
+                        session_record["audio_duration_seconds"],
+                        session_record["transcript_id"],
+                        session_record["raw_text"],
+                        session_record["provider_name"],
+                        session_record["language_code"],
+                        session_record["segment_count"],
+                        session_record["flag_count"],
+                        session_record["is_interrupted"],
+                        session_record["recovery_notes"],
+                        session_record["metadata_json"],
+                    ),
+                )
             await conn.commit()
 
         return session_record
@@ -172,52 +224,100 @@ class SessionRepository:
         words: Optional[List[Dict[str, Any]]] = None,
     ):
         """
-        Progressively persists a newly finalized transcript segment to SQLite.
+        Progressively persists a newly finalized transcript segment.
         Updates session segment count and flag count durably.
         """
         segment_id = f"seg_{session_id}_{segment_index}_{uuid.uuid4().hex[:6]}"
         flags_json = json.dumps(flags or [])
         words_json = json.dumps(words or [])
-        flag_increment = len(flags or [])
 
         async with get_db_connection() as conn:
-            # 1. Insert segment
-            await conn.execute(
-                """
-                INSERT OR REPLACE INTO session_segments (
-                    segment_id, session_id, segment_index, start_time, end_time,
-                    text, confidence, is_low_confidence, flags_json, words_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    segment_id,
-                    session_id,
-                    segment_index,
-                    start_time,
-                    end_time,
-                    text,
-                    confidence,
-                    1 if is_low_confidence else 0,
-                    flags_json,
-                    words_json,
-                ),
+            # 1. Insert or update segment
+            seg_chk = await conn.execute(
+                "SELECT segment_id FROM session_segments WHERE segment_id = ?",
+                (segment_id,),
             )
+            if await seg_chk.fetchone():
+                await conn.execute(
+                    """
+                    UPDATE session_segments SET
+                        session_id = ?, segment_index = ?, start_time = ?, end_time = ?,
+                        text = ?, confidence = ?, is_low_confidence = ?, flags_json = ?, words_json = ?
+                    WHERE segment_id = ?
+                    """,
+                    (
+                        session_id,
+                        segment_index,
+                        start_time,
+                        end_time,
+                        text,
+                        confidence,
+                        1 if is_low_confidence else 0,
+                        flags_json,
+                        words_json,
+                        segment_id,
+                    ),
+                )
+            else:
+                await conn.execute(
+                    """
+                    INSERT INTO session_segments (
+                        segment_id, session_id, segment_index, start_time, end_time,
+                        text, confidence, is_low_confidence, flags_json, words_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        segment_id,
+                        session_id,
+                        segment_index,
+                        start_time,
+                        end_time,
+                        text,
+                        confidence,
+                        1 if is_low_confidence else 0,
+                        flags_json,
+                        words_json,
+                    ),
+                )
 
-            # 2. Update session duration and counts
+            # 2. Update session duration and counts in a database-agnostic manner
+            seg_cur = await conn.execute(
+                "SELECT segment_index, text, flags_json, end_time FROM session_segments WHERE session_id = ? ORDER BY segment_index ASC",
+                (session_id,),
+            )
+            all_segs = await seg_cur.fetchall()
+            seg_count = len(all_segs)
+            total_flags = 0
+            all_texts = []
+            max_end = end_time
+            for s in all_segs:
+                sd = dict(s)
+                f_list = json.loads(sd.get("flags_json") or "[]")
+                total_flags += len(f_list)
+                if sd.get("text"):
+                    all_texts.append(sd["text"])
+                if sd.get("end_time") and sd["end_time"] > max_end:
+                    max_end = sd["end_time"]
+            full_raw_text = " ".join(all_texts)
+
+            sess_cur = await conn.execute(
+                "SELECT duration_seconds FROM sessions WHERE session_id = ?",
+                (session_id,),
+            )
+            sess_row = await sess_cur.fetchone()
+            curr_dur = dict(sess_row).get("duration_seconds") or 0.0 if sess_row else 0.0
+            new_dur = max(float(curr_dur), float(max_end))
+
             await conn.execute(
                 """
                 UPDATE sessions
-                SET segment_count = (SELECT COUNT(*) FROM session_segments WHERE session_id = ?),
-                    flag_count = (SELECT SUM(json_array_length(flags_json)) FROM session_segments WHERE session_id = ?),
-                    duration_seconds = MAX(duration_seconds, ?),
-                    raw_text = (
-                        SELECT GROUP_CONCAT(text, ' ') FROM (
-                            SELECT text FROM session_segments WHERE session_id = ? ORDER BY segment_index ASC
-                        )
-                    )
+                SET segment_count = ?,
+                    flag_count = ?,
+                    duration_seconds = ?,
+                    raw_text = ?
                 WHERE session_id = ?
                 """,
-                (session_id, session_id, end_time, session_id, session_id),
+                (seg_count, total_flags, new_dur, full_raw_text, session_id),
             )
             await conn.commit()
 
@@ -235,17 +335,16 @@ class SessionRepository:
                 """,
                 (flags_json, session_id, segment_index),
             )
-            # Recompute total flag count for session
+            # Recompute total flag count for session cleanly
+            seg_cur = await conn.execute(
+                "SELECT flags_json FROM session_segments WHERE session_id = ?",
+                (session_id,),
+            )
+            all_segs = await seg_cur.fetchall()
+            total_flags = sum(len(json.loads(dict(s).get("flags_json") or "[]")) for s in all_segs)
             await conn.execute(
-                """
-                UPDATE sessions
-                SET flag_count = (
-                    SELECT COALESCE(SUM(json_array_length(flags_json)), 0)
-                    FROM session_segments WHERE session_id = ?
-                )
-                WHERE session_id = ?
-                """,
-                (session_id, session_id),
+                "UPDATE sessions SET flag_count = ? WHERE session_id = ?",
+                (total_flags, session_id),
             )
             await conn.commit()
 
@@ -469,7 +568,7 @@ class SessionRepository:
 
                 await conn.execute(
                     """
-                    INSERT OR IGNORE INTO sessions (
+                    INSERT INTO sessions (
                         session_id, title, date_created, duration_seconds, status,
                         recording_id, audio_filename, audio_file_path, audio_file_size,
                         audio_duration_seconds, segment_count, flag_count, is_interrupted
@@ -544,73 +643,88 @@ class SessionRepository:
                     # Insert segments if not already present
                     for idx, seg in enumerate(segments):
                         seg_id = f"seg_{s_id}_{idx}"
-                        await conn.execute(
-                            """
-                            INSERT OR IGNORE INTO session_segments (
-                                segment_id, session_id, segment_index, start_time, end_time,
-                                text, confidence, is_low_confidence, flags_json, words_json
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """,
-                            (
-                                seg_id,
-                                s_id,
-                                idx,
-                                seg.get("start_time", 0.0),
-                                seg.get("end_time", 0.0),
-                                seg.get("text", ""),
-                                seg.get("confidence"),
-                                1 if seg.get("is_low_confidence") else 0,
-                                json.dumps(seg.get("flags", [])),
-                                json.dumps(seg.get("words", [])),
-                            ),
+                        seg_chk = await conn.execute(
+                            "SELECT segment_id FROM session_segments WHERE segment_id = ?",
+                            (seg_id,),
                         )
+                        if not await seg_chk.fetchone():
+                            await conn.execute(
+                                """
+                                INSERT INTO session_segments (
+                                    segment_id, session_id, segment_index, start_time, end_time,
+                                    text, confidence, is_low_confidence, flags_json, words_json
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                """,
+                                (
+                                    seg_id,
+                                    s_id,
+                                    idx,
+                                    seg.get("start_time", 0.0),
+                                    seg.get("end_time", 0.0),
+                                    seg.get("text", ""),
+                                    seg.get("confidence"),
+                                    1 if seg.get("is_low_confidence") else 0,
+                                    json.dumps(seg.get("flags", [])),
+                                    json.dumps(seg.get("words", [])),
+                                ),
+                            )
                 else:
                     # Create standalone transcript session (e.g. from uploaded file)
                     created_at = tr_meta.get("created_at") or time.strftime("%Y-%m-%dT%H:%M:%SZ")
                     title = f"Transcript — {tr_meta.get('original_filename', tr_id)}"
-                    await conn.execute(
-                        """
-                        INSERT OR IGNORE INTO sessions (
-                            session_id, title, date_created, duration_seconds, status,
-                            recording_id, transcript_id, raw_text, provider_name,
-                            language_code, segment_count, flag_count, is_interrupted
-                        ) VALUES (?, ?, ?, ?, 'completed', ?, ?, ?, ?, 'en-NG', ?, ?, 0)
-                        """,
-                        (
-                            linked_session_id,
-                            title,
-                            created_at,
-                            tr_meta.get("duration_seconds", 0.0),
-                            rec_ref,
-                            tr_id,
-                            raw_text,
-                            tr_data.get("provider_name", "azure_speech"),
-                            len(segments),
-                            flags_count,
-                        ),
+                    sess_chk = await conn.execute(
+                        "SELECT session_id FROM sessions WHERE session_id = ?",
+                        (linked_session_id,),
                     )
-                    for idx, seg in enumerate(segments):
-                        seg_id = f"seg_{linked_session_id}_{idx}"
+                    if not await sess_chk.fetchone():
                         await conn.execute(
                             """
-                            INSERT OR IGNORE INTO session_segments (
-                                segment_id, session_id, segment_index, start_time, end_time,
-                                text, confidence, is_low_confidence, flags_json, words_json
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO sessions (
+                                session_id, title, date_created, duration_seconds, status,
+                                recording_id, transcript_id, raw_text, provider_name,
+                                language_code, segment_count, flag_count, is_interrupted
+                            ) VALUES (?, ?, ?, ?, 'completed', ?, ?, ?, ?, 'en-NG', ?, ?, 0)
                             """,
                             (
-                                seg_id,
                                 linked_session_id,
-                                idx,
-                                seg.get("start_time", 0.0),
-                                seg.get("end_time", 0.0),
-                                seg.get("text", ""),
-                                seg.get("confidence"),
-                                1 if seg.get("is_low_confidence") else 0,
-                                json.dumps(seg.get("flags", [])),
-                                json.dumps(seg.get("words", [])),
+                                title,
+                                created_at,
+                                tr_meta.get("duration_seconds", 0.0),
+                                rec_ref,
+                                tr_id,
+                                raw_text,
+                                tr_data.get("provider_name", "azure_speech"),
+                                len(segments),
+                                flags_count,
                             ),
                         )
+                    for idx, seg in enumerate(segments):
+                        seg_id = f"seg_{linked_session_id}_{idx}"
+                        seg_chk = await conn.execute(
+                            "SELECT segment_id FROM session_segments WHERE segment_id = ?",
+                            (seg_id,),
+                        )
+                        if not await seg_chk.fetchone():
+                            await conn.execute(
+                                """
+                                INSERT INTO session_segments (
+                                    segment_id, session_id, segment_index, start_time, end_time,
+                                    text, confidence, is_low_confidence, flags_json, words_json
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                """,
+                                (
+                                    seg_id,
+                                    linked_session_id,
+                                    idx,
+                                    seg.get("start_time", 0.0),
+                                    seg.get("end_time", 0.0),
+                                    seg.get("text", ""),
+                                    seg.get("confidence"),
+                                    1 if seg.get("is_low_confidence") else 0,
+                                    json.dumps(seg.get("flags", [])),
+                                    json.dumps(seg.get("words", [])),
+                                ),
+                            )
 
             await conn.commit()
 
@@ -673,26 +787,31 @@ class SessionRepository:
                 for f in flags:
                     flag_reasons.append(f)
 
-                await conn.execute(
-                    """
-                    INSERT OR IGNORE INTO verification_items (
-                        item_id, session_id, segment_index, original_text, verified_text,
-                        start_time, end_time, original_confidence, action,
-                        correction_note, verified_at, flag_reasons
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, ?)
-                    """,
-                    (
-                        item_id,
-                        session_id,
-                        seg["segment_index"],
-                        seg["text"],
-                        seg["text"],  # pre-populate verified_text with original
-                        seg["start_time"],
-                        seg["end_time"],
-                        seg["confidence"],
-                        json.dumps(flag_reasons),
-                    ),
+                vi_chk = await conn.execute(
+                    "SELECT item_id FROM verification_items WHERE session_id = ? AND segment_index = ?",
+                    (session_id, seg["segment_index"]),
                 )
+                if not await vi_chk.fetchone():
+                    await conn.execute(
+                        """
+                        INSERT INTO verification_items (
+                            item_id, session_id, segment_index, original_text, verified_text,
+                            start_time, end_time, original_confidence, action,
+                            correction_note, verified_at, flag_reasons
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, ?)
+                        """,
+                        (
+                            item_id,
+                            session_id,
+                            seg["segment_index"],
+                            seg["text"],
+                            seg["text"],  # pre-populate verified_text with original
+                            seg["start_time"],
+                            seg["end_time"],
+                            seg["confidence"],
+                            json.dumps(flag_reasons),
+                        ),
+                    )
 
             # Update session verification state
             new_status = "in_progress" if items_total > 0 else "not_started"

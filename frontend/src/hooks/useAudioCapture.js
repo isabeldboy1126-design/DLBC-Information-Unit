@@ -49,6 +49,7 @@ export function useAudioCapture() {
   const startTimeRef = useRef(0)
   const isStartingRef = useRef(false)
   const isRecordingRef = useRef(false)
+  const activeSessionIdRef = useRef(null)
 
   // 1. Enumerate available audio input devices
   const updateDeviceList = useCallback(async () => {
@@ -473,8 +474,11 @@ export function useAudioCapture() {
           try {
             const data = JSON.parse(event.data)
 
-            // Live Transcription Event Handlers
-            if (data.type === 'live_transcription_status') {
+            if (data.status === 'ready') {
+              if (data.sessionId) {
+                activeSessionIdRef.current = data.sessionId
+              }
+            } else if (data.type === 'live_transcription_status') {
               setLiveTranscript((prev) => ({
                 ...prev,
                 status: data.status,
@@ -674,7 +678,7 @@ export function useAudioCapture() {
                     wsRef.current = null
                   }
                 }, 200)
-                resolve(data.session || { session_id: data.recording?.session_id || data.transcript?.recording_id })
+                resolve(data.session || (activeSessionIdRef.current ? { session_id: activeSessionIdRef.current } : { session_id: data.recording?.session_id || data.transcript?.recording_id }))
               }
             }
           } catch (e) {}
