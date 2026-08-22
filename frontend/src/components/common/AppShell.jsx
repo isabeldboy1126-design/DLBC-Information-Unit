@@ -13,7 +13,8 @@ import React, { useState, useEffect } from 'react'
  *   - Right: Notification icon alone.
  */
 export function AppShell({
-  activeView, // 'dashboard' | 'sessions' | 'settings' | 'new_live' | 'transcribe'
+  activeView, // 'dashboard' | 'sessions' | 'settings' | 'new_live' | 'transcribe' | 'live_recording'
+  isLiveRecordingActive = false,
   onNavigate,
   screenTitle = 'Dashboard',
   onBack = null,
@@ -84,15 +85,18 @@ export function AppShell({
         <div className="sidebar-cta-container">
           <button
             type="button"
-            className="sidebar-live-btn"
+            className={`sidebar-live-btn ${isLiveRecordingActive ? 'sidebar-live-btn--recording' : ''}`}
             onClick={() => {
               onStartLiveSession()
               closeMobileNav()
             }}
             id="sidebar-btn-start-live"
+            title={isLiveRecordingActive ? 'Return to active recording session' : 'Start a new live recording session'}
           >
             <span className="live-pulse-dot">●</span>
-            <span className="live-btn-text">START LIVE SESSION</span>
+            <span className="live-btn-text">
+              {isLiveRecordingActive ? 'ACTIVE RECORDING' : 'START LIVE SESSION'}
+            </span>
           </button>
         </div>
 

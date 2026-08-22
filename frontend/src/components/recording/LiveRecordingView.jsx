@@ -17,6 +17,7 @@ export function LiveRecordingView({
   liveTranscript = [],
   audioLevel = 0,
   hasAudioSignal = false,
+  onMinimize,
   onStopRecording,
   onToggleManualFlag,
 }) {
@@ -102,8 +103,20 @@ export function LiveRecordingView({
           </div>
         </div>
 
-        {/* Right: Red Stop Session Action */}
+        {/* Right: Actions */}
         <div className="live-bar-right">
+          {onMinimize && (
+            <button
+              type="button"
+              className="btn btn--outline btn--minimize-recording"
+              onClick={onMinimize}
+              id="btn-minimize-live-recording"
+              title="Minimize recorder to floating widget and use other app features"
+            >
+              <span className="minimize-icon">🗕</span>
+              <span>Minimize</span>
+            </button>
+          )}
           <button
             type="button"
             className="btn btn--danger btn--stop-session"

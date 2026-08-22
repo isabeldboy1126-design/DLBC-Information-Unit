@@ -8,6 +8,7 @@ import { AppShell } from './components/common/AppShell'
 import { DashboardView } from './components/dashboard/DashboardView'
 import { NewLiveSessionView } from './components/sessions/NewLiveSessionView'
 import { LiveRecordingView } from './components/recording/LiveRecordingView'
+import { FloatingRecordingController } from './components/recording/FloatingRecordingController'
 import { SessionCompletionView } from './components/sessions/SessionCompletionView'
 import { SessionHistoryList } from './components/sessions/SessionHistoryList'
 import { SessionDetailView } from './components/sessions/SessionDetailView'
@@ -23,8 +24,9 @@ import { ErrorBanner } from './components/ErrorBanner'
 import './App.css'
 
 function App() {
-  // Navigation: 'dashboard' | 'sessions' | 'new_live' | 'transcribe' | 'settings'
+  // Navigation: 'dashboard' | 'sessions' | 'new_live' | 'transcribe' | 'settings' | 'live_recording'
   const [currentView, setCurrentView] = useState('dashboard')
+  const [isRecorderMinimized, setIsRecorderMinimized] = useState(false)
   const [sessionMetadata, setSessionMetadata] = useState({
     title: 'Sunday Morning Worship Service',
     eventType: 'Sunday Worship Service',
@@ -48,24 +50,28 @@ function App() {
   // Phase 4: Persistent Church Sessions Hook
   const sessionsHook = useSessions()
 
-  // Auto-switch to live_recording when recording starts
+  // Synchronize modal and minimized state when recording starts/stops
   useEffect(() => {
     if (liveAudio.isRecording) {
       setShowCompletionModal(false)
+    } else {
+      setIsRecorderMinimized(false)
     }
   }, [liveAudio.isRecording])
 
   // Handle Start Recording from NewLiveSessionView
   const handleStartRecording = async (meta) => {
     setSessionMetadata(meta)
+    setIsRecorderMinimized(false)
     const success = await liveAudio.startRecording(meta.title, meta)
     if (success) {
-      // isRecording becomes true, rendering LiveRecordingView
+      setIsRecorderMinimized(false)
     }
   }
 
   // Handle Stop Recording
   const handleStopRecording = async () => {
+    setIsRecorderMinimized(false)
     const recordingResult = await liveAudio.stopRecording()
     await sessionsHook.fetchSessions()
     const targetId =
@@ -80,16 +86,15 @@ function App() {
     setShowCompletionModal(true)
   }
 
-  // Navigation Guard for active recording
+  // Seamless Navigation Handler allowing background recording in floating mode
   const handleNavigate = (view) => {
-    if (liveAudio.isRecording && view !== 'live_recording') {
-      if (
-        !window.confirm(
-          'A live recording is currently active! Leaving this screen will not stop the recording, but we recommend monitoring live status. Proceed anyway?'
-        )
-      ) {
+    if (liveAudio.isRecording) {
+      if (view === 'live_recording') {
+        setIsRecorderMinimized(false)
         return
       }
+      // Switch to floating recorder mode on navigation to any other section
+      setIsRecorderMinimized(true)
     }
     if (view === 'sessions') {
       sessionsHook.closeActiveSession()
@@ -107,10 +112,10 @@ function App() {
 
   // Contextual Top Header computation: Screen Title & Back Action
   const getHeaderContext = () => {
-    if (liveAudio.isRecording) {
+    if (liveAudio.isRecording && !isRecorderMinimized) {
       return {
         title: 'Live Session Recording',
-        onBack: null,
+        onBack: () => setIsRecorderMinimized(true),
       }
     }
     if (showCompletionModal) {
@@ -171,15 +176,18 @@ function App() {
       activeView={
         showCompletionModal
           ? 'dashboard'
-          : liveAudio.isRecording
+          : liveAudio.isRecording && !isRecorderMinimized
           ? 'live_recording'
           : currentView
       }
+      isLiveRecordingActive={liveAudio.isRecording}
       onNavigate={handleNavigate}
       screenTitle={currentScreenTitle}
       onBack={currentScreenBack}
       onStartLiveSession={() => {
-        if (!liveAudio.isRecording) {
+        if (liveAudio.isRecording) {
+          setIsRecorderMinimized(false)
+        } else {
           setCurrentView('new_live')
         }
       }}
@@ -199,15 +207,16 @@ function App() {
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* VIEW: LIVE RECORDING ACTIVE (Overrides when recording)        */}
+      {/* VIEW: LIVE RECORDING ACTIVE (Full Screen Mode)               */}
       {/* ------------------------------------------------------------- */}
-      {liveAudio.isRecording ? (
+      {liveAudio.isRecording && !isRecorderMinimized ? (
         <LiveRecordingView
           sessionMetadata={sessionMetadata}
           elapsedTime={liveAudio.elapsedTime}
           liveTranscript={liveAudio.liveTranscript}
           audioLevel={liveAudio.audioLevel}
           hasAudioSignal={liveAudio.hasAudioSignal}
+          onMinimize={() => setIsRecorderMinimized(true)}
           onStopRecording={handleStopRecording}
           onToggleManualFlag={liveAudio.toggleManualFlag}
         />
@@ -270,8 +279,19 @@ function App() {
         /* ----------------------------------------------------------- */
         <DashboardView
           sessions={sessionsHook.sessions}
-          onStartLiveSession={() => setCurrentView('new_live')}
+          onStartLiveSession={() => {
+            if (liveAudio.isRecording) {
+              setIsRecorderMinimized(false)
+            } else {
+              setCurrentView('new_live')
+            }
+          }}
           onOpenSession={(sessionId) => {
+            const activeRecId = liveAudio.latestSession?.session_id || liveAudio.latestRecording?.session_id
+            if (liveAudio.isRecording && (sessionId === activeRecId || sessionsHook.sessions.find((s) => s.session_id === sessionId)?.status === 'recording')) {
+              setIsRecorderMinimized(false)
+              return
+            }
             sessionsHook.loadSession(sessionId)
             setCurrentView('sessions')
           }}
@@ -291,11 +311,25 @@ function App() {
         /* ----------------------------------------------------------- */
         /* VIEW 2: NEW LIVE SESSION SETUP                              */
         /* ----------------------------------------------------------- */
-        <NewLiveSessionView
-          liveAudio={liveAudio}
-          onStartRecording={handleStartRecording}
-          onBack={() => setCurrentView('dashboard')}
-        />
+        liveAudio.isRecording ? (
+          <div className="card text-center p-4">
+            <h3>Live Recording in Progress</h3>
+            <p>An active recording is already running in the background.</p>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => setIsRecorderMinimized(false)}
+            >
+              Open Active Recorder
+            </button>
+          </div>
+        ) : (
+          <NewLiveSessionView
+            liveAudio={liveAudio}
+            onStartRecording={handleStartRecording}
+            onBack={() => setCurrentView('dashboard')}
+          />
+        )
       ) : currentView === 'sessions' ? (
         /* ----------------------------------------------------------- */
         /* VIEW 3: SESSIONS HISTORY & WORKSPACE                        */
@@ -304,11 +338,22 @@ function App() {
           <SessionHistoryList
             sessions={sessionsHook.sessions}
             onOpenSession={(sessionId) => {
+              const activeRecId = liveAudio.latestSession?.session_id || liveAudio.latestRecording?.session_id
+              if (liveAudio.isRecording && (sessionId === activeRecId || sessionsHook.sessions.find((s) => s.session_id === sessionId)?.status === 'recording')) {
+                setIsRecorderMinimized(false)
+                return
+              }
               sessionsHook.loadSession(sessionId)
             }}
             onDeleteSession={sessionsHook.deleteSession}
             onRefresh={sessionsHook.fetchSessions}
-            onStartNewSession={() => setCurrentView('new_live')}
+            onStartNewSession={() => {
+              if (liveAudio.isRecording) {
+                setIsRecorderMinimized(false)
+              } else {
+                setCurrentView('new_live')
+              }
+            }}
             isLoading={sessionsHook.isLoading}
             initialStatusFilter={sessionsStatusFilter}
           />
@@ -388,6 +433,21 @@ function App() {
         /* ----------------------------------------------------------- */
         <SettingsView onBack={() => handleNavigate('dashboard')} />
       ) : null}
+
+      {/* ------------------------------------------------------------- */}
+      {/* FLOATING CONTROLLER: Persistent across all app views when min */}
+      {/* ------------------------------------------------------------- */}
+      {liveAudio.isRecording && isRecorderMinimized && (
+        <FloatingRecordingController
+          sessionMetadata={sessionMetadata}
+          elapsedTime={liveAudio.elapsedTime}
+          liveTranscript={liveAudio.liveTranscript}
+          audioLevel={liveAudio.audioLevel}
+          hasAudioSignal={liveAudio.hasAudioSignal}
+          onMaximize={() => setIsRecorderMinimized(false)}
+          onStopRecording={handleStopRecording}
+        />
+      )}
     </AppShell>
   )
 }
