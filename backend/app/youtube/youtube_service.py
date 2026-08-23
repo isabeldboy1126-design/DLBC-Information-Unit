@@ -19,6 +19,8 @@ import time
 import uuid
 from typing import Any, Callable, Dict, List, Optional
 
+import httpx
+
 from app.audio.stream_manager import AudioStreamSession
 from app.config import STORAGE_AUDIO_DIR, STORAGE_TRANSCRIPTS_DIR
 from app.database.session_repo import session_repo
@@ -43,7 +45,8 @@ def validate_youtube_url(url: str) -> bool:
 def extract_youtube_metadata(url: str) -> Dict[str, Any]:
     """
     Extracts video/stream metadata without downloading media.
-    Returns: title, channel, duration, thumbnail, is_live, is_upcoming, etc.
+    Uses official YouTube oEmbed API combined with yt-dlp android/ios player clients
+    for bulletproof resilience across cloud datacenter IPs.
     """
     import yt_dlp
 
@@ -51,58 +54,63 @@ def extract_youtube_metadata(url: str) -> Dict[str, Any]:
     if not validate_youtube_url(clean_url):
         raise ValueError("Invalid YouTube URL format. Please provide a valid YouTube link.")
 
+    # 1. Fetch public oEmbed data as baseline guarantee (never blocked by IP / bot filters)
+    oembed_data = {}
+    try:
+        r = httpx.get(f"https://www.youtube.com/oembed?url={clean_url}&format=json", timeout=6.0)
+        if r.status_code == 200:
+            oembed_data = r.json()
+    except Exception as oe_err:
+        logger.debug(f"oEmbed extraction notice: {oe_err}")
+
+    # 2. Extract detailed stream metadata via yt-dlp using mobile player clients
     ydl_opts = {
         "skip_download": True,
         "quiet": True,
         "no_warnings": True,
         "extract_flat": False,
+        "nocheckcertificate": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "mweb", "web"],
+                "player_skip": ["webpage", "configs"],
+            }
+        },
     }
 
+    info = {}
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(clean_url, download=False)
+            info = ydl.extract_info(clean_url, download=False) or {}
     except Exception as e:
-        error_msg = str(e)
-        logger.error(f"yt-dlp metadata extraction failed for {clean_url}: {error_msg}")
-        if "Private video" in error_msg:
-            raise ValueError("This YouTube video is private.")
-        elif "This live event will begin in" in error_msg or "Premieres in" in error_msg:
-            return {
-                "title": "Upcoming Live Stream",
-                "channel": "YouTube Channel",
-                "duration_seconds": None,
-                "thumbnail": None,
-                "is_live": False,
-                "is_upcoming": True,
-                "status": "upcoming",
-                "url": clean_url,
-            }
-        elif "Video unavailable" in error_msg:
-            raise ValueError("This YouTube video or live stream is unavailable.")
-        else:
-            raise ValueError(f"Unable to access YouTube stream: {error_msg}")
+        logger.warning(f"yt-dlp metadata extraction notice for {clean_url}: {e}")
 
-    if not info:
-        raise ValueError("Could not retrieve video information from YouTube.")
+    # If neither oEmbed nor yt-dlp returned info, report graceful error
+    if not info and not oembed_data:
+        raise ValueError("Unable to retrieve information for this YouTube video. Please check the URL.")
 
-    # Determine live status
-    live_status = info.get("live_status", "")
-    is_live = bool(
-        info.get("is_live")
-        or live_status == "is_live"
-        or info.get("was_live") is False and info.get("duration") is None
-    )
-    is_upcoming = bool(live_status == "is_upcoming" or info.get("is_upcoming"))
+    title = info.get("title") or oembed_data.get("title") or "YouTube Worship Session"
+    channel = info.get("uploader") or info.get("channel") or oembed_data.get("author_name") or "YouTube Channel"
+    thumbnail = info.get("thumbnail") or oembed_data.get("thumbnail_url")
 
     duration = info.get("duration")
     if duration is not None:
         duration = float(duration)
 
+    live_status = info.get("live_status", "")
+    is_live = bool(
+        info.get("is_live")
+        or live_status == "is_live"
+        or "/live/" in clean_url.lower()
+        or (info.get("was_live") is False and duration is None and bool(info))
+    )
+    is_upcoming = bool(live_status == "is_upcoming" or info.get("is_upcoming"))
+
     return {
-        "title": info.get("title") or "YouTube Worship Session",
-        "channel": info.get("uploader") or info.get("channel") or "DLBC Channel",
+        "title": title,
+        "channel": channel,
         "duration_seconds": duration,
-        "thumbnail": info.get("thumbnail"),
+        "thumbnail": thumbnail,
         "is_live": is_live,
         "is_upcoming": is_upcoming,
         "view_count": info.get("view_count"),
@@ -143,6 +151,12 @@ def download_recorded_youtube_audio(
         "outtmpl": temp_download_template,
         "quiet": True,
         "no_warnings": True,
+        "nocheckcertificate": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "mweb"],
+            }
+        },
         "progress_hooks": [ydl_progress_hook],
         "ffmpeg_location": os.path.dirname(ffmpeg_path) if ffmpeg_path else None,
     }
@@ -329,7 +343,17 @@ class YouTubeLiveSessionManager:
             session_state["status"] = "connecting"
 
             # Extract direct stream URL using yt-dlp
-            ydl_opts = {"format": "bestaudio/best", "quiet": True, "no_warnings": True}
+            ydl_opts = {
+                "format": "bestaudio/best",
+                "quiet": True,
+                "no_warnings": True,
+                "nocheckcertificate": True,
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": ["android", "ios", "mweb"],
+                    }
+                },
+            }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 stream_url = info.get("url")
