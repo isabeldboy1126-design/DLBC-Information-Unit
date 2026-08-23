@@ -42,10 +42,22 @@ def validate_youtube_url(url: str) -> bool:
     return bool(YOUTUBE_URL_REGEX.match(url.strip()))
 
 
+def get_yt_extractor_args() -> dict:
+    """Returns extractor arguments configured with bgutil PO-Token provider and mobile player clients."""
+    return {
+        "youtubepot-bgutilhttp": {
+            "base_url": ["http://127.0.0.1:4416"],
+        },
+        "youtube": {
+            "player_client": ["mweb", "web", "android"],
+        },
+    }
+
+
 def extract_youtube_metadata(url: str) -> Dict[str, Any]:
     """
     Extracts video/stream metadata without downloading media.
-    Uses official YouTube oEmbed API combined with yt-dlp android/ios player clients
+    Uses official YouTube oEmbed API combined with yt-dlp bgutil PO Token provider
     for bulletproof resilience across cloud datacenter IPs.
     """
     import yt_dlp
@@ -56,38 +68,45 @@ def extract_youtube_metadata(url: str) -> Dict[str, Any]:
 
     # 1. Fetch public oEmbed data as baseline guarantee (never blocked by IP / bot filters)
     oembed_data = {}
+    oembed_status = 200
     try:
         r = httpx.get(f"https://www.youtube.com/oembed?url={clean_url}&format=json", timeout=6.0)
+        oembed_status = r.status_code
         if r.status_code == 200:
             oembed_data = r.json()
     except Exception as oe_err:
         logger.debug(f"oEmbed extraction notice: {oe_err}")
 
-    # 2. Extract detailed stream metadata via yt-dlp using mobile player clients
+    # 2. Extract detailed stream metadata via yt-dlp with PO-Token Provider
     ydl_opts = {
         "skip_download": True,
         "quiet": True,
         "no_warnings": True,
         "extract_flat": False,
         "nocheckcertificate": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios", "mweb", "web"],
-                "player_skip": ["webpage", "configs"],
-            }
-        },
+        "extractor_args": get_yt_extractor_args(),
     }
 
     info = {}
+    yt_error_msg = ""
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(clean_url, download=False) or {}
     except Exception as e:
+        yt_error_msg = str(e)
         logger.warning(f"yt-dlp metadata extraction notice for {clean_url}: {e}")
 
-    # If neither oEmbed nor yt-dlp returned info, report graceful error
+    # If both oEmbed returned 404/not found and yt-dlp failed, the video is definitely unavailable
+    if oembed_status in (404, 400) and not info:
+        raise ValueError("This YouTube video or live broadcast is unavailable or has been removed.")
+
     if not info and not oembed_data:
-        raise ValueError("Unable to retrieve information for this YouTube video. Please check the URL.")
+        if "Private video" in yt_error_msg:
+            raise ValueError("This YouTube video is private.")
+        elif "Video unavailable" in yt_error_msg:
+            raise ValueError("This YouTube video is unavailable or has been removed.")
+        else:
+            raise ValueError(f"Unable to access YouTube stream: {yt_error_msg or 'Video unavailable'}")
 
     title = info.get("title") or oembed_data.get("title") or "YouTube Worship Session"
     channel = info.get("uploader") or info.get("channel") or oembed_data.get("author_name") or "YouTube Channel"
@@ -152,11 +171,7 @@ def download_recorded_youtube_audio(
         "quiet": True,
         "no_warnings": True,
         "nocheckcertificate": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios", "mweb"],
-            }
-        },
+        "extractor_args": get_yt_extractor_args(),
         "progress_hooks": [ydl_progress_hook],
         "ffmpeg_location": os.path.dirname(ffmpeg_path) if ffmpeg_path else None,
     }
@@ -348,11 +363,7 @@ class YouTubeLiveSessionManager:
                 "quiet": True,
                 "no_warnings": True,
                 "nocheckcertificate": True,
-                "extractor_args": {
-                    "youtube": {
-                        "player_client": ["android", "ios", "mweb"],
-                    }
-                },
+                "extractor_args": get_yt_extractor_args(),
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
