@@ -349,8 +349,9 @@ export function ReportingStandardsModal({ isOpen, onClose, onStandardUpdated }) 
                   className="btn btn--primary"
                   onClick={handleSaveNewVersion}
                   disabled={saving}
+                  id="btn-modal-save-reporting-standards"
                 >
-                  {saving ? 'Saving...' : '💾 Save as New Version'}
+                  {saving ? 'Saving...' : '💾 Save & Apply Instructions'}
                 </button>
               </div>
             )}

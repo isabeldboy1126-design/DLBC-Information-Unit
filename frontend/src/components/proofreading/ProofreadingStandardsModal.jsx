@@ -299,8 +299,9 @@ export function ProofreadingStandardsModal({ isOpen, onClose, onStandardUpdated 
                   className="btn btn--primary"
                   onClick={handleSaveNewVersion}
                   disabled={saving}
+                  id="btn-modal-save-proofreading-standards"
                 >
-                  {saving ? 'Saving...' : '💾 Save as New Version'}
+                  {saving ? 'Saving...' : '💾 Save & Apply Instructions'}
                 </button>
               </div>
             )}
