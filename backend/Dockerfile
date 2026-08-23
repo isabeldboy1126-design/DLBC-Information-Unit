@@ -26,8 +26,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application source and bgutil server
 COPY . .
 
-# Install dependencies for bgutil POT server
-RUN cd /app/bgutil-server && npm ci --omit=dev --no-audit --no-fund
+# Install dependencies and build bgutil POT server
+RUN cd /app/bgutil-server && npm ci --no-audit --no-fund && npx tsc
 
 # Ensure runtime storage directories exist
 RUN mkdir -p storage/audio storage/uploads storage/transcripts storage/verified_transcripts
