@@ -49,7 +49,7 @@ def get_yt_extractor_args() -> dict:
             "base_url": ["http://127.0.0.1:4416"],
         },
         "youtube": {
-            "player_client": ["mweb", "web", "android"],
+            "player_client": ["android", "android_creator", "mweb", "web"],
         },
     }
 

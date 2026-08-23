@@ -42,6 +42,7 @@ export function useAudioCapture() {
   const workletNodeRef = useRef(null)
   const animationFrameRef = useRef(null)
   const silentGainNodeRef = useRef(null)
+  const wakeLockRef = useRef(null)
 
   // WebSocket & Timer Refs
   const wsRef = useRef(null)
@@ -50,6 +51,43 @@ export function useAudioCapture() {
   const isStartingRef = useRef(false)
   const isRecordingRef = useRef(false)
   const activeSessionIdRef = useRef(null)
+
+  // Screen Wake Lock Management (Prevents OS/display sleep from halting long recordings)
+  const requestWakeLock = useCallback(async () => {
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request('screen')
+        console.log('Screen Wake Lock acquired successfully.')
+        wakeLockRef.current.addEventListener('release', () => {
+          console.log('Screen Wake Lock released.')
+        })
+      } catch (err) {
+        console.warn('Screen Wake Lock notice:', err.message)
+      }
+    }
+  }, [])
+
+  const releaseWakeLock = useCallback(async () => {
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release()
+      } catch (e) {}
+      wakeLockRef.current = null
+    }
+  }, [])
+
+  // Re-acquire wake lock if tab becomes visible while recording is still active
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && isRecordingRef.current && !wakeLockRef.current) {
+        await requestWakeLock()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [requestWakeLock])
 
   // 1. Enumerate available audio input devices
   const updateDeviceList = useCallback(async () => {
@@ -165,10 +203,10 @@ export function useAudioCapture() {
     }
   }, [updateDeviceList])
 
-  // 3. Initialize Audio Stream & AudioContext (Phase 1 master audio capture pipeline)
-  const initAudioStream = useCallback(async () => {
+  // 3. Initialize Audio Stream & AudioContext (supports both physical mic and browser tab MediaStreams)
+  const initAudioStream = useCallback(async (providedStream = null) => {
     // Release existing stream if any
-    if (mediaStreamRef.current) {
+    if (mediaStreamRef.current && mediaStreamRef.current !== providedStream) {
       try {
         mediaStreamRef.current.getTracks().forEach((t) => t.stop())
       } catch (e) {}
@@ -185,44 +223,74 @@ export function useAudioCapture() {
       audioContextRef.current = null
     }
 
-    const audioConstraints = {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-    }
-
-    if (selectedDeviceId && selectedDeviceId !== 'default') {
-      audioConstraints.deviceId = { exact: selectedDeviceId }
-    }
-
-    let stream = null
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
-      setPermissionState('granted')
-    } catch (err) {
-      console.error('Failed to get user media stream:', err)
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setPermissionState('denied')
-        setError('Microphone permission was denied. Please allow microphone access in your browser settings.')
-      } else {
-        setError(`Failed to open audio stream: ${err.message}`)
+    let stream = providedStream
+    if (!stream) {
+      const audioConstraints = {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
       }
+
+      if (selectedDeviceId && selectedDeviceId !== 'default') {
+        audioConstraints.deviceId = { exact: selectedDeviceId }
+      }
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
+        setPermissionState('granted')
+      } catch (err) {
+        console.error('Failed to get user media stream:', err)
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setPermissionState('denied')
+          setError('Microphone permission was denied. Please allow microphone access in your browser settings.')
+        } else {
+          setError(`Failed to open audio stream: ${err.message}`)
+        }
+        throw err
+      }
+    }
+
+    const audioTracks = stream.getAudioTracks()
+    if (audioTracks.length === 0) {
+      stream.getTracks().forEach((t) => {
+        try { t.stop() } catch (e) {}
+      })
+      const err = new Error('No tab audio was shared. Please try again and enable "Share tab audio".')
+      setError(err.message)
       throw err
     }
+
+    // Safely discard video tracks from display-media capture to avoid consuming video resources
+    const videoTracks = stream.getVideoTracks()
+    if (videoTracks.length > 0) {
+      videoTracks.forEach((vt) => {
+        try { vt.stop() } catch (e) {}
+      })
+    }
+
     mediaStreamRef.current = stream
 
-    // Handle track disconnection
-    stream.getAudioTracks().forEach((track) => {
+    // Handle track disconnection or user stopping tab sharing
+    audioTracks.forEach((track) => {
       track.onended = () => {
-        setError('Selected audio input device was disconnected.')
+        console.warn('Audio track ended by user or system.')
+        if (isRecordingRef.current) {
+          setError('Audio capture was ended in the browser.')
+          // Gracefully trigger stop
+          if (stopRecordingRef.current) {
+            stopRecordingRef.current()
+          }
+        } else {
+          setError('Selected audio input was disconnected.')
+        }
       }
     })
 
     // Inspect actual applied settings
-    const track = stream.getAudioTracks()[0]
+    const track = audioTracks[0]
     const settings = track.getSettings ? track.getSettings() : {}
     setTrackSettings({
-      label: track.label || 'Audio Input',
+      label: track.label || (providedStream ? 'YouTube Tab Audio' : 'Audio Input'),
       sampleRate: settings.sampleRate || 48000,
       channelCount: settings.channelCount || 1,
       echoCancellation: settings.echoCancellation ?? false,
@@ -353,7 +421,7 @@ export function useAudioCapture() {
   }, [isRecording, stopMeteringLoop])
 
   // 6. Start Real Recording (Progressive PCM Streaming to FastAPI + Live Azure Transcription + Phase 4 Session)
-  const startRecording = useCallback(async (sessionTitle = null, sessionMeta = null) => {
+  const startRecording = useCallback(async (sessionTitle = null, sessionMeta = null, customStream = null) => {
     if (isRecording || isRecordingRef.current || isStartingRef.current) return false
     isStartingRef.current = true
     isRecordingRef.current = true
@@ -372,8 +440,11 @@ export function useAudioCapture() {
 
     try {
       // 1. Initialize master audio stream & context
-      const { ctx, sourceNode, settings } = await initAudioStream()
+      const { ctx, sourceNode, settings } = await initAudioStream(customStream)
       startMeteringLoop()
+
+      // Acquire Screen Wake Lock to prevent screen sleep during long sermon/worship captures
+      await requestWakeLock()
 
       // 2. Load AudioWorklet module
       try {
@@ -395,6 +466,7 @@ export function useAudioCapture() {
             isStartingRef.current = false
             isRecordingRef.current = false
             setIsRecording(false)
+            releaseWakeLock()
             setError('Recording initialization timed out. Please check backend connection.')
             if (mediaStreamRef.current) {
               try { mediaStreamRef.current.getTracks().forEach((t) => t.stop()) } catch (e) {}
@@ -537,6 +609,7 @@ export function useAudioCapture() {
             isStartingRef.current = false
             isRecordingRef.current = false
             setIsRecording(false)
+            releaseWakeLock()
             console.error('WebSocket streaming error:', err)
             setError('Streaming connection error with FastAPI backend.')
             if (mediaStreamRef.current) {
@@ -558,6 +631,7 @@ export function useAudioCapture() {
     } catch (err) {
       isStartingRef.current = false
       isRecordingRef.current = false
+      releaseWakeLock()
       console.error('Failed to start recording:', err)
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         setPermissionState('denied')
@@ -577,9 +651,63 @@ export function useAudioCapture() {
       }
       return false
     }
-  }, [initAudioStream, isRecording, startMeteringLoop, trackSettings])
+  }, [initAudioStream, isRecording, requestWakeLock, releaseWakeLock, startMeteringLoop, trackSettings])
 
-  // 7. Stop Recording — Stops media tracks, disconnects audio graph, and resolves with finalized session
+  // 7. Start Tab Audio Capture (Captures browser tab audio with getDisplayMedia and feeds into live pipeline)
+  const startTabCapture = useCallback(async (sessionTitle = null, sessionMeta = null) => {
+    if (isRecording || isRecordingRef.current || isStartingRef.current) return false
+    setError(null)
+
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        throw new Error('Screen / Browser Tab Audio Capture is not supported in this browser.')
+      }
+
+      // Request display media with audio enabled and browser-tab hints
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          displaySurface: 'browser',
+        },
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+        displaySurface: 'browser',
+        selfBrowserSurface: 'exclude',
+        preferCurrentTab: false,
+        systemAudio: 'include',
+      })
+
+      const audioTracks = displayStream.getAudioTracks()
+      if (audioTracks.length === 0) {
+        displayStream.getTracks().forEach((t) => {
+          try { t.stop() } catch (e) {}
+        })
+        const errMsg = 'No tab audio was shared. Please try again and enable "Share tab audio".'
+        setError(errMsg)
+        return false
+      }
+
+      const metaWithSource = {
+        ...(sessionMeta || {}),
+        source_type: 'youtube_tab',
+        youtube_url: sessionMeta?.url || sessionMeta?.youtube_url || '',
+      }
+
+      return await startRecording(sessionTitle, metaWithSource, displayStream)
+    } catch (err) {
+      console.error('Tab audio capture request failed:', err)
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setError('Tab sharing was cancelled or denied.')
+      } else {
+        setError(err.message || 'Failed to capture tab audio.')
+      }
+      return false
+    }
+  }, [isRecording, startRecording])
+
+  // 8. Stop Recording — Stops media tracks, disconnects audio graph, and resolves with finalized session
   const stopRecording = useCallback(() => {
     return new Promise((resolve) => {
       isRecordingRef.current = false
@@ -592,6 +720,7 @@ export function useAudioCapture() {
       setIsRecording(false)
       setIsTesting(false)
       stopMeteringLoop()
+      releaseWakeLock()
 
       // Stop & disconnect AudioWorklet node and silent sink
       if (workletNodeRef.current) {
@@ -694,9 +823,9 @@ export function useAudioCapture() {
         resolve(null)
       }
     })
-  }, [stopMeteringLoop])
+  }, [releaseWakeLock, stopMeteringLoop])
 
-  // 8. Toggle Manual Flag during live recording
+  // 9. Toggle Manual Flag during live recording
   const toggleManualFlag = useCallback((segmentIndex) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(
@@ -780,6 +909,7 @@ export function useAudioCapture() {
     stopAudioTest,
     isRecording,
     startRecording,
+    startTabCapture,
     stopRecording,
     elapsedTime,
     recordingStats,

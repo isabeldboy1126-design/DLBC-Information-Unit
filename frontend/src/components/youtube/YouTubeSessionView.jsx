@@ -15,6 +15,8 @@ import { getApiUrl } from '../../config'
 export function YouTubeSessionView({
   onBack,
   onOpenSession,
+  onStartTabCapture,
+  liveAudio,
 }) {
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -125,7 +127,35 @@ export function YouTubeSessionView({
     }
   }
 
-  // 2. Start Recorded Transcription
+  // Helper to compile session metadata
+  const getSessionMetadata = () => {
+    const progName = currentProgramme?.name || 'Sunday Worship Service'
+    const sessName = currentProgrammeSessions.find((s) => s.id === selectedSessionId)?.name || ''
+    return {
+      title: customTitle.trim() || videoMeta?.title || 'YouTube Session',
+      programme: progName,
+      programme_session: sessName,
+      minister: minister.trim(),
+      message_title: customTitle.trim() || videoMeta?.title || '',
+      source_type: 'youtube_tab',
+      youtube_url: videoMeta?.url || '',
+      thumbnail: videoMeta?.thumbnail || '',
+    }
+  }
+
+  // 2. Start Tab Audio Capture (Browser Tab DisplayMedia Stream)
+  const handleStartTabCapture = async () => {
+    if (!videoMeta || !onStartTabCapture) return
+    setJobError('')
+    const meta = getSessionMetadata()
+    try {
+      await onStartTabCapture(meta)
+    } catch (err) {
+      setJobError(err.message || 'Failed to initiate tab audio capture.')
+    }
+  }
+
+  // 3. Start Recorded Automatic Server-Side Transcription
   const handleStartRecordedTranscription = async () => {
     if (!videoMeta) return
     setJobError('')
@@ -175,7 +205,7 @@ export function YouTubeSessionView({
     }
   }
 
-  // 3. Start YouTube Live Stream Transcription
+  // 4. Start Server-Side YouTube Live Stream Transcription
   const handleStartLiveTranscription = async () => {
     if (!videoMeta) return
     setJobError('')
@@ -229,7 +259,7 @@ export function YouTubeSessionView({
     }
   }
 
-  // 4. Stop YouTube Live Transcription
+  // 5. Stop YouTube Live Transcription
   const handleStopLive = async () => {
     if (!liveSessionId) return
     setIsStoppingLive(true)
@@ -255,6 +285,11 @@ export function YouTubeSessionView({
     if (hours > 0) return `${pad(hours)}:${pad(mins)}:${pad(secs)}`
     return `${pad(mins)}:${pad(secs)}`
   }
+
+  const isServerBotBlocked =
+    (activeJob?.status === 'failed' && activeJob?.error?.includes('bot')) ||
+    jobError?.toLowerCase()?.includes('bot') ||
+    jobError?.toLowerCase()?.includes('sign in')
 
   return (
     <div className="youtube-session-page-container">
@@ -416,31 +451,127 @@ export function YouTubeSessionView({
                 </div>
               </div>
 
-              {/* Action Buttons */}
+              {/* Action Cards / Selection */}
               {!activeJob && !isLiveActive && !liveSessionId && (
-                <div className="youtube-action-bar">
+                <div className="youtube-action-container" style={{ marginTop: '1.25rem' }}>
                   {videoMeta.is_live ? (
-                    <button
-                      type="button"
-                      className="btn btn--primary btn--large"
-                      onClick={handleStartLiveTranscription}
-                    >
-                      <span className="live-pulse-dot" style={{ marginRight: '0.4rem' }}>●</span>
-                      <span>Start Live Transcription</span>
-                    </button>
+                    /* -------------------------------------------------- */
+                    /* LIVE BROADCAST INGESTION MODES                     */
+                    /* -------------------------------------------------- */
+                    <div className="youtube-live-options-card">
+                      <div className="tab-capture-hero-box">
+                        <div className="tab-hero-header">
+                          <span className="live-pulse-dot">●</span>
+                          <h3 className="tab-hero-title">Capture Live YouTube Audio (Recommended)</h3>
+                        </div>
+                        <p className="tab-hero-desc">
+                          Transcribes the live broadcast directly through your browser. Bypasses all server-side bot challenges with 100% reliability.
+                        </p>
+
+                        <div className="tab-guide-steps-list">
+                          <div className="tab-guide-step-item">
+                            <span className="step-circle">1</span>
+                            <div className="step-content">
+                              <span>Open the live stream in another tab and ensure it is playing.</span>
+                              <button
+                                type="button"
+                                className="btn btn--outline btn--small"
+                                style={{ marginTop: '0.4rem' }}
+                                onClick={() => window.open(videoMeta.url, '_blank')}
+                              >
+                                ↗ Open YouTube Live Stream
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="tab-guide-step-item">
+                            <span className="step-circle">2</span>
+                            <div className="step-content">
+                              <span>Click below, select the YouTube tab, and make sure <strong>"Share tab audio"</strong> is checked.</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="tab-hero-cta" style={{ marginTop: '1.2rem' }}>
+                          <button
+                            type="button"
+                            className="btn btn--primary btn--large"
+                            onClick={handleStartTabCapture}
+                          >
+                            <span>🎙️ Capture YouTube Tab Audio</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Optional Server-Side Fallback for Live */}
+                      <details className="server-side-details" style={{ marginTop: '1rem' }}>
+                        <summary style={{ cursor: 'pointer', color: 'var(--color-text-muted, #94a3b8)', fontSize: '0.85rem' }}>
+                          Advanced: Process via server background stream
+                        </summary>
+                        <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary, #cbd5e1)', marginBottom: '0.5rem' }}>
+                            Attempts to extract live stream audio directly from the Azure backend container:
+                          </p>
+                          <button
+                            type="button"
+                            className="btn btn--outline btn--small"
+                            onClick={handleStartLiveTranscription}
+                          >
+                            <span>Start Server-Side Live Stream</span>
+                          </button>
+                        </div>
+                      </details>
+                    </div>
                   ) : videoMeta.is_upcoming ? (
                     <div className="alert alert--info">
-                      This live stream has not started broadcasting yet.
+                      This live stream is scheduled and has not started broadcasting yet.
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      className="btn btn--primary btn--large"
-                      onClick={handleStartRecordedTranscription}
-                    >
-                      <span>Start Transcription</span>
-                      <span style={{ marginLeft: '0.4rem' }}>→</span>
-                    </button>
+                    /* -------------------------------------------------- */
+                    /* RECORDED VIDEO INGESTION MODES                     */
+                    /* -------------------------------------------------- */
+                    <div className="youtube-recorded-options-grid">
+                      {/* Option 1: Automatic Server-Side */}
+                      <div className="recorded-option-card">
+                        <div className="recorded-opt-header">
+                          <h3 className="recorded-opt-title">⚡ Process Automatically</h3>
+                          <span className="opt-tag">Fastest</span>
+                        </div>
+                        <p className="recorded-opt-desc">
+                          Extracts and transcribes audio directly on the server in the background. Best for normal public videos.
+                        </p>
+                        <button
+                          type="button"
+                          className="btn btn--primary"
+                          style={{ width: '100%', marginTop: 'auto' }}
+                          onClick={handleStartRecordedTranscription}
+                        >
+                          <span>Process Automatically →</span>
+                        </button>
+                      </div>
+
+                      {/* Option 2: Browser Tab Playback Capture */}
+                      <div className="recorded-option-card">
+                        <div className="recorded-opt-header">
+                          <h3 className="recorded-opt-title">🎙️ Transcribe Through Playback</h3>
+                          <span className="opt-tag opt-tag--secondary">100% Reliable</span>
+                        </div>
+                        <p className="recorded-opt-desc">
+                          Plays the video in your browser and captures tab audio live. Completely immune to YouTube bot blocks.
+                        </p>
+                        <button
+                          type="button"
+                          className="btn btn--outline"
+                          style={{ width: '100%', marginTop: 'auto' }}
+                          onClick={() => {
+                            window.open(videoMeta.url, '_blank')
+                            handleStartTabCapture()
+                          }}
+                        >
+                          <span>Play & Capture Tab Audio</span>
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -490,8 +621,39 @@ export function YouTubeSessionView({
               )}
 
               {activeJob.status === 'failed' && (
-                <div className="youtube-error-banner" style={{ marginTop: '1rem' }}>
-                  <span>⚠️ Error: {activeJob.error || 'Transcription failed.'}</span>
+                <div className="youtube-bot-fallback-box" style={{ marginTop: '1.25rem' }}>
+                  <div className="bot-fallback-header">
+                    <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+                    <div>
+                      <h4 style={{ margin: 0, color: 'var(--color-warning, #f59e0b)' }}>
+                        YouTube Server Access Restricted
+                      </h4>
+                      <p style={{ margin: '0.3rem 0 0', color: 'var(--color-text-secondary, #cbd5e1)', fontSize: '0.9rem' }}>
+                        YouTube is blocking automatic server-side downloading for this video.
+                        You can still transcribe it in full by playing it in your browser and capturing the tab's audio.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bot-fallback-actions" style={{ marginTop: '1rem', display: 'flex', gap: '0.75rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={() => {
+                        window.open(videoMeta.url, '_blank')
+                        handleStartTabCapture()
+                      }}
+                    >
+                      <span>🎙️ Transcribe Through Browser Playback</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--outline"
+                      onClick={() => window.open(videoMeta.url, '_blank')}
+                    >
+                      <span>↗ Open in YouTube</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

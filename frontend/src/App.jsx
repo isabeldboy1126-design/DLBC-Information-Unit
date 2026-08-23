@@ -450,6 +450,17 @@ function App() {
             sessionsHook.loadSession(sessionId)
             setCurrentView('sessions')
           }}
+          liveAudio={liveAudio}
+          onStartTabCapture={async (meta) => {
+            setSessionMetadata(meta)
+            setIsRecorderMinimized(false)
+            const success = await liveAudio.startTabCapture(meta.title, meta)
+            if (success) {
+              setIsRecorderMinimized(false)
+              setCurrentView('live_recording')
+            }
+            return success
+          }}
         />
       ) : null}
 
