@@ -69,10 +69,17 @@ export function LiveRecordingView({
       <div className="card live-top-recording-bar">
         <div className="live-bar-left">
           {/* Active Recording Badge */}
-          <div className="live-rec-badge-pill">
-            <span className="live-rec-dot">●</span>
-            <span className="live-rec-text">RECORDING ACTIVE</span>
-          </div>
+          {sessionMetadata.source_type === 'youtube_tab' ? (
+            <div className="live-rec-badge-pill" style={{ background: '#fef2f2', borderColor: '#fecaca' }}>
+              <span className="live-rec-dot" style={{ background: '#dc2626' }}>●</span>
+              <span className="live-rec-text" style={{ color: '#991b1b' }}>YOUTUBE TAB AUDIO</span>
+            </div>
+          ) : (
+            <div className="live-rec-badge-pill">
+              <span className="live-rec-dot">●</span>
+              <span className="live-rec-text">RECORDING ACTIVE</span>
+            </div>
+          )}
 
           {/* Recording Timer */}
           <div className="live-bar-timer">{formatTimer(elapsedTime)}</div>
@@ -98,7 +105,7 @@ export function LiveRecordingView({
 
           {/* Compact Session / Programme Details */}
           <div className="live-bar-metadata" title={compactMetadataString}>
-            <span className="live-meta-icon">🏛️</span>
+            <span className="live-meta-icon">{sessionMetadata.source_type === 'youtube_tab' ? '📺' : '🏛️'}</span>
             <span className="live-meta-text">{compactMetadataString}</span>
           </div>
         </div>
@@ -137,7 +144,11 @@ export function LiveRecordingView({
           {segments.length === 0 && !interimText ? (
             <div className="transcript-waiting-placeholder">
               <span className="waiting-spinner">⏳</span>
-              <p className="waiting-text">Listening for live audio input... Live transcript will stream here.</p>
+              <p className="waiting-text">
+                {sessionMetadata.source_type === 'youtube_tab'
+                  ? 'Capturing audio from shared YouTube tab... Live transcript will stream here.'
+                  : 'Listening for live audio input... Live transcript will stream here.'}
+              </p>
             </div>
           ) : (
             <>
@@ -217,7 +228,9 @@ export function LiveRecordingView({
 
           <div className="subbar-right">
             <span className="engine-model-text">
-              Azure Speech (en-NG) &bull; Lossless PCM Archive
+              {sessionMetadata.source_type === 'youtube_tab'
+                ? 'Azure Speech (en-NG) • YouTube Tab Audio • Lossless PCM Archive'
+                : 'Azure Speech (en-NG) • Lossless PCM Archive'}
             </span>
           </div>
         </div>

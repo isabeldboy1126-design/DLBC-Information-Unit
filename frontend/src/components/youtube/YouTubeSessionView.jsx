@@ -8,8 +8,8 @@ import { getApiUrl } from '../../config'
  * - URL analysis and validation for both recorded videos and live streams.
  * - Dynamic metadata extraction (title, channel, duration, thumbnail, live status).
  * - Optional programme / event assignment.
- * - Recorded video background transcription with real progress tracking.
- * - Server-side YouTube Live stream transcription with real-time ticker and stop action.
+ * - Recorded video background transcription with real progress tracking and bot fallback.
+ * - High-reliability browser tab-audio capture for YouTube Live broadcasts and playback.
  * - Seamless transition to the session workspace upon completion.
  */
 export function YouTubeSessionView({
@@ -34,15 +34,6 @@ export function YouTubeSessionView({
   const [activeJob, setActiveJob] = useState(null)
   const [jobError, setJobError] = useState('')
   const pollIntervalRef = useRef(null)
-
-  // Live stream flow state
-  const [liveSessionId, setLiveSessionId] = useState(null)
-  const [isLiveActive, setIsLiveActive] = useState(false)
-  const [liveElapsedSeconds, setLiveElapsedSeconds] = useState(0)
-  const [liveSegments, setLiveSegments] = useState([])
-  const [liveInterimText, setLiveInterimText] = useState('')
-  const [isStoppingLive, setIsStoppingLive] = useState(false)
-  const livePollIntervalRef = useRef(null)
 
   // Load configured programmes
   useEffect(() => {
@@ -71,7 +62,6 @@ export function YouTubeSessionView({
   useEffect(() => {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
-      if (livePollIntervalRef.current) clearInterval(livePollIntervalRef.current)
     }
   }, [])
 
@@ -103,8 +93,6 @@ export function YouTubeSessionView({
     setVideoMeta(null)
     setActiveJob(null)
     setJobError('')
-    setLiveSessionId(null)
-    setIsLiveActive(false)
 
     try {
       const res = await fetch(getApiUrl('/api/youtube/analyze'), {
@@ -205,77 +193,6 @@ export function YouTubeSessionView({
     }
   }
 
-  // 4. Start Server-Side YouTube Live Stream Transcription
-  const handleStartLiveTranscription = async () => {
-    if (!videoMeta) return
-    setJobError('')
-
-    const progName = currentProgramme?.name || 'Sunday Worship Service'
-    const sessName = currentProgrammeSessions.find((s) => s.id === selectedSessionId)?.name || ''
-
-    try {
-      const res = await fetch(getApiUrl('/api/youtube/live/start'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: videoMeta.url,
-          title: customTitle.trim() || videoMeta.title,
-          programme: progName,
-          programme_session: sessName,
-          minister: minister.trim(),
-          message_title: customTitle.trim(),
-        }),
-      })
-
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.detail || 'Failed to start YouTube Live stream.')
-      }
-
-      setLiveSessionId(data.session_id)
-      setIsLiveActive(true)
-
-      // Start Live Polling
-      if (livePollIntervalRef.current) clearInterval(livePollIntervalRef.current)
-      livePollIntervalRef.current = setInterval(async () => {
-        try {
-          const statusRes = await fetch(getApiUrl(`/api/youtube/live/status/${data.session_id}`))
-          if (statusRes.ok) {
-            const statusData = await statusRes.json()
-            setLiveElapsedSeconds(statusData.elapsed_seconds || 0)
-            setLiveSegments(statusData.segments || [])
-            setLiveInterimText(statusData.interim_text || '')
-            if (statusData.status === 'completed' || statusData.status === 'stream_ended') {
-              setIsLiveActive(false)
-              clearInterval(livePollIntervalRef.current)
-            }
-          }
-        } catch (pollErr) {
-          console.error('Live poll error:', pollErr)
-        }
-      }, 1200)
-    } catch (err) {
-      setJobError(err.message || 'Error starting live stream transcription.')
-    }
-  }
-
-  // 5. Stop YouTube Live Transcription
-  const handleStopLive = async () => {
-    if (!liveSessionId) return
-    setIsStoppingLive(true)
-    try {
-      await fetch(getApiUrl(`/api/youtube/live/stop/${liveSessionId}`), {
-        method: 'POST',
-      })
-      setIsLiveActive(false)
-      if (livePollIntervalRef.current) clearInterval(livePollIntervalRef.current)
-    } catch (err) {
-      console.error('Error stopping live stream:', err)
-    } finally {
-      setIsStoppingLive(false)
-    }
-  }
-
   const formatDuration = (totalSeconds) => {
     if (!totalSeconds && totalSeconds !== 0) return '—'
     const hours = Math.floor(totalSeconds / 3600)
@@ -285,11 +202,6 @@ export function YouTubeSessionView({
     if (hours > 0) return `${pad(hours)}:${pad(mins)}:${pad(secs)}`
     return `${pad(mins)}:${pad(secs)}`
   }
-
-  const isServerBotBlocked =
-    (activeJob?.status === 'failed' && activeJob?.error?.includes('bot')) ||
-    jobError?.toLowerCase()?.includes('bot') ||
-    jobError?.toLowerCase()?.includes('sign in')
 
   return (
     <div className="youtube-session-page-container">
@@ -322,12 +234,12 @@ export function YouTubeSessionView({
                 placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
                 value={youtubeUrl}
                 onChange={(e) => setYoutubeUrl(e.target.value)}
-                disabled={isAnalyzing || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing' || isLiveActive}
+                disabled={isAnalyzing || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
               />
               <button
                 type="submit"
                 className="btn btn--primary youtube-analyze-btn"
-                disabled={isAnalyzing || !youtubeUrl.trim() || isLiveActive || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
+                disabled={isAnalyzing || !youtubeUrl.trim() || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
               >
                 {isAnalyzing ? (
                   <>
@@ -396,7 +308,7 @@ export function YouTubeSessionView({
                     className="form-control form-select"
                     value={selectedProgrammeId}
                     onChange={(e) => handleProgrammeChange(e.target.value)}
-                    disabled={isLiveActive || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
+                    disabled={activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
                   >
                     {programmes.map((p) => (
                       <option key={p.id} value={p.id}>{p.name}</option>
@@ -411,7 +323,7 @@ export function YouTubeSessionView({
                     className="form-control form-select"
                     value={selectedSessionId}
                     onChange={(e) => setSelectedSessionId(e.target.value)}
-                    disabled={isLiveActive || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
+                    disabled={activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
                   >
                     {currentProgrammeSessions.length === 0 ? (
                       <option>General Session</option>
@@ -434,7 +346,7 @@ export function YouTubeSessionView({
                     placeholder="e.g. Pastor W.F. Kumuyi"
                     value={minister}
                     onChange={(e) => setMinister(e.target.value)}
-                    disabled={isLiveActive || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
+                    disabled={activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
                   />
                 </div>
 
@@ -446,13 +358,13 @@ export function YouTubeSessionView({
                     className="form-control"
                     value={customTitle}
                     onChange={(e) => setCustomTitle(e.target.value)}
-                    disabled={isLiveActive || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
+                    disabled={activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
                   />
                 </div>
               </div>
 
               {/* Action Cards / Selection */}
-              {!activeJob && !isLiveActive && !liveSessionId && (
+              {!activeJob && (
                 <div className="youtube-action-container" style={{ marginTop: '1.25rem' }}>
                   {videoMeta.is_live ? (
                     /* -------------------------------------------------- */
@@ -462,32 +374,40 @@ export function YouTubeSessionView({
                       <div className="tab-capture-hero-box">
                         <div className="tab-hero-header">
                           <span className="live-pulse-dot">●</span>
-                          <h3 className="tab-hero-title">Capture Live YouTube Audio (Recommended)</h3>
+                          <h3 className="tab-hero-title">YouTube Live Audio Capture</h3>
                         </div>
                         <p className="tab-hero-desc">
-                          Transcribes the live broadcast directly through your browser. Bypasses all server-side bot challenges with 100% reliability.
+                          Transcribes the live broadcast directly through your browser using tab-audio capture.
                         </p>
 
                         <div className="tab-guide-steps-list">
                           <div className="tab-guide-step-item">
                             <span className="step-circle">1</span>
                             <div className="step-content">
-                              <span>Open the live stream in another tab and ensure it is playing.</span>
-                              <button
-                                type="button"
-                                className="btn btn--outline btn--small"
-                                style={{ marginTop: '0.4rem' }}
-                                onClick={() => window.open(videoMeta.url, '_blank')}
-                              >
-                                ↗ Open YouTube Live Stream
-                              </button>
+                              <span>Open the YouTube live stream in a separate browser tab and ensure playback is active.</span>
+                              <div style={{ marginTop: '0.4rem' }}>
+                                <button
+                                  type="button"
+                                  className="btn btn--outline btn--small"
+                                  onClick={() => window.open(videoMeta.url, '_blank')}
+                                >
+                                  ↗ Open YouTube Live Stream
+                                </button>
+                              </div>
                             </div>
                           </div>
 
                           <div className="tab-guide-step-item">
                             <span className="step-circle">2</span>
                             <div className="step-content">
-                              <span>Click below, select the YouTube tab, and make sure <strong>"Share tab audio"</strong> is checked.</span>
+                              <span>Return to this DLBC app tab.</span>
+                            </div>
+                          </div>
+
+                          <div className="tab-guide-step-item">
+                            <span className="step-circle">3</span>
+                            <div className="step-content">
+                              <span>Click <strong>"Capture YouTube Tab Audio"</strong> below, select the YouTube tab, and make sure <strong>"Share tab audio"</strong> is enabled in the browser prompt.</span>
                             </div>
                           </div>
                         </div>
@@ -502,25 +422,6 @@ export function YouTubeSessionView({
                           </button>
                         </div>
                       </div>
-
-                      {/* Optional Server-Side Fallback for Live */}
-                      <details className="server-side-details" style={{ marginTop: '1rem' }}>
-                        <summary style={{ cursor: 'pointer', color: 'var(--color-text-muted, #94a3b8)', fontSize: '0.85rem' }}>
-                          Advanced: Process via server background stream
-                        </summary>
-                        <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
-                          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary, #cbd5e1)', marginBottom: '0.5rem' }}>
-                            Attempts to extract live stream audio directly from the Azure backend container:
-                          </p>
-                          <button
-                            type="button"
-                            className="btn btn--outline btn--small"
-                            onClick={handleStartLiveTranscription}
-                          >
-                            <span>Start Server-Side Live Stream</span>
-                          </button>
-                        </div>
-                      </details>
                     </div>
                   ) : videoMeta.is_upcoming ? (
                     <div className="alert alert--info">
@@ -538,7 +439,7 @@ export function YouTubeSessionView({
                           <span className="opt-tag">Fastest</span>
                         </div>
                         <p className="recorded-opt-desc">
-                          Extracts and transcribes audio directly on the server in the background. Best for normal public videos.
+                          Extracts and transcribes audio directly on the server in the background. Best for standard recorded messages.
                         </p>
                         <button
                           type="button"
@@ -557,7 +458,7 @@ export function YouTubeSessionView({
                           <span className="opt-tag opt-tag--secondary">100% Reliable</span>
                         </div>
                         <p className="recorded-opt-desc">
-                          Plays the video in your browser and captures tab audio live. Completely immune to YouTube bot blocks.
+                          Plays the video in your browser and captures tab audio live. Completely immune to YouTube bot restrictions.
                         </p>
                         <button
                           type="button"
@@ -658,67 +559,9 @@ export function YouTubeSessionView({
               )}
             </div>
           )}
-
-          {/* 5. Active YouTube Live Stream Monitor */}
-          {(isLiveActive || liveSessionId) && (
-            <div className="youtube-live-monitor-section">
-              <div className="youtube-live-monitor-header">
-                <div className="live-header-left">
-                  <span className="status-badge badge--live">● YOUTUBE LIVE</span>
-                  <span className="live-timer-text">{formatDuration(liveElapsedSeconds)}</span>
-                  <span className="live-azure-badge">Azure Speech: en-NG</span>
-                </div>
-
-                <div className="live-header-right">
-                  {isLiveActive ? (
-                    <button
-                      type="button"
-                      className="btn btn--danger btn--small"
-                      onClick={handleStopLive}
-                      disabled={isStoppingLive}
-                    >
-                      {isStoppingLive ? 'Finalizing...' : '⏹ Stop YouTube Transcription'}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn btn--primary btn--small"
-                      onClick={() => onOpenSession(liveSessionId)}
-                    >
-                      <span>Open Session Workspace →</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Real-time Ticker */}
-              <div className="youtube-live-ticker-box">
-                <span className="ticker-label">Live Hypotheses:</span>
-                <p className="ticker-text">
-                  {liveInterimText || (liveSegments.length > 0 ? liveSegments[liveSegments.length - 1].text : 'Ingesting audio stream from YouTube broadcast...')}
-                  {liveInterimText && <span className="floating-typing-cursor">|</span>}
-                </p>
-              </div>
-
-              {/* Live Segments List */}
-              <div className="youtube-live-segments-scroll">
-                {liveSegments.length === 0 ? (
-                  <div className="empty-segments-notice">
-                    Listening to server-side YouTube Live stream...
-                  </div>
-                ) : (
-                  liveSegments.map((seg, idx) => (
-                    <div key={idx} className="youtube-live-segment-row">
-                      <span className="seg-time">[{formatDuration(seg.start_time)}]</span>
-                      <span className="seg-text">{seg.text}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
   )
 }
+
