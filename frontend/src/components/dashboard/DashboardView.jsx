@@ -12,6 +12,7 @@ import React, { useRef } from 'react'
 export function DashboardView({
   sessions = [],
   onStartLiveSession,
+  onStartYouTubeSession,
   onOpenSession,
   onViewAllSessions,
   onViewNeedsVerification,
@@ -65,7 +66,7 @@ export function DashboardView({
   return (
     <div className="dashboard-view-container">
       {/* ------------------------------------------------------------- */}
-      {/* 1. TOP HERO ACTION CARDS                                      */}
+      {/* 1. TOP HERO ACTION CARDS (3 Equal Choices)                    */}
       {/* ------------------------------------------------------------- */}
       <div className="dashboard-hero-grid">
         {/* Hero Card 1: Start Live Session */}
@@ -76,27 +77,29 @@ export function DashboardView({
           tabIndex={0}
           id="hero-card-start-live"
         >
-          <div className="hero-card-header">
-            <div className="hero-card-icon-box">
-              <span className="hero-icon">🎙️</span>
+          <div>
+            <div className="hero-card-header">
+              <div className="hero-card-icon-box">
+                <span className="hero-icon">🎙️</span>
+              </div>
+              <div className="hero-card-title-group">
+                <h2 className="hero-card-title">Start Live Session</h2>
+                <span className="hero-arrow">→</span>
+              </div>
             </div>
-            <div className="hero-card-title-group">
-              <h2 className="hero-card-title">Start Live Session</h2>
-              <span className="hero-arrow">→</span>
-            </div>
-          </div>
 
-          <p className="hero-card-desc">
-            Record a live church service and transcribe it while it happens.
-          </p>
+            <p className="hero-card-desc">
+              Record live audio via microphone or USB sound interface and transcribe in real-time.
+            </p>
+          </div>
 
           <div className="hero-card-footer">
             <span className="hero-status-dot">●</span>
-            <span className="hero-status-text">Ready to record</span>
+            <span className="hero-status-text">Mic / USB Direct Audio</span>
           </div>
         </div>
 
-        {/* Hero Card 2: Transcribe Recording (Secondary Action) */}
+        {/* Hero Card 2: Upload Recording */}
         <div
           className="dashboard-hero-card hero-card--upload hero-card--secondary"
           onClick={() => fileInputRef.current?.click()}
@@ -122,22 +125,53 @@ export function DashboardView({
                 <span className="hero-icon">📁</span>
               </div>
               <div className="hero-card-title-group">
-                <h2 className="hero-card-title hero-card-title--dark" style={{ fontSize: '1.12rem' }}>
-                  Transcribe Recording
+                <h2 className="hero-card-title hero-card-title--dark">
+                  Upload Recording
                 </h2>
+                <span className="hero-arrow" style={{ color: '#0f2947' }}>→</span>
               </div>
             </div>
 
-            <p className="hero-card-desc hero-card-desc--dark" style={{ fontSize: '0.84rem', margin: '0 0 1rem 0' }}>
+            <p className="hero-card-desc hero-card-desc--dark">
               Upload an existing audio or video recording to transcribe and create a session.
             </p>
           </div>
 
-          <div className="hero-upload-action">
-            <button type="button" className="btn btn--outline btn--small hero-upload-btn" tabIndex={-1}>
-              <span>Upload Recording</span>
-              <span>→</span>
-            </button>
+          <div className="hero-card-footer" style={{ borderTopColor: '#e2e8f0' }}>
+            <span className="hero-status-dot" style={{ background: '#0ea5e9' }}>●</span>
+            <span className="hero-status-text" style={{ color: '#475569' }}>Audio / Video File</span>
+          </div>
+        </div>
+
+        {/* Hero Card 3: YouTube Session */}
+        <div
+          className="dashboard-hero-card hero-card--youtube hero-card--secondary"
+          onClick={onStartYouTubeSession}
+          role="button"
+          tabIndex={0}
+          id="hero-card-youtube"
+        >
+          <div>
+            <div className="hero-card-header hero-card-header--compact">
+              <div className="hero-card-icon-box hero-card-icon-box--red">
+                <span className="hero-icon">▶️</span>
+              </div>
+              <div className="hero-card-title-group">
+                <h2 className="hero-card-title hero-card-title--dark">
+                  YouTube Session
+                </h2>
+                <span className="hero-arrow" style={{ color: '#dc2626' }}>→</span>
+              </div>
+            </div>
+
+            <p className="hero-card-desc hero-card-desc--dark">
+              Paste the URL of a YouTube live broadcast or recorded sermon message to ingest.
+            </p>
+          </div>
+
+          <div className="hero-card-footer" style={{ borderTopColor: '#e2e8f0' }}>
+            <span className="hero-status-dot" style={{ background: '#dc2626' }}>●</span>
+            <span className="hero-status-text" style={{ color: '#475569' }}>Paste YouTube URL</span>
           </div>
         </div>
       </div>

@@ -82,6 +82,7 @@ from app.editing.router import router as editing_router
 from app.proofreading.router import router as proofreading_router
 from app.final_report.router import router as final_report_router
 from app.programmes.router import router as programmes_router
+from app.youtube.router import router as youtube_router
 
 app.include_router(audio_router)
 app.include_router(transcription_router)
@@ -92,6 +93,7 @@ app.include_router(editing_router)
 app.include_router(proofreading_router)
 app.include_router(final_report_router)
 app.include_router(programmes_router)
+app.include_router(youtube_router)
 
 
 

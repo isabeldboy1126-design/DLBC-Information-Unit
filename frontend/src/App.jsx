@@ -13,6 +13,7 @@ import { SessionCompletionView } from './components/sessions/SessionCompletionVi
 import { SessionHistoryList } from './components/sessions/SessionHistoryList'
 import { SessionDetailView } from './components/sessions/SessionDetailView'
 import { SettingsView } from './components/settings/SettingsView'
+import { YouTubeSessionView } from './components/youtube/YouTubeSessionView'
 
 // File Transcription Components
 import { RecordedFileUploader } from './components/transcription/RecordedFileUploader'
@@ -142,6 +143,12 @@ function App() {
     if (currentView === 'transcribe') {
       return {
         title: 'Transcribe Recording File',
+        onBack: () => setCurrentView('dashboard'),
+      }
+    }
+    if (currentView === 'youtube') {
+      return {
+        title: 'YouTube Session',
         onBack: () => setCurrentView('dashboard'),
       }
     }
@@ -286,6 +293,7 @@ function App() {
               setCurrentView('new_live')
             }
           }}
+          onStartYouTubeSession={() => setCurrentView('youtube')}
           onOpenSession={(sessionId) => {
             const activeRecId = liveAudio.latestSession?.session_id || liveAudio.latestRecording?.session_id
             if (liveAudio.isRecording && (sessionId === activeRecId || sessionsHook.sessions.find((s) => s.session_id === sessionId)?.status === 'recording')) {
@@ -432,6 +440,17 @@ function App() {
         /* VIEW 5: SETTINGS & STANDARDS                                */
         /* ----------------------------------------------------------- */
         <SettingsView onBack={() => handleNavigate('dashboard')} />
+      ) : currentView === 'youtube' ? (
+        /* ----------------------------------------------------------- */
+        /* VIEW 6: YOUTUBE INGESTION PIPELINE                          */
+        /* ----------------------------------------------------------- */
+        <YouTubeSessionView
+          onBack={() => setCurrentView('dashboard')}
+          onOpenSession={(sessionId) => {
+            sessionsHook.loadSession(sessionId)
+            setCurrentView('sessions')
+          }}
+        />
       ) : null}
 
       {/* ------------------------------------------------------------- */}
