@@ -81,3 +81,7 @@ models/
 huggingface/
 storage/models/
 
+# --- Scratch & Temporary Artifacts ---
+scratch/
+ux-review-screenshots/
+
