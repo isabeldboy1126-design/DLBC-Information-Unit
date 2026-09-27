@@ -25,9 +25,36 @@ import { ErrorBanner } from './components/ErrorBanner'
 import './App.css'
 
 function App() {
+  // Read initial view from URL hash if present (e.g. #sessions, #new_live)
+  const getInitialView = () => {
+    try {
+      const hash = window.location.hash.replace('#', '')
+      if (hash.startsWith('sessions')) return 'sessions'
+      if (['dashboard', 'sessions', 'new_live', 'transcribe', 'settings', 'live_recording'].includes(hash)) {
+        return hash
+      }
+    } catch {}
+    return 'dashboard'
+  }
+
   // Navigation: 'dashboard' | 'sessions' | 'new_live' | 'transcribe' | 'settings' | 'live_recording'
-  const [currentView, setCurrentView] = useState('dashboard')
+  const [currentView, setCurrentView] = useState(getInitialView)
   const [isRecorderMinimized, setIsRecorderMinimized] = useState(false)
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '')
+      if (hash.startsWith('sessions')) {
+        setCurrentView('sessions')
+        return
+      }
+      if (['dashboard', 'sessions', 'new_live', 'transcribe', 'settings', 'live_recording'].includes(hash)) {
+        setCurrentView(hash)
+      }
+    }
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [])
   const [sessionMetadata, setSessionMetadata] = useState({
     title: 'Sunday Morning Worship Service',
     eventType: 'Sunday Worship Service',
@@ -166,7 +193,7 @@ function App() {
         }
       }
       return {
-        title: 'Sessions History',
+        title: '',
         onBack: () => setCurrentView('dashboard'),
       }
     }

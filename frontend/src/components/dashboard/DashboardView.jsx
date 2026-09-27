@@ -336,11 +336,11 @@ export function DashboardView({
               onClick={onViewNeedsVerification || onViewAllSessions}
               id="btn-attention-view-more"
             >
-              View all sessions <span aria-hidden="true">→</span>
+              View all <span aria-hidden="true">→</span>
             </button>
           </div>
 
-          {/* Each attention item is its OWN independent floating container */}
+          {/* Each attention item is its OWN independent floating row */}
           <div className="attention-items-container">
             {attentionSessions.map((sess) => {
               const isInterrupted = !!sess.is_interrupted
@@ -349,31 +349,25 @@ export function DashboardView({
               const readyEditing = isVerified && sess.reporting_status === 'reports_ready' && sess.editing_status !== 'complete'
               const readyProofreading = sess.editing_status === 'complete' && sess.proofreading_status !== 'complete'
 
-              let stagePillText = 'VERIFICATION'
+              let stageLabel = `Verification · ${sess.flag_count || 1}`
               let stagePillClass = 'stage-pill--verification'
-              let actionBtnText = 'Review Sections →'
-              let reasonText = `${sess.flag_count || 1} sections need verification`
+              let actionBtnText = 'Review'
 
               if (isInterrupted) {
-                stagePillText = 'INTERRUPTED'
+                stageLabel = 'Interrupted'
                 stagePillClass = 'stage-pill--interrupted'
-                actionBtnText = 'Review Recovery →'
-                reasonText = 'Interrupted during recording — review recovery'
+                actionBtnText = 'Review'
               } else if (readyProofreading) {
-                stagePillText = 'PROOFREADING'
+                stageLabel = 'Proofreading'
                 stagePillClass = 'stage-pill--proofreading'
-                actionBtnText = 'Start Proofreading →'
-                reasonText = 'Editorial draft approved — ready for proofreading'
+                actionBtnText = 'Continue'
               } else if (readyEditing) {
-                stagePillText = 'EDITING'
+                stageLabel = 'Editing'
                 stagePillClass = 'stage-pill--editing'
-                actionBtnText = 'Continue Editing →'
-                reasonText = 'Verification complete — ready for editing'
+                actionBtnText = 'Continue'
               }
 
-              const speakerName = getSpeakerName(sess)
               const sessionDate = formatAttentionDate(sess.date_created)
-              const sessionDuration = formatDuration(sess.duration_seconds || sess.audio_duration_seconds)
 
               return (
                 <div
@@ -385,41 +379,16 @@ export function DashboardView({
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSession(sess.session_id); } }}
                 >
                   <div className="attention-card-left">
-                    <div className="attention-doc-box">
-                      <DocumentItemIcon />
-                    </div>
-
                     <div className="attention-info-stack">
                       <h3 className="attention-session-title">{sess.title || 'Untitled Session'}</h3>
-                      <p className="attention-reason-text">{reasonText}</p>
-
-                      <div className="attention-meta-row">
-                        {sessionDate && (
-                          <span className="attention-meta-chip">
-                            <CalendarIcon />
-                            <span>{sessionDate}</span>
-                          </span>
-                        )}
-                        {speakerName && (
-                          <span className="attention-meta-chip">
-                            <UserIcon />
-                            <span>{speakerName}</span>
-                          </span>
-                        )}
-                        {sessionDuration && (
-                          <span className="attention-meta-chip attention-meta-chip--duration">
-                            <ClockIcon />
-                            <span>{sessionDuration}</span>
-                          </span>
-                        )}
-                      </div>
+                      {sessionDate && <span className="attention-session-date">{sessionDate}</span>}
                     </div>
                   </div>
 
                   <div className="attention-card-right">
                     <span className={`attention-stage-pill ${stagePillClass}`}>
                       <span className="pill-dot">●</span>
-                      <span className="pill-label">{stagePillText}</span>
+                      <span className="pill-label">{stageLabel}</span>
                     </span>
 
                     <button
@@ -431,19 +400,6 @@ export function DashboardView({
                       }}
                     >
                       {actionBtnText}
-                    </button>
-
-                    <button
-                      type="button"
-                      className="attention-menu-dots-btn"
-                      title="More options"
-                      aria-label="More options"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onOpenSession(sess.session_id)
-                      }}
-                    >
-                      <DotsMenuIcon />
                     </button>
                   </div>
                 </div>
@@ -469,7 +425,7 @@ export function DashboardView({
             onClick={onViewAllSessions}
             id="btn-view-all-sessions"
           >
-            View all sessions <span aria-hidden="true">→</span>
+            View all <span aria-hidden="true">→</span>
           </button>
         </div>
 

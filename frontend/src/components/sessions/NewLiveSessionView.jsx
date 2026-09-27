@@ -21,8 +21,6 @@ export function NewLiveSessionView({
   const [selectedSessionId, setSelectedSessionId] = useState('')
   const [minister, setMinister] = useState('')
   const [messageTitle, setMessageTitle] = useState('')
-  const [customSessionName, setCustomSessionName] = useState('')
-  const [isCustomTitleEdited, setIsCustomTitleEdited] = useState(false)
   const [validationError, setValidationError] = useState('')
   const [isLoadingProgrammes, setIsLoadingProgrammes] = useState(true)
 
@@ -81,7 +79,7 @@ export function NewLiveSessionView({
     ? `${progName} — ${sessName}${messageTitle.trim() ? ': ' + messageTitle.trim() : ''}`
     : `${progName}${messageTitle.trim() ? ': ' + messageTitle.trim() : ''}`
 
-  const effectiveSessionTitle = isCustomTitleEdited ? customSessionName : computedDefaultTitle
+  const finalSessionTitle = computedDefaultTitle
 
   // Start live test meter when component mounts
   useEffect(() => {
@@ -94,7 +92,7 @@ export function NewLiveSessionView({
   }, [liveAudio.permissionState])
 
   const handleStart = () => {
-    const finalTitle = effectiveSessionTitle.trim() || computedDefaultTitle
+    const finalTitle = finalSessionTitle.trim()
     if (!finalTitle) {
       setValidationError('Please specify or select a Session Title.')
       return
@@ -121,16 +119,7 @@ export function NewLiveSessionView({
     <div className="new-session-view-container">
       {/* Header */}
       <div className="new-session-header">
-        <div>
-          <h1 className="new-session-title">New Live Session</h1>
-          <p className="new-session-subtitle">
-            Configure session details and verify audio input before recording.
-          </p>
-        </div>
-
-        <button type="button" className="btn btn--outline btn--small" onClick={onBack}>
-          ← Back to Dashboard
-        </button>
+        <h1 className="new-session-title">New Live Session</h1>
       </div>
 
       {(validationError || liveAudio.error) && (
@@ -233,38 +222,6 @@ export function NewLiveSessionView({
                 onChange={(e) => setMessageTitle(e.target.value)}
               />
             </div>
-
-            {/* 4. Session Title Preview / Override */}
-            <div className="form-group" style={{ marginTop: '0.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label className="form-label" htmlFor="input-session-name">
-                  Generated Session Title
-                </label>
-                {isCustomTitleEdited && (
-                  <button
-                    type="button"
-                    className="btn-link-small"
-                    onClick={() => {
-                      setIsCustomTitleEdited(false)
-                      setCustomSessionName('')
-                    }}
-                    style={{ fontSize: '0.72rem', color: '#3b82f6' }}
-                  >
-                    ↺ Reset to auto
-                  </button>
-                )}
-              </div>
-              <input
-                type="text"
-                id="input-session-name"
-                className="form-control"
-                value={effectiveSessionTitle}
-                onChange={(e) => {
-                  setIsCustomTitleEdited(true)
-                  setCustomSessionName(e.target.value)
-                }}
-              />
-            </div>
           </div>
         </div>
 
@@ -277,9 +234,6 @@ export function NewLiveSessionView({
                 <span className="card-icon">🎙️</span>
                 <h3>Audio Input</h3>
               </div>
-              <span className={`badge ${liveAudio.hasAudioSignal ? 'badge--success' : 'badge--info'}`}>
-                {liveAudio.hasAudioSignal ? '● SIGNAL ACTIVE' : '● READY'}
-              </span>
             </div>
 
             <div className="card-body new-session-card-body">

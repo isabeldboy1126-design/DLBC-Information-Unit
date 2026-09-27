@@ -39,6 +39,22 @@ function BellIcon() {
   )
 }
 
+function ChevronLeftIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  )
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  )
+}
+
 /**
  * AppShell — Persistent application shell matching the Lead Monitor reference design.
  */
@@ -52,6 +68,13 @@ export function AppShell({
   children,
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      return typeof window !== 'undefined' && window.location.hash.includes('sidebar_collapsed')
+    } catch {
+      return false
+    }
+  })
 
   const openMobileNav = () => setMobileNavOpen(true)
   const closeMobileNav = () => setMobileNavOpen(false)
@@ -77,9 +100,9 @@ export function AppShell({
       {/* ------------------------------------------------------------- */}
       {/* LEFT SIDEBAR                                                  */}
       {/* ------------------------------------------------------------- */}
-      <aside className={`app-sidebar ${mobileNavOpen ? 'app-sidebar--mobile-open' : ''}`}>
+      <aside className={`app-sidebar ${isCollapsed ? 'app-sidebar--collapsed' : ''} ${mobileNavOpen ? 'app-sidebar--mobile-open' : ''}`}>
         <div className="sidebar-top">
-          {/* Brand Logo */}
+          {/* Brand Logo & Collapse Toggle */}
           <div className="sidebar-brand-row">
             <div
               className="sidebar-brand"
@@ -89,17 +112,31 @@ export function AppShell({
               }}
               role="button"
               tabIndex={0}
+              title={isCollapsed ? 'DLBC Information Unit' : undefined}
             >
               <img
                 src="/dlbc-logo.png"
                 alt="DLBC logo"
                 className="sidebar-brand-logo"
               />
-              <div className="sidebar-brand-text">
-                <span className="brand-name">DLBC</span>
-                <span className="brand-sub">INFORMATION UNIT</span>
-              </div>
+              {!isCollapsed && (
+                <div className="sidebar-brand-text">
+                  <span className="brand-name">DLBC</span>
+                  <span className="brand-sub">INFORMATION UNIT</span>
+                </div>
+              )}
             </div>
+
+            {/* Desktop Collapse / Expand Toggle */}
+            <button
+              type="button"
+              className="sidebar-desktop-collapse-btn"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+            </button>
 
             {/* Close button inside mobile drawer */}
             <button
@@ -126,12 +163,12 @@ export function AppShell({
                 title="Return to active recording monitor"
               >
                 <span className="live-pulse-dot">●</span>
-                <span className="live-btn-text">ACTIVE RECORDING</span>
+                {!isCollapsed && <span className="live-btn-text">ACTIVE RECORDING</span>}
               </button>
             </div>
           )}
 
-          {/* Navigation Links */}
+          {/* Main Navigation Links: Dashboard and Sessions ONLY */}
           <nav className="sidebar-nav">
             <button
               type="button"
@@ -141,9 +178,10 @@ export function AppShell({
                 closeMobileNav()
               }}
               id="nav-link-dashboard"
+              title={isCollapsed ? 'Dashboard' : undefined}
             >
               <span className="nav-icon"><HomeIcon /></span>
-              <span className="nav-label">Dashboard</span>
+              {!isCollapsed && <span className="nav-label">Dashboard</span>}
             </button>
 
             <button
@@ -154,35 +192,29 @@ export function AppShell({
                 closeMobileNav()
               }}
               id="nav-link-sessions"
+              title={isCollapsed ? 'Sessions' : undefined}
             >
               <span className="nav-icon"><SessionsIcon /></span>
-              <span className="nav-label">Sessions</span>
-            </button>
-
-            <button
-              type="button"
-              className={`sidebar-nav-item ${activeView === 'settings' ? 'sidebar-nav-item--active' : ''}`}
-              onClick={() => {
-                onNavigate('settings')
-                closeMobileNav()
-              }}
-              id="nav-link-settings"
-            >
-              <span className="nav-icon"><SettingsIcon /></span>
-              <span className="nav-label">Settings</span>
+              {!isCollapsed && <span className="nav-label">Sessions</span>}
             </button>
           </nav>
         </div>
 
-        {/* Sidebar Footer: System Status */}
+        {/* Sidebar Footer: Settings alone at the bottom (System Ready removed) */}
         <div className="sidebar-footer">
-          <div className="sidebar-status-widget">
-            <div className="sidebar-status-indicator">
-              <span className="sidebar-status-dot" />
-              <span className="sidebar-status-title">System Ready</span>
-            </div>
-            <span className="sidebar-status-subtitle">All systems operational</span>
-          </div>
+          <button
+            type="button"
+            className={`sidebar-nav-item ${activeView === 'settings' ? 'sidebar-nav-item--active' : ''}`}
+            onClick={() => {
+              onNavigate('settings')
+              closeMobileNav()
+            }}
+            id="nav-link-settings"
+            title={isCollapsed ? 'Settings' : undefined}
+          >
+            <span className="nav-icon"><SettingsIcon /></span>
+            {!isCollapsed && <span className="nav-label">Settings</span>}
+          </button>
         </div>
       </aside>
 
@@ -199,7 +231,7 @@ export function AppShell({
       {/* ------------------------------------------------------------- */}
       {/* MAIN CONTENT AREA & TOP BAR                                   */}
       {/* ------------------------------------------------------------- */}
-      <div className="app-main-column">
+      <div className={`app-main-column ${isCollapsed ? 'app-main-column--collapsed' : ''}`}>
         {/* Top Header Bar */}
         <header className="app-topbar">
           {/* Dynamic Contextual Title & Back Button */}
@@ -223,11 +255,14 @@ export function AppShell({
                   className="topbar-back-btn"
                   onClick={onBack}
                   id="topbar-btn-back"
+                  aria-label="Back"
+                  title="Back"
                 >
                   <span className="back-arrow">←</span>
-                  <span className="back-text">Back</span>
                 </button>
-                <span className="topbar-screen-title">{screenTitle}</span>
+                {screenTitle ? (
+                  <span className="topbar-screen-title">{screenTitle}</span>
+                ) : null}
               </div>
             ) : (
               <h1 className="topbar-screen-title topbar-screen-title--root">{screenTitle}</h1>
