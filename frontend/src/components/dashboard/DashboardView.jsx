@@ -1,4 +1,5 @@
 import React, { useRef } from 'react'
+import { getSessionHierarchy } from '../sessions/SessionDetailView'
 
 /* =========================================================================
    SVG Icons (Clean, crisp vectors matching reference design)
@@ -305,9 +306,6 @@ export function DashboardView({
 
             <div className="upload-card-content">
               <h3 className="upload-card-title">Upload Recording</h3>
-              <p className="upload-card-desc">
-                Upload an audio or video file to transcribe and create a session.
-              </p>
             </div>
           </div>
 
@@ -367,6 +365,7 @@ export function DashboardView({
                 actionBtnText = 'Continue'
               }
 
+              const { programme, sessionTitle } = getSessionHierarchy(sess)
               const sessionDate = formatAttentionDate(sess.date_created)
 
               return (
@@ -380,7 +379,8 @@ export function DashboardView({
                 >
                   <div className="attention-card-left">
                     <div className="attention-info-stack">
-                      <h3 className="attention-session-title">{sess.title || 'Untitled Session'}</h3>
+                      {programme && <span className="attention-programme-label">{programme}</span>}
+                      <h3 className="attention-session-title">{sessionTitle}</h3>
                       {sessionDate && <span className="attention-session-date">{sessionDate}</span>}
                     </div>
                   </div>

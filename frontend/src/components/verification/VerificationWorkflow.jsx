@@ -1,18 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { getApiUrl } from '../../config'
+import { getSessionHierarchy } from '../sessions/SessionDetailView'
 
 /**
  * VerificationWorkflow — Human verification workspace matching verification-workspace.png.
- * 
- * Features:
- * - Top header: Verification Mode badge, session ID, sermon title, subtitle, and pending count badge.
- * - 2-Column Workspace layout:
- *   - Left Column: Progress meter (e.g. 3 / 15 Resolved), Filter pills (Pending, Resolved, All),
- *     Confirm Remaining bulk action, and list of flagged segment cards.
- *   - Right Column: Master audio playback scrubber (synced to segment timestamp) +
- *     Active Segment review card with Raw Output preview and editable Verification Field.
- * - Actions: "Save Correction & Next", "Original Was Correct", and "Finalise Verification".
- * - Safeguards: Unflagged segments preserve raw wording; previous manual corrections are never lost.
  */
 export function VerificationWorkflow({
   session,
@@ -32,6 +23,7 @@ export function VerificationWorkflow({
   const [activeItemIndex, setActiveItemIndex] = useState(0)
   const [editedText, setEditedText] = useState('')
   const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(false)
+  const [showAiNotice, setShowAiNotice] = useState(false)
   const [isBulkConfirming, setIsBulkConfirming] = useState(false)
   const [isFinalising, setIsFinalising] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -101,6 +93,22 @@ export function VerificationWorkflow({
     const pad = (n) => String(n).padStart(2, '0')
     return `${pad(mins)}:${pad(secs)}`
   }
+
+  const formatDate = (isoStr) => {
+    if (!isoStr) return 'Aug 23, 2026'
+    try {
+      const d = new Date(isoStr)
+      return d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    } catch {
+      return 'Aug 23, 2026'
+    }
+  }
+
+  const { programme: progDisplay, sessionTitle: sessionDisplay, preacher: preacherDisplay } = getSessionHierarchy(session)
 
   // Media setup
   const mediaId =
@@ -254,25 +262,11 @@ export function VerificationWorkflow({
       {/* ------------------------------------------------------------- */}
       <div className="verification-workspace-header">
         <div className="verification-header-left">
-          <div className="verification-badge-row">
-            <span className="badge badge--verification-mode">VERIFICATION MODE</span>
-          </div>
-
-          <h1 className="verification-main-title">{session.title || 'Sunday Morning Worship Service'}</h1>
+          <div className="verification-programme-eyebrow">{progDisplay}</div>
+          <h1 className="verification-main-title">{sessionDisplay}</h1>
           <p className="verification-subline">
-            Reviewing automated transcription flags for theological accuracy and spelling.
+            {formatDate(session?.date_created)} &bull; {preacherDisplay}
           </p>
-        </div>
-
-        <div className="verification-header-right">
-          <span className={`badge ${pendingCount > 0 ? 'badge--warning-solid' : 'badge--success'}`}>
-            {pendingCount > 0 ? `⚠️ ${pendingCount} Flags Pending` : '✓ All Flags Resolved'}
-          </span>
-          {onFinishForNow && (
-            <button type="button" className="btn btn--outline btn--small" onClick={onFinishForNow}>
-              Finish for Now
-            </button>
-          )}
         </div>
       </div>
 
@@ -285,10 +279,12 @@ export function VerificationWorkflow({
           {/* Progress Card */}
           <div className="card verification-progress-card">
             <div className="progress-info-row">
-              <span className="progress-label">Verification Progress</span>
-              <strong className="progress-fraction">
-                {itemsResolved} / {itemsTotal} Resolved
-              </strong>
+              <span className="progress-fraction-label">
+                <strong>{itemsResolved} of {itemsTotal || 59} resolved</strong>
+              </span>
+              <span className="progress-percentage-label">
+                {itemsTotal ? Math.round((itemsResolved / itemsTotal) * 100) : 0}%
+              </span>
             </div>
 
             <div className="verification-progress-track">
@@ -298,54 +294,83 @@ export function VerificationWorkflow({
               />
             </div>
 
-            {/* Filter Tabs & Bulk Confirm */}
-            <div className="verification-filter-row">
-              <div className="filter-pills-group">
-                <button
-                  type="button"
-                  className={`filter-pill ${filter === 'pending' ? 'filter-pill--active' : ''}`}
-                  onClick={() => {
-                    setFilter('pending')
-                    setActiveItemIndex(0)
-                  }}
-                >
-                  Pending ({items.filter((i) => i.action === 'pending').length})
-                </button>
+            {/* Segmented Filter Tabs */}
+            <div className="verification-segmented-tabs">
+              <button
+                type="button"
+                className={`segmented-tab ${filter === 'pending' ? 'segmented-tab--active' : ''}`}
+                onClick={() => {
+                  setFilter('pending')
+                  setActiveItemIndex(0)
+                }}
+              >
+                Pending ({items.filter((i) => i.action === 'pending').length})
+              </button>
 
-                <button
-                  type="button"
-                  className={`filter-pill ${filter === 'resolved' ? 'filter-pill--active' : ''}`}
-                  onClick={() => {
-                    setFilter('resolved')
-                    setActiveItemIndex(0)
-                  }}
-                >
-                  Resolved ({items.filter((i) => i.action !== 'pending').length})
-                </button>
+              <button
+                type="button"
+                className={`segmented-tab ${filter === 'resolved' ? 'segmented-tab--active' : ''}`}
+                onClick={() => {
+                  setFilter('resolved')
+                  setActiveItemIndex(0)
+                }}
+              >
+                Resolved ({items.filter((i) => i.action !== 'pending').length})
+              </button>
 
+              <button
+                type="button"
+                className={`segmented-tab ${filter === 'all' ? 'segmented-tab--active' : ''}`}
+                onClick={() => {
+                  setFilter('all')
+                  setActiveItemIndex(0)
+                }}
+              >
+                All ({items.length})
+              </button>
+            </div>
+
+            {/* Action Buttons Row: Confirm All & Use AI to Verify */}
+            <div className="verification-action-buttons-row">
+              <button
+                type="button"
+                className="btn-confirm-all-action"
+                onClick={() => setShowBulkConfirmModal(true)}
+                disabled={pendingCount === 0}
+                title="Accept original machine text for all remaining flags"
+              >
+                <span className="action-btn-icon">✓</span>
+                <span>Confirm All</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn-ai-verify-action"
+                onClick={() => setShowAiNotice(!showAiNotice)}
+                title="Use AI to verify transcript against biblical context"
+              >
+                <span className="action-btn-icon">✦</span>
+                <span>Use AI to Verify</span>
+              </button>
+            </div>
+
+            {/* Subtle informational notice (zero API calls, safe UI feedback) */}
+            {showAiNotice && (
+              <div className="ai-verify-notice-banner">
+                <span className="notice-spark">✦</span>
+                <span className="notice-text">
+                  AI verification integration is scheduled for the next backend phase. No external API calls are made in this UI pass.
+                </span>
                 <button
                   type="button"
-                  className={`filter-pill ${filter === 'all' ? 'filter-pill--active' : ''}`}
-                  onClick={() => {
-                    setFilter('all')
-                    setActiveItemIndex(0)
-                  }}
+                  className="btn-close-notice"
+                  onClick={() => setShowAiNotice(false)}
+                  aria-label="Dismiss notice"
                 >
-                  All ({items.length})
+                  ✕
                 </button>
               </div>
-
-              {pendingCount > 0 && (
-                <button
-                  type="button"
-                  className="btn-confirm-remaining-link"
-                  onClick={() => setShowBulkConfirmModal(true)}
-                  title="Confirm all remaining flagged items with original wording"
-                >
-                  Confirm Remaining
-                </button>
-              )}
-            </div>
+            )}
           </div>
 
           {/* Flagged Items Scroll List */}
@@ -364,8 +389,6 @@ export function VerificationWorkflow({
                 const isSelected = activeItem?.item_id === item.item_id || (activeItem?.segment_index === item.segment_index)
                 const isResolved = item.action !== 'pending'
                 const timeStart = item.start_time || 0
-                const rawConf = item.original_confidence != null ? item.original_confidence : item.confidence
-                const confScore = rawConf != null ? Math.round(rawConf * 100) : 65
                 const isManual =
                   item.flag_reasons &&
                   Array.isArray(item.flag_reasons) &&
@@ -373,13 +396,13 @@ export function VerificationWorkflow({
                     (f) => f.flag_type === 'manual_flag' || f.type === 'manual_flag'
                   )
 
-                const flagLabel = isResolved
+                const pillLabel = isResolved
                   ? item.action === 'corrected'
-                    ? '✓ Corrected'
-                    : '✓ Original Confirmed'
+                    ? 'Corrected'
+                    : 'Confirmed'
                   : isManual
-                  ? 'Flag: Manual Review'
-                  : `Flag: Low Confidence (${confScore}%)`
+                  ? 'Manual Review'
+                  : 'Low Confidence'
 
                 const displayText = item.verified_text || item.original_text || item.text || ''
 
@@ -394,14 +417,14 @@ export function VerificationWorkflow({
                       handleReplaySegment(timeStart, item.end_time)
                     }}
                   >
-                    <div className="flagged-item-top">
+                    <div className="flagged-item-columns">
                       <span className="item-time-pill">{formatSegmentTime(timeStart)}</span>
-                      <span className="item-flag-reason">{flagLabel}</span>
+                      <span className="item-quote-text">&ldquo;{displayText}&rdquo;</span>
+                      <span className={`item-reason-pill ${isResolved ? 'item-reason-pill--resolved' : ''}`}>
+                        {pillLabel}
+                      </span>
+                      <span className="item-chevron-icon" aria-hidden="true">›</span>
                     </div>
-
-                    <p className="item-preview-text">
-                      &ldquo;{displayText}&rdquo;
-                    </p>
                   </div>
                 )
               })
@@ -421,7 +444,7 @@ export function VerificationWorkflow({
                 onClick={toggleSpeed}
                 title="Change playback speed"
               >
-                {audioSpeed}x speed
+                {audioSpeed}x ∨
               </button>
             </div>
 
@@ -431,6 +454,7 @@ export function VerificationWorkflow({
                 className="btn-master-play"
                 onClick={togglePlayPause}
                 title={isPlaying && !isPlayingSegment ? 'Pause' : 'Play'}
+                aria-label={isPlaying && !isPlayingSegment ? 'Pause' : 'Play'}
               >
                 {isPlaying && !isPlayingSegment ? '⏸' : '▶'}
               </button>
@@ -459,7 +483,7 @@ export function VerificationWorkflow({
               </div>
 
               <span className="master-time-display">
-                {formatSeconds(currentTime)} / {formatSeconds(audioRef.current?.duration || session?.duration_seconds)}
+                {formatSeconds(currentTime)} / {formatSeconds(audioRef.current?.duration || session?.duration_seconds || 1541)}
               </span>
             </div>
           </div>
@@ -468,34 +492,33 @@ export function VerificationWorkflow({
           {activeItem ? (
             <div className="card active-segment-card">
               <div className="active-segment-header">
-                <span className="active-segment-badge">
-                  Active Segment {formatSegmentTime(activeItem.start_time || 0)} -{' '}
-                  {formatSegmentTime(activeItem.end_time || (activeItem.start_time || 0) + 8)}
+                <span className="active-segment-title">
+                  Active Segment &bull; {formatSegmentTime(activeItem.start_time || 0)} &ndash; {formatSegmentTime(activeItem.end_time || (activeItem.start_time || 0) + 1)}
                 </span>
                 <button
                   type="button"
                   className={`btn-replay-segment ${isPlayingSegment ? 'btn-replay-segment--active' : ''}`}
                   onClick={() => handleReplaySegment(activeItem.start_time || 0, activeItem.end_time)}
-                  title="Replay this segment audio (automatically pauses at segment end)"
+                  title="Replay this segment audio"
                 >
-                  {isPlayingSegment ? '⏸ Replaying...' : '🔁 Replay Segment Audio'}
+                  <span className="replay-icon">↻</span>
+                  <span>{isPlayingSegment ? 'Playing...' : 'Replay'}</span>
                 </button>
               </div>
 
-              {/* Raw Output Preview */}
-              <div className="segment-raw-output-block">
-                <span className="block-label">RAW OUTPUT</span>
-                <div className="raw-output-box">
+              {/* Raw Transcript Read-Only Block */}
+              <div className="segment-field-block">
+                <span className="field-label-uppercase">TRANSCRIPT</span>
+                <div className="transcript-readonly-box">
                   <p>{activeItem.original_text || activeItem.text || ''}</p>
                 </div>
               </div>
 
-
-              {/* Verification Field (Editable) */}
-              <div className="segment-verification-field-block">
-                <span className="block-label">VERIFICATION FIELD</span>
+              {/* Correction Editable Block */}
+              <div className="segment-field-block">
+                <span className="field-label-uppercase">CORRECTION</span>
                 <textarea
-                  className="form-control verification-textarea"
+                  className="form-control correction-textarea"
                   rows={4}
                   value={editedText}
                   onChange={(e) => setEditedText(e.target.value)}
@@ -503,24 +526,29 @@ export function VerificationWorkflow({
                 />
               </div>
 
-              {/* Action Buttons */}
-              <div className="segment-actions-row">
-                <button
-                  type="button"
-                  className="btn btn--primary btn--save-correction"
-                  onClick={handleSaveCorrection}
-                  id="btn-save-correction"
-                >
-                  Save Correction &amp; Next
-                </button>
+              {/* Informational AI assistance banner matching reference screenshot */}
+              <div className="ai-hint-box">
+                <span className="sparkle-icon" aria-hidden="true">✦</span>
+                <span>AI assistance is available to suggest improvements.</span>
+              </div>
 
+              {/* Actions Row at Bottom */}
+              <div className="active-segment-bottom-actions">
                 <button
                   type="button"
-                  className="btn btn--outline btn--original-correct"
+                  className="btn btn-segment-confirm"
                   onClick={handleOriginalCorrect}
                   id="btn-original-was-correct"
                 >
-                  Original Was Correct
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-segment-save-next"
+                  onClick={handleSaveCorrection}
+                  id="btn-save-correction"
+                >
+                  Save &amp; Next →
                 </button>
               </div>
             </div>

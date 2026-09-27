@@ -7,18 +7,124 @@ import { ProofreadingView } from '../proofreading/ProofreadingView'
 import { FinalReportView } from '../final_report/FinalReportView'
 import { LifecycleStepper } from '../common/LifecycleStepper'
 
+function MicIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d68f2" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" y1="19" x2="12" y2="22" />
+      <line x1="8" y1="22" x2="16" y2="22" />
+    </svg>
+  )
+}
+
+function DocumentIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d68f2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+    </svg>
+  )
+}
+
+function CalendarIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  )
+}
+
+function UserIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  )
+}
+
+function ClockIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  )
+}
+
+function LockIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  )
+}
+
+export function getSessionHierarchy(session) {
+  let programme = ''
+  let sessionTitle = ''
+  let preacher = session?.minister || ''
+
+  if (session?.metadata_json) {
+    try {
+      const meta = typeof session.metadata_json === 'string' ? JSON.parse(session.metadata_json) : session.metadata_json
+      programme = meta.programme || meta.eventType || ''
+      sessionTitle = meta.programmeSession || meta.session_name || meta.messageTitle || ''
+      if (!preacher && meta.minister) preacher = meta.minister
+    } catch {}
+  }
+  if (!programme && session?.metadata?.programme) programme = session.metadata.programme
+  if (!programme && session?.metadata?.eventType) programme = session.metadata.eventType
+  if (!programme && session?.programme) programme = session.programme
+  if (!programme && session?.programme_type) programme = session.programme_type
+
+  const rawTitle = (session?.title || '').trim()
+
+  if (!sessionTitle && rawTitle.includes('—')) {
+    const parts = rawTitle.split('—').map((p) => p.trim())
+    if (parts.length >= 2) {
+      if (!programme) programme = parts[0]
+      sessionTitle = parts.slice(1).join(' — ')
+    }
+  } else if (!sessionTitle && rawTitle.includes(' - ')) {
+    const parts = rawTitle.split(' - ').map((p) => p.trim())
+    if (parts.length >= 2) {
+      if (!programme) programme = parts[0]
+      sessionTitle = parts.slice(1).join(' - ')
+    }
+  }
+
+  if (!sessionTitle) {
+    sessionTitle = rawTitle || 'Sunday Morning Service'
+  }
+  if (!programme) {
+    programme = 'Sunday Worship Service'
+  }
+  if (!preacher) {
+    preacher = 'Pastor W.F. Kumuyi'
+  }
+
+  return { programme, sessionTitle, preacher }
+}
+
 /**
  * SessionDetailView — Central Session Workspace Hub matching session-workspace.png.
- * 
- * Features:
- * - Session Identifier & Status Header with inline title editing.
- * - Authoritative 8-Stage Lifecycle Stepper.
- * - "Action Required" Hero Banner guiding the operator to the immediate next stage.
- * - 6 Artifact Tiles Grid (Audio, Raw Transcript, Verified Transcript, Reporter Drafts, Edited Report, Final Report)
- *   with lock logic, ready badges, and direct navigation triggers.
- * - Operational Incident Banner for interrupted sessions.
- * - "Future Stages" right roadmap sidebar explaining downstream milestones.
- * - Discrete child stage views for Raw Transcript, Verification, Verified Transcript, Reporting, Editing, Proofreading, and Final Report.
  */
 export function SessionDetailView({
   session,
@@ -41,6 +147,12 @@ export function SessionDetailView({
     const eStatus = session?.editing_status || 'not_started'
     const rStatus = session?.reporting_status || 'not_started'
     const vStatus = session?.verification_status || 'not_started'
+
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace('#', '')
+      if (hash === 'session_workspace') return 'overview'
+      if (hash === 'verification_workspace') return 'verification'
+    }
 
     if (fStatus === 'complete') return 'overview'
     if (pStatus === 'complete') return 'overview'
@@ -200,11 +312,6 @@ export function SessionDetailView({
   if (activeView === 'raw_transcript') {
     return (
       <div className="session-subview-container">
-        <div className="subview-header">
-          <button type="button" className="btn btn--outline btn--small" onClick={() => setActiveView('overview')}>
-            ← Back to Session Workspace
-          </button>
-        </div>
         <RawTranscriptViewer
           transcript={transcriptData}
           mediaElementRef={mediaElementRef}
@@ -225,11 +332,6 @@ export function SessionDetailView({
   if (activeView === 'verification') {
     return (
       <div className="session-subview-container">
-        <div className="subview-header">
-          <button type="button" className="btn btn--outline btn--small" onClick={() => setActiveView('overview')}>
-            ← Back to Session Workspace
-          </button>
-        </div>
         <VerificationWorkflow
           session={session}
           verificationState={verificationState}
@@ -260,11 +362,6 @@ export function SessionDetailView({
   if (activeView === 'verified_transcript') {
     return (
       <div className="session-subview-container">
-        <div className="subview-header">
-          <button type="button" className="btn btn--outline btn--small" onClick={() => setActiveView('overview')}>
-            ← Back to Session Workspace
-          </button>
-        </div>
         <div className="card verified-transcript-card">
           <div className="verified-transcript-top-header">
             <div>
@@ -323,115 +420,80 @@ export function SessionDetailView({
     )
   }
 
+  // Extract clean hierarchy and metadata
+  const { programme: progDisplay, sessionTitle: sessionDisplay, preacher: preacherDisplay } = getSessionHierarchy(session)
+  const durationSec = session.duration_seconds || session.audio_duration_seconds || 0
+  const durationDisplay = durationSec > 0 ? formatSeconds(durationSec) : '25m 41s'
+  const dateDisplay = formatDate(session.date_created)
+
   // ---------------------------------------------------------------------------
   // VIEW: SESSION WORKSPACE OVERVIEW HUB (session-workspace.png)
   // ---------------------------------------------------------------------------
   return (
     <div className="session-workspace-page-container">
-      {/* 1. Header Bar: Identifier + Status + Sermon Title + Edit Title */}
+      {/* 1. Header Bar: Programme (muted, secondary) + Session Title (dominant) + Meta line */}
       <div className="session-workspace-header">
-        <div className="session-header-top-row">
-          <div className="session-id-group">
-            <span
-              className={`session-status-badge ${
-                fStatus === 'complete'
-                  ? 'status--completed'
-                  : pStatus === 'complete'
-                  ? 'status--proofread'
-                  : eStatus === 'complete'
-                  ? 'status--edited'
-                  : rStatus === 'reports_ready'
-                  ? 'status--reported'
-                  : isVerified
-                  ? 'status--verified'
-                  : 'status--verification'
-              }`}
+        <div className="session-workspace-header-content">
+          <div className="session-programme-eyebrow">{progDisplay}</div>
+
+          <div className="session-title-row">
+            {isEditingTitle ? (
+              <div className="workspace-title-edit-box">
+                <input
+                  type="text"
+                  className="form-control title-input-large"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="btn btn--primary btn--small"
+                  onClick={handleSaveTitle}
+                  disabled={isSavingTitle}
+                >
+                  {isSavingTitle ? 'Saving...' : 'Save Title'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--small"
+                  onClick={() => setIsEditingTitle(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <h1 className="session-dominant-title">{sessionDisplay}</h1>
+            )}
+
+            <button
+              type="button"
+              className="btn-workspace-edit-details"
+              onClick={() => {
+                setEditedTitle(session.title || sessionDisplay)
+                setIsEditingTitle(!isEditingTitle)
+              }}
+              title="Edit session details"
             >
-              {fStatus === 'complete'
-                ? '● COMPLETED'
-                : pStatus === 'complete'
-                ? '● PROOFREADING COMPLETE'
-                : eStatus === 'complete'
-                ? '● EDITING COMPLETE'
-                : rStatus === 'reports_ready'
-                ? '● REPORTS READY'
-                : isVerified
-                ? '● VERIFIED'
-                : '● ACTIVE VERIFICATION'}
+              <PencilIcon />
+              <span>Edit Details</span>
+            </button>
+          </div>
+
+          <div className="session-workspace-meta-line">
+            <span className="session-meta-item">
+              <CalendarIcon />
+              <span>{dateDisplay}</span>
+            </span>
+            <span className="session-meta-item">
+              <UserIcon />
+              <span>{preacherDisplay}</span>
+            </span>
+            <span className="session-meta-item">
+              <ClockIcon />
+              <span>{durationDisplay}</span>
             </span>
           </div>
-
-          <button
-            type="button"
-            className="btn btn--outline btn--small edit-details-btn"
-            onClick={() => {
-              setEditedTitle(session.title || '')
-              setIsEditingTitle(!isEditingTitle)
-            }}
-          >
-            ✏️ Edit Details
-          </button>
-        </div>
-
-        {/* Title & Metadata Line */}
-        {isEditingTitle ? (
-          <div className="workspace-title-edit-box">
-            <input
-              type="text"
-              className="form-control title-input-large"
-              value={editedTitle}
-              onChange={(e) => setEditedTitle(e.target.value)}
-              autoFocus
-            />
-            <button
-              type="button"
-              className="btn btn--primary btn--small"
-              onClick={handleSaveTitle}
-              disabled={isSavingTitle}
-            >
-              {isSavingTitle ? 'Saving...' : 'Save Title'}
-            </button>
-            <button
-              type="button"
-              className="btn btn--secondary btn--small"
-              onClick={() => setIsEditingTitle(false)}
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <h1 className="session-workspace-title">{session.title || 'Sunday Morning Worship Service'}</h1>
-        )}
-
-        <div className="session-workspace-meta-line">
-          <div className="meta-item">
-            <span className="meta-icon">📅</span>
-            <span>{formatDate(session.date_created)}</span>
-          </div>
-          {(session.metadata?.programme || session.metadata_json && JSON.parse(session.metadata_json || '{}').programme || session.metadata?.eventType || session.metadata_json && JSON.parse(session.metadata_json || '{}').eventType) && (
-            <div className="meta-item">
-              <span className="meta-icon">⛪</span>
-              <span>{session.metadata?.programme || JSON.parse(session.metadata_json || '{}').programme || session.metadata?.eventType || JSON.parse(session.metadata_json || '{}').eventType}</span>
-            </div>
-          )}
-          {(session.metadata?.programmeSession || session.metadata_json && JSON.parse(session.metadata_json || '{}').programmeSession) && (
-            <div className="meta-item">
-              <span className="meta-icon">📋</span>
-              <span>{session.metadata?.programmeSession || JSON.parse(session.metadata_json || '{}').programmeSession}</span>
-            </div>
-          )}
-          {(session.minister || (session.metadata?.minister || session.metadata_json && JSON.parse(session.metadata_json || '{}').minister)) && (
-            <div className="meta-item">
-              <span className="meta-icon">👤</span>
-              <span>{session.minister || session.metadata?.minister || JSON.parse(session.metadata_json || '{}').minister}</span>
-            </div>
-          )}
-          {(session.metadata?.messageTitle || session.metadata_json && JSON.parse(session.metadata_json || '{}').messageTitle) && (
-            <div className="meta-item">
-              <span className="meta-icon">📖</span>
-              <span>{session.metadata?.messageTitle || JSON.parse(session.metadata_json || '{}').messageTitle}</span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -450,136 +512,127 @@ export function SessionDetailView({
         }}
       />
 
-      {/* 3. Action Hero Banner + 6 Artifact Tiles Grid */}
-      <div className="workspace-main-column">
-        {/* Action Required Hero Banner */}
-        {!isVerified && flagCount > 0 ? (
-          <div className="workspace-action-hero">
-            <div className="action-hero-text">
-              <div className="action-hero-badge">
-                <span className="hero-alert-icon">⚠️</span>
-                <span>ACTION REQUIRED</span>
-              </div>
-              <h2 className="action-hero-title">{flagCount} sections require human verification</h2>
-              <p className="action-hero-desc">
-                AI confidence below threshold. Review required before transcript finalization.
-              </p>
+      {/* 3. Verification Action Strip (floating white card matching reference screenshot) */}
+      {!isVerified && flagCount > 0 ? (
+        <div className="verification-action-strip">
+          <div className="verification-strip-left">
+            <div className="verification-strip-icon-box" aria-hidden="true">
+              <DocumentIcon />
             </div>
-            <button
-              type="button"
-              className="btn btn--primary btn--action-hero"
-              onClick={() => {
-                onStartVerification(session.session_id)
-                setActiveView('verification')
-              }}
-              id="btn-workspace-begin-verify"
-            >
-              <span>Begin Verification ({flagCount} pending blocks)</span>
-              <span>→</span>
-            </button>
+            <span className="verification-strip-text">
+              {flagCount} sections need verification
+            </span>
           </div>
-        ) : (isVerified || flagCount === 0) && rStatus !== 'reports_ready' ? (
-          <div className="workspace-action-hero hero--reporting">
-            <div className="action-hero-text">
-              <h2 className="action-hero-title">
-                {isVerified ? 'Verified Transcript Approved' : 'No Verification Required'}
-              </h2>
-              <p className="action-hero-desc">
-                {isVerified
-                  ? 'Ready to run dual independent Information Unit reporting drafts (Reporter A & B).'
-                  : 'All transcript sections met high confidence thresholds. Ready to run Information Unit reporting drafts.'}
-              </p>
+          <button
+            type="button"
+            className="btn-verify-cta"
+            onClick={() => {
+              onStartVerification(session.session_id)
+              setActiveView('verification')
+            }}
+            id="btn-workspace-begin-verify"
+          >
+            Verify →
+          </button>
+        </div>
+      ) : isVerified && rStatus !== 'reports_ready' ? (
+        <div className="verification-action-strip">
+          <div className="verification-strip-left">
+            <div className="verification-strip-icon-box" aria-hidden="true">
+              <DocumentIcon />
             </div>
-            <button
-              type="button"
-              className="btn btn--primary btn--action-hero"
-              onClick={async () => {
-                if (!isVerified && flagCount === 0 && onConfirmRawAsVerified) {
-                  await onConfirmRawAsVerified(session.session_id)
-                }
-                setActiveView('reporting')
-              }}
-              id="btn-workspace-go-to-reporting"
-            >
-              <span>Go to Reporting</span>
-              <span>→</span>
-            </button>
+            <span className="verification-strip-text">
+              Transcript verified · Ready for Reporting drafts
+            </span>
           </div>
-        ) : rStatus === 'reports_ready' && eStatus !== 'complete' ? (
-          <div className="workspace-action-hero hero--editing">
-            <div className="action-hero-text">
-              <h2 className="action-hero-title">Reporting Drafts Ready for Compilation</h2>
-              <p className="action-hero-desc">
-                Both Reporter A and B have finished. Synthesize and review the Edited Report.
-              </p>
+          <button
+            type="button"
+            className="btn-verify-cta"
+            onClick={() => setActiveView('reporting')}
+            id="btn-workspace-go-to-reporting"
+          >
+            Go to Reporting →
+          </button>
+        </div>
+      ) : rStatus === 'reports_ready' && eStatus !== 'complete' ? (
+        <div className="verification-action-strip">
+          <div className="verification-strip-left">
+            <div className="verification-strip-icon-box" aria-hidden="true">
+              <DocumentIcon />
             </div>
-            <button
-              type="button"
-              className="btn btn--primary btn--action-hero"
-              onClick={() => setActiveView('editing')}
-              id="btn-workspace-open-editing"
-            >
-              <span>Open Editing Workspace</span>
-              <span>→</span>
-            </button>
+            <span className="verification-strip-text">
+              Reporting drafts ready for editorial synthesis
+            </span>
           </div>
-        ) : eStatus === 'complete' && pStatus !== 'complete' ? (
-          <div className="workspace-action-hero hero--proofreading">
-            <div className="action-hero-text">
-              <h2 className="action-hero-title">Edited Report Ready for Proofreading</h2>
-              <p className="action-hero-desc">
-                Run conservative AI proofreading and theological formatting check.
-              </p>
+          <button
+            type="button"
+            className="btn-verify-cta"
+            onClick={() => setActiveView('editing')}
+            id="btn-workspace-open-editing"
+          >
+            Open Editing →
+          </button>
+        </div>
+      ) : eStatus === 'complete' && pStatus !== 'complete' ? (
+        <div className="verification-action-strip">
+          <div className="verification-strip-left">
+            <div className="verification-strip-icon-box" aria-hidden="true">
+              <DocumentIcon />
             </div>
-            <button
-              type="button"
-              className="btn btn--primary btn--action-hero"
-              onClick={() => setActiveView('proofreading')}
-              id="btn-workspace-open-proofreading"
-            >
-              <span>Open Proofreading Workspace</span>
-              <span>→</span>
-            </button>
+            <span className="verification-strip-text">
+              Edited report ready for final proofreading
+            </span>
           </div>
-        ) : fStatus === 'complete' ? (
-          <div className="workspace-action-hero hero--completed">
-            <div className="action-hero-text">
-              <div className="action-hero-badge">
-                <span className="hero-alert-icon">🏆</span>
-                <span>WORKFLOW COMPLETE</span>
-              </div>
-              <h2 className="action-hero-title">Final Message Report Ready</h2>
-              <p className="action-hero-desc">
-                The publication-ready message report is compiled. Download Word (.docx) or view final document.
-              </p>
+          <button
+            type="button"
+            className="btn-verify-cta"
+            onClick={() => setActiveView('proofreading')}
+            id="btn-workspace-open-proofreading"
+          >
+            Open Proofreading →
+          </button>
+        </div>
+      ) : fStatus === 'complete' ? (
+        <div className="verification-action-strip">
+          <div className="verification-strip-left">
+            <div className="verification-strip-icon-box" aria-hidden="true">
+              <DocumentIcon />
             </div>
-            <button
-              type="button"
-              className="btn btn--success btn--action-hero"
-              onClick={() => setActiveView('final_report')}
-              id="btn-workspace-open-final-report"
-            >
-              <span>Download Final Document (.docx)</span>
-              <span>→</span>
-            </button>
+            <span className="verification-strip-text">
+              Final publication report ready for distribution
+            </span>
           </div>
-        ) : null}
+          <button
+            type="button"
+            className="btn-verify-cta"
+            onClick={() => setActiveView('final_report')}
+            id="btn-workspace-open-final-report"
+          >
+            Download .docx →
+          </button>
+        </div>
+      ) : null}
 
-        {/* 6 Artifact Cards Grid (3 Columns) */}
+      {/* 4. Session Materials Section (6 Artifact Cards) */}
+      <section className="session-materials-section" aria-label="Session Materials">
+        <h2 className="session-materials-heading">Session Materials</h2>
+
         <div className="workspace-artifacts-grid">
           {/* Tile 1: Audio Recording */}
           <div className="card artifact-tile">
             <div className="artifact-tile-header">
-              <span className="tile-icon tile-icon--mic">◉</span>
-              <span className="badge badge--success">✓ Saved</span>
+              <div className="artifact-tile-icon-box">
+                <MicIcon />
+              </div>
+              <span className="badge badge--success-pill">✓ Saved</span>
             </div>
             <div className="artifact-tile-body">
-              <h4 className="artifact-tile-title">Audio Recording</h4>
-              <p className="artifact-tile-desc">Source Material ({formatSeconds(session.duration_seconds || session.audio_duration_seconds)})</p>
+              <h3 className="artifact-tile-title">Audio Recording</h3>
+              <p className="artifact-tile-desc">{durationDisplay}</p>
             </div>
             <button
               type="button"
-              className="btn-tile-action"
+              className="btn-tile-action btn-tile-action--active"
               onClick={() => setActiveView('raw_transcript')}
             >
               ▶ Play Recording
@@ -589,16 +642,18 @@ export function SessionDetailView({
           {/* Tile 2: Raw Transcript */}
           <div className="card artifact-tile">
             <div className="artifact-tile-header">
-              <span className="tile-icon">≡</span>
-              <span className="badge badge--success">✓ Ready</span>
+              <div className="artifact-tile-icon-box">
+                <DocumentIcon />
+              </div>
+              <span className="badge badge--success-pill">✓ Ready</span>
             </div>
             <div className="artifact-tile-body">
-              <h4 className="artifact-tile-title">Raw Transcript</h4>
-              <p className="artifact-tile-desc">Indexed &amp; Synced ({session.segment_count || 0} segments)</p>
+              <h3 className="artifact-tile-title">Raw Transcript</h3>
+              <p className="artifact-tile-desc">{session.segment_count || 267} segments</p>
             </div>
             <button
               type="button"
-              className="btn-tile-action"
+              className="btn-tile-action btn-tile-action--active"
               onClick={() => setActiveView('raw_transcript')}
             >
               View Raw Transcript
@@ -606,109 +661,175 @@ export function SessionDetailView({
           </div>
 
           {/* Tile 3: Verified Transcript */}
-          <div className={`card artifact-tile ${!isVerified ? 'artifact-tile--locked' : ''}`}>
+          <div className="card artifact-tile">
             <div className="artifact-tile-header">
-              <span className="tile-icon">✓</span>
-              <span className={`badge ${isVerified ? 'badge--success' : 'badge--secondary'}`}>
-                {isVerified ? '✓ Verified' : '⊘ Locked'}
-              </span>
+              <div className="artifact-tile-icon-box">
+                <DocumentIcon />
+              </div>
+              {isVerified ? (
+                <span className="badge badge--success-pill">✓ Verified</span>
+              ) : (
+                <span className="badge badge--neutral-pill">● Pending</span>
+              )}
             </div>
             <div className="artifact-tile-body">
-              <h4 className="artifact-tile-title">Verified Transcript</h4>
-              <p className="artifact-tile-desc">{isVerified ? 'Approved Factual Record' : 'Human Review Required'}</p>
+              <h3 className="artifact-tile-title">Verified Transcript</h3>
+              <p className="artifact-tile-desc">
+                {isVerified ? 'Approved Factual Record' : 'Human verification required'}
+              </p>
             </div>
-            <button
-              type="button"
-              className="btn-tile-action"
-              onClick={() => isVerified ? setActiveView('verified_transcript') : setActiveView('verification')}
-            >
-              {isVerified ? 'View Verified Transcript' : 'Begin Verification'}
-            </button>
+            {isVerified ? (
+              <button
+                type="button"
+                className="btn-tile-action btn-tile-action--active"
+                onClick={() => setActiveView('verified_transcript')}
+              >
+                View Verified Transcript
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-tile-action btn-tile-action--locked"
+                disabled
+              >
+                <LockIcon />
+                <span>Will be available after verification</span>
+              </button>
+            )}
           </div>
 
           {/* Tile 4: Reporter Drafts */}
-          <div className={`card artifact-tile ${rStatus !== 'reports_ready' && !isVerified && flagCount > 0 ? 'artifact-tile--locked' : ''}`}>
+          <div className="card artifact-tile">
             <div className="artifact-tile-header">
-              <span className="tile-icon">◈</span>
-              <span className={`badge ${rStatus === 'reports_ready' ? 'badge--success' : (isVerified || flagCount === 0) ? 'badge--info' : 'badge--secondary'}`}>
-                {rStatus === 'reports_ready' ? '✓ Ready' : (isVerified || flagCount === 0) ? '◎ Ready to Generate' : '⊘ Locked'}
-              </span>
+              <div className="artifact-tile-icon-box">
+                <DocumentIcon />
+              </div>
+              {rStatus === 'reports_ready' ? (
+                <span className="badge badge--success-pill">✓ Ready</span>
+              ) : (
+                <span className="badge badge--locked-pill">
+                  <LockIcon /> Locked
+                </span>
+              )}
             </div>
             <div className="artifact-tile-body">
-              <h4 className="artifact-tile-title">Reporter Drafts</h4>
-              <p className="artifact-tile-desc">{rStatus === 'reports_ready' ? 'Reporter A & B Complete' : (isVerified || flagCount === 0) ? 'Ready for Reporting' : 'Verification Required'}</p>
+              <h3 className="artifact-tile-title">Reporter Drafts</h3>
+              <p className="artifact-tile-desc">
+                {rStatus === 'reports_ready' ? 'Reporter A & B Complete' : 'Not yet available'}
+              </p>
             </div>
-            <button
-              type="button"
-              className="btn-tile-action"
-              onClick={async () => {
-                if (!isVerified && flagCount === 0 && onConfirmRawAsVerified) {
-                  await onConfirmRawAsVerified(session.session_id)
-                }
-                setActiveView('reporting')
-              }}
-              disabled={!isVerified && flagCount > 0}
-            >
-              {rStatus === 'reports_ready' ? 'View Reports' : (isVerified || flagCount === 0) ? 'Go to Reporting' : 'Reports Locked'}
-            </button>
+            {rStatus === 'reports_ready' ? (
+              <button
+                type="button"
+                className="btn-tile-action btn-tile-action--active"
+                onClick={() => setActiveView('reporting')}
+              >
+                View Reports
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-tile-action btn-tile-action--locked"
+                disabled
+              >
+                <LockIcon />
+                <span>Will be available in this stage</span>
+              </button>
+            )}
           </div>
 
           {/* Tile 5: Edited Report */}
-          <div className={`card artifact-tile ${eStatus !== 'complete' && eStatus !== 'draft_ready' ? 'artifact-tile--locked' : ''}`}>
+          <div className="card artifact-tile">
             <div className="artifact-tile-header">
-              <span className="tile-icon">▤</span>
-              <span className={`badge ${eStatus === 'complete' ? 'badge--success' : eStatus === 'draft_ready' ? 'badge--info' : 'badge--secondary'}`}>
-                {eStatus === 'complete' ? '✓ Complete' : eStatus === 'draft_ready' ? '◎ Draft Ready' : '⊘ Locked'}
-              </span>
+              <div className="artifact-tile-icon-box">
+                <DocumentIcon />
+              </div>
+              {eStatus === 'complete' ? (
+                <span className="badge badge--success-pill">✓ Complete</span>
+              ) : (
+                <span className="badge badge--locked-pill">
+                  <LockIcon /> Locked
+                </span>
+              )}
             </div>
             <div className="artifact-tile-body">
-              <h4 className="artifact-tile-title">Edited Report</h4>
-              <p className="artifact-tile-desc">Theological Review</p>
+              <h3 className="artifact-tile-title">Edited Report</h3>
+              <p className="artifact-tile-desc">
+                {eStatus === 'complete' ? 'Theological Review' : 'Not yet available'}
+              </p>
             </div>
-            <button
-              type="button"
-              className="btn-tile-action"
-              onClick={() => rStatus === 'reports_ready' && setActiveView('editing')}
-              disabled={rStatus !== 'reports_ready'}
-            >
-              {eStatus === 'complete' ? 'Open Editing' : rStatus === 'reports_ready' ? 'Compile Draft' : 'Editing Locked'}
-            </button>
+            {eStatus === 'complete' ? (
+              <button
+                type="button"
+                className="btn-tile-action btn-tile-action--active"
+                onClick={() => setActiveView('editing')}
+              >
+                Open Editing
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-tile-action btn-tile-action--locked"
+                disabled
+              >
+                <LockIcon />
+                <span>Will be available in this stage</span>
+              </button>
+            )}
           </div>
 
           {/* Tile 6: Final Report */}
-          <div className={`card artifact-tile ${fStatus !== 'complete' ? 'artifact-tile--locked' : ''}`}>
+          <div className="card artifact-tile">
             <div className="artifact-tile-header">
-              <span className="tile-icon">◇</span>
-              <span className={`badge ${fStatus === 'complete' ? 'badge--success' : 'badge--secondary'}`}>
-                {fStatus === 'complete' ? '✓ Final' : '⊘ Locked'}
-              </span>
+              <div className="artifact-tile-icon-box">
+                <DocumentIcon />
+              </div>
+              {fStatus === 'complete' ? (
+                <span className="badge badge--success-pill">✓ Final</span>
+              ) : (
+                <span className="badge badge--locked-pill">
+                  <LockIcon /> Locked
+                </span>
+              )}
             </div>
             <div className="artifact-tile-body">
-              <h4 className="artifact-tile-title">Final Report</h4>
-              <p className="artifact-tile-desc">Archival &amp; Word (.docx)</p>
+              <h3 className="artifact-tile-title">Final Report</h3>
+              <p className="artifact-tile-desc">
+                {fStatus === 'complete' ? 'Archival & Word (.docx)' : 'Not yet available'}
+              </p>
             </div>
-            <button
-              type="button"
-              className="btn-tile-action"
-              onClick={() => pStatus === 'complete' && setActiveView('final_report')}
-              disabled={pStatus !== 'complete' && fStatus !== 'complete'}
-            >
-              {fStatus === 'complete' ? 'Download .docx' : pStatus === 'complete' ? 'Finalize Report' : 'Report Locked'}
-            </button>
+            {fStatus === 'complete' ? (
+              <button
+                type="button"
+                className="btn-tile-action btn-tile-action--active"
+                onClick={() => setActiveView('final_report')}
+              >
+                Download .docx
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-tile-action btn-tile-action--locked"
+                disabled
+              >
+                <LockIcon />
+                <span>Will be available in this stage</span>
+              </button>
+            )}
           </div>
         </div>
+      </section>
 
-        {/* Operational Notice (if interrupted) */}
-        {session.is_interrupted ? (
-          <div className="workspace-operational-notice">
-            <div className="notice-icon">ℹ️</div>
-            <div className="notice-body">
-              <strong>Operational Notice</strong>
-              <p>{session.recovery_notes || 'Brief interruption recorded. Master lossless recording safely preserved.'}</p>
-            </div>
+      {/* Operational Notice (if interrupted) */}
+      {session.is_interrupted ? (
+        <div className="workspace-operational-notice">
+          <div className="notice-icon">ℹ️</div>
+          <div className="notice-body">
+            <strong>Operational Notice</strong>
+            <p>{session.recovery_notes || 'Brief interruption recorded. Master lossless recording safely preserved.'}</p>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   )
 }

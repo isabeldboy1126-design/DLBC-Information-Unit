@@ -29,7 +29,7 @@ function App() {
   const getInitialView = () => {
     try {
       const hash = window.location.hash.replace('#', '')
-      if (hash.startsWith('sessions')) return 'sessions'
+      if (hash.startsWith('sessions') || hash === 'session_workspace' || hash === 'verification_workspace') return 'sessions'
       if (['dashboard', 'sessions', 'new_live', 'transcribe', 'settings', 'live_recording'].includes(hash)) {
         return hash
       }
@@ -44,7 +44,7 @@ function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '')
-      if (hash.startsWith('sessions')) {
+      if (hash.startsWith('sessions') || hash === 'session_workspace' || hash === 'verification_workspace') {
         setCurrentView('sessions')
         return
       }
@@ -77,6 +77,16 @@ function App() {
 
   // Phase 4: Persistent Church Sessions Hook
   const sessionsHook = useSessions()
+
+  // Auto-load first session when directly loading #session_workspace or #verification_workspace
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '')
+    if (hash === 'session_workspace' || hash === 'verification_workspace') {
+      if (sessionsHook.sessions && sessionsHook.sessions.length > 0 && !sessionsHook.activeSession) {
+        sessionsHook.loadSession(sessionsHook.sessions[0].session_id)
+      }
+    }
+  }, [sessionsHook.sessions, sessionsHook.activeSession])
 
   // Synchronize modal and minimized state when recording starts/stops
   useEffect(() => {

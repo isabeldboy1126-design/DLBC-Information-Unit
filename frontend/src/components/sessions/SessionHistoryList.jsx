@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { getApiUrl } from '../../config'
+import { getSessionHierarchy } from './SessionDetailView'
+
+function ClockIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  )
+}
 
 function FilterIcon() {
   return (
@@ -154,49 +164,12 @@ export function SessionHistoryList({
     }
   }
 
-  // Extract primary Session and secondary Programme, eliminating exact duplicates
+  // Extract primary Session and secondary Programme (never omit Programme)
   const getSessionDisplayNames = (s) => {
-    let programmeName = ''
-    let sessionName = ''
-
-    if (s.metadata_json) {
-      try {
-        const meta = typeof s.metadata_json === 'string' ? JSON.parse(s.metadata_json) : s.metadata_json
-        programmeName = meta.programme || meta.eventType || ''
-        sessionName = meta.programmeSession || meta.session_name || ''
-      } catch {}
-    }
-
-    if (!programmeName && s.programme) programmeName = s.programme
-    if (!programmeName && s.programme_type) programmeName = s.programme_type
-
-    const title = (s.title || '').trim()
-    if (!sessionName && title.includes('—')) {
-      const parts = title.split('—').map((p) => p.trim())
-      if (parts.length >= 2) {
-        if (!programmeName) programmeName = parts[0]
-        sessionName = parts.slice(1).join(' — ')
-      }
-    } else if (!sessionName && title.includes(' - ')) {
-      const parts = title.split(' - ').map((p) => p.trim())
-      if (parts.length >= 2) {
-        if (!programmeName) programmeName = parts[0]
-        sessionName = parts.slice(1).join(' - ')
-      }
-    }
-
-    if (!sessionName) {
-      sessionName = title || 'Untitled Session'
-    }
-
-    // Dedup: if programme and session names are identical, omit secondary line
-    const isDuplicate =
-      programmeName && sessionName &&
-      programmeName.toLowerCase().trim() === sessionName.toLowerCase().trim()
-
+    const { programme, sessionTitle } = getSessionHierarchy(s)
     return {
-      programmeName: isDuplicate ? '' : programmeName,
-      sessionName,
+      programmeName: programme || 'Sunday Worship Service',
+      sessionName: sessionTitle || 'Sunday Morning Service',
     }
   }
 
@@ -537,11 +510,9 @@ export function SessionHistoryList({
               <div key={s.session_id} className="refined-session-card">
                 {/* Top Row: Programme Name (Secondary) + Status Pill */}
                 <div className="session-card-top-row">
-                  {programmeName ? (
-                    <span className="session-card-programme" title={programmeName}>
-                      {programmeName}
-                    </span>
-                  ) : <span />}
+                  <span className="session-card-programme" title={programmeName}>
+                    {programmeName}
+                  </span>
 
                   <span className={`session-card-pill ${statusPillClass}`}>
                     <span className="pill-dot">●</span>
@@ -556,10 +527,13 @@ export function SessionHistoryList({
                   </h2>
                 </div>
 
-                {/* Clean Metadata Row: Date & Human Timeframe without labels */}
+                {/* Clean Metadata Row: Date & Human Timeframe with clock icon */}
                 <div className="session-card-meta-row">
                   <span className="session-card-meta-date">{formattedDate}</span>
-                  <span className="session-card-meta-duration">{humanDuration}</span>
+                  <span className="session-card-meta-duration">
+                    <ClockIcon />
+                    <span>{humanDuration}</span>
+                  </span>
                 </div>
 
                 {/* Footer: Interactive Next Action (white at rest, blue on hover) & Quiet Delete */}

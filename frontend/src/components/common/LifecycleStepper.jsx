@@ -148,11 +148,7 @@ export function LifecycleStepper({ session, activeStage, onSelectStage, compact 
                     <span className="lifecycle-check">✓</span>
                   ) : stage.isActive ? (
                     <span className="lifecycle-active-dot" />
-                  ) : stage.isLocked ? (
-                    <span className="lifecycle-lock">🔒</span>
-                  ) : (
-                    <span className="lifecycle-num">{idx + 1}</span>
-                  )}
+                  ) : null}
                 </div>
                 <span className="lifecycle-node-label">
                   {compact ? stage.shortLabel : stage.label}
