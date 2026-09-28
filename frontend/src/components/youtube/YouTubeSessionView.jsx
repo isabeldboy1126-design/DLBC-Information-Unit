@@ -207,16 +207,7 @@ export function YouTubeSessionView({
     <div className="youtube-session-page-container">
       {/* 1. Header */}
       <div className="youtube-session-header">
-        <div>
-          <h1 className="youtube-session-title">YouTube Session</h1>
-          <p className="youtube-session-subtitle">
-            Ingest and transcribe recorded YouTube messages or live broadcasts with Azure Speech.
-          </p>
-        </div>
-
-        <button type="button" className="btn btn--outline btn--small" onClick={onBack}>
-          ← Back to Dashboard
-        </button>
+        <h1 className="youtube-session-title">YouTube Session</h1>
       </div>
 
       {/* 2. URL Input Card */}
@@ -224,7 +215,7 @@ export function YouTubeSessionView({
         <form onSubmit={handleAnalyzeUrl} className="youtube-url-form">
           <div className="form-group youtube-url-group">
             <label className="form-label" htmlFor="youtube-url-input">
-              YouTube Video or Live Stream URL *
+              YouTube video, shorts or live broadcast
             </label>
             <div className="youtube-input-flex">
               <input
@@ -238,7 +229,11 @@ export function YouTubeSessionView({
               />
               <button
                 type="submit"
-                className="btn btn--primary youtube-analyze-btn"
+                className={`btn youtube-analyze-btn ${
+                  !youtubeUrl.trim() || isAnalyzing || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'
+                    ? 'youtube-analyze-btn--disabled'
+                    : 'youtube-analyze-btn--enabled'
+                }`}
                 disabled={isAnalyzing || !youtubeUrl.trim() || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
               >
                 {isAnalyzing ? (
@@ -251,9 +246,6 @@ export function YouTubeSessionView({
                 )}
               </button>
             </div>
-            <span className="form-help-text">
-              Supports standard YouTube videos, YouTube Live broadcasts, and youtu.be shortlinks.
-            </span>
           </div>
         </form>
 

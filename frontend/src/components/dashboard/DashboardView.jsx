@@ -65,15 +65,6 @@ function CalendarIcon() {
   )
 }
 
-function UserIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  )
-}
-
 function ClockIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -92,43 +83,33 @@ function ClockHeaderIcon() {
   )
 }
 
-function DotsMenuIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <circle cx="5" cy="12" r="2" />
-      <circle cx="12" cy="12" r="2" />
-      <circle cx="19" cy="12" r="2" />
-    </svg>
-  )
+/**
+ * Determines whether a session qualifies for operator attention.
+ * A session counts once if it has any actionable incomplete state.
+ */
+export function isActionableAttentionSession(s) {
+  if (!s) return false
+  if (s.is_interrupted) return true
+  if (s.final_report_status === 'complete') return false
+
+  const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
+  const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress')
+  const readyEditing = isVerified && s.reporting_status === 'reports_ready' && s.editing_status !== 'complete'
+  const readyProofreading = s.editing_status === 'complete' && s.proofreading_status !== 'complete'
+
+  return needsVerification || readyEditing || readyProofreading
 }
 
 /**
- * Calculates the total sum of actionable verification items and pending session actions
- * across all attention sessions, rather than merely counting the session records.
+ * Calculates the total number of sessions that require attention (not the flag sum).
  */
-export function calculateTotalAttentionItems(sessionsList) {
+export function calculateTotalAttentionSessions(sessionsList) {
   if (!Array.isArray(sessionsList)) return 0
-  return sessionsList.reduce((total, s) => {
-    const isInterrupted = !!s.is_interrupted
-    const isFinalComplete = s.final_report_status === 'complete'
-    if (isFinalComplete) return total
-
-    const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
-    const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress')
-    const readyEditing = isVerified && s.reporting_status === 'reports_ready' && s.editing_status !== 'complete'
-    const readyProofreading = s.editing_status === 'complete' && s.proofreading_status !== 'complete'
-
-    if (!isInterrupted && !needsVerification && !readyEditing && !readyProofreading) {
-      return total
-    }
-
-    if (needsVerification) {
-      const count = Number(s.flag_count) || Number(s.verification_items_total) || 1
-      return total + count
-    }
-    return total + 1
-  }, 0)
+  return sessionsList.filter(isActionableAttentionSession).length
 }
+
+// Retain alias for any existing imports
+export const calculateTotalAttentionItems = calculateTotalAttentionSessions
 
 /**
  * DashboardView — Polished production dashboard matching the authoritative reference.
@@ -149,21 +130,9 @@ export function DashboardView({
   // 2. Unverified sessions with flagged items or in-progress review
   // 3. Reports ready, pending editorial synthesis
   // 4. Editing complete, pending proofreading review
-  const allAttentionSessions = sessions.filter((s) => {
-    const isInterrupted = !!s.is_interrupted
-    const isFinalComplete = s.final_report_status === 'complete'
-    if (isFinalComplete) return false
-
-    const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
-    const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress')
-    const readyEditing = isVerified && s.reporting_status === 'reports_ready' && s.editing_status !== 'complete'
-    const readyProofreading = s.editing_status === 'complete' && s.proofreading_status !== 'complete'
-
-    return isInterrupted || needsVerification || readyEditing || readyProofreading
-  })
-
+  const allAttentionSessions = sessions.filter(isActionableAttentionSession)
   const attentionSessions = allAttentionSessions.slice(0, 3)
-  const totalAttentionCount = calculateTotalAttentionItems(allAttentionSessions)
+  const totalAttentionCount = allAttentionSessions.length
 
   // Recent 6 sessions
   const recentSessions = [...sessions].sort((a, b) => {
@@ -177,6 +146,21 @@ export function DashboardView({
     const secs = Math.floor(totalSeconds % 60)
     const pad = (n) => String(n).padStart(2, '0')
     return `${pad(hours)}:${pad(mins)}:${pad(secs)}`
+  }
+
+  const formatAttentionDuration = (totalSeconds) => {
+    if (!totalSeconds && totalSeconds !== 0) return ''
+    const secs = Math.round(totalSeconds)
+    const hours = Math.floor(secs / 3600)
+    const mins = Math.floor((secs % 3600) / 60)
+    const remSecs = secs % 60
+    if (hours > 0) {
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
+    }
+    if (mins > 0) {
+      return remSecs > 0 ? `${mins}m ${remSecs}s` : `${mins}m`
+    }
+    return `${remSecs}s`
   }
 
   const formatAttentionDate = (isoStr) => {
@@ -204,19 +188,6 @@ export function DashboardView({
     }
   }
 
-  const getSpeakerName = (sess) => {
-    if (sess.minister) return sess.minister
-    try {
-      if (sess.metadata_json) {
-        const parsed = typeof sess.metadata_json === 'string' ? JSON.parse(sess.metadata_json) : sess.metadata_json
-        if (parsed.minister) return parsed.minister
-        if (parsed.preacher_name) return parsed.preacher_name
-        if (parsed.speaker) return parsed.speaker
-      }
-    } catch {}
-    return 'Pst. W.F. Kumuyi'
-  }
-
   const handleDrop = (e) => {
     e.preventDefault()
     if (e.dataTransfer.files && e.dataTransfer.files[0] && onFileSelect) {
@@ -236,7 +207,7 @@ export function DashboardView({
       <section className="dashboard-creation-area" aria-label="Session Creation Actions">
         {/* Top Row: Start Live Session (dominant) & YouTube Session */}
         <div className="creation-cards-grid">
-          {/* Card 1: Start Live Session (Dominant) */}
+          {/* Card 1: Start Live Session (Dominant Hero Card) */}
           <div
             className="creation-card creation-card--live"
             onClick={onStartLiveSession}
@@ -263,17 +234,21 @@ export function DashboardView({
               </div>
             </div>
 
-            {/* Right Action Circle Button & Integrated Microphone Image */}
-            <div className="creation-card-visual">
+            {/* Right Photographic Microphone Hero with Soft Gradient Transition */}
+            <div className="creation-card-hero-wrap" aria-hidden="true">
+              <img
+                src="/mic-hero.png"
+                alt=""
+                className="creation-mic-hero-img"
+                loading="eager"
+              />
+              <div className="creation-mic-gradient-overlay" />
+            </div>
+
+            <div className="creation-card-action-slot">
               <div className="action-circle-btn action-circle-btn--primary" aria-hidden="true">
                 <ArrowRightIcon />
               </div>
-              <img
-                src="/mic-illustration.png"
-                alt=""
-                className="creation-mic-illustration"
-                loading="eager"
-              />
             </div>
           </div>
 
@@ -396,8 +371,9 @@ export function DashboardView({
                 actionBtnText = 'Continue'
               }
 
-              const { programme, sessionTitle } = getSessionHierarchy(sess)
+              const { sessionTitle } = getSessionHierarchy(sess)
               const sessionDate = formatAttentionDate(sess.date_created)
+              const sessionDuration = formatAttentionDuration(sess.duration_seconds || sess.audio_duration_seconds)
 
               return (
                 <div
@@ -413,24 +389,20 @@ export function DashboardView({
                       <DocumentItemIcon />
                     </div>
                     <div className="attention-info-stack">
-                      {programme && <span className="attention-programme-label">{programme}</span>}
                       <h3 className="attention-session-title">{sessionTitle}</h3>
                       <div className="attention-meta-row">
                         {sessionDate && (
                           <span className="attention-meta-chip">
-                            <CalendarIcon />
                             <span>{sessionDate}</span>
                           </span>
                         )}
-                        <span className="attention-meta-chip">
-                          <UserIcon />
-                          <span>{getSpeakerName(sess)}</span>
-                        </span>
-                        {sess.duration_seconds > 0 && (
-                          <span className="attention-meta-chip attention-meta-chip--duration">
-                            <ClockIcon />
-                            <span>{formatDuration(sess.duration_seconds)}</span>
-                          </span>
+                        {sessionDuration && (
+                          <>
+                            <span className="attention-meta-separator" aria-hidden="true">·</span>
+                            <span className="attention-meta-chip attention-meta-chip--duration">
+                              <span>{sessionDuration}</span>
+                            </span>
+                          </>
                         )}
                       </div>
                     </div>
@@ -577,19 +549,6 @@ export function DashboardView({
                             }}
                           >
                             View <span aria-hidden="true">→</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            className="table-dots-btn"
-                            title="Session options"
-                            aria-label="Session options"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onOpenSession(sess.session_id)
-                            }}
-                          >
-                            <DotsMenuIcon />
                           </button>
                         </div>
                       </td>

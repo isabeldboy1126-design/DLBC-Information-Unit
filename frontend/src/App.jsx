@@ -30,14 +30,14 @@ function App() {
     try {
       const hash = window.location.hash.replace('#', '')
       if (hash.startsWith('sessions') || hash === 'session_workspace' || hash === 'verification_workspace') return 'sessions'
-      if (['dashboard', 'sessions', 'new_live', 'transcribe', 'settings', 'live_recording'].includes(hash)) {
+      if (['dashboard', 'sessions', 'new_live', 'transcribe', 'youtube', 'settings', 'live_recording'].includes(hash)) {
         return hash
       }
     } catch {}
     return 'dashboard'
   }
 
-  // Navigation: 'dashboard' | 'sessions' | 'new_live' | 'transcribe' | 'settings' | 'live_recording'
+  // Navigation: 'dashboard' | 'sessions' | 'new_live' | 'transcribe' | 'youtube' | 'settings' | 'live_recording'
   const [currentView, setCurrentView] = useState(getInitialView)
   const [isRecorderMinimized, setIsRecorderMinimized] = useState(false)
 
@@ -48,7 +48,7 @@ function App() {
         setCurrentView('sessions')
         return
       }
-      if (['dashboard', 'sessions', 'new_live', 'transcribe', 'settings', 'live_recording'].includes(hash)) {
+      if (['dashboard', 'sessions', 'new_live', 'transcribe', 'youtube', 'settings', 'live_recording'].includes(hash)) {
         setCurrentView(hash)
       }
     }

@@ -59,6 +59,7 @@ export function SessionHistoryList({
       return false
     }
   })
+  const [isEventDropdownOpen, setIsEventDropdownOpen] = useState(false)
   const [selectedProgrammeFilter, setSelectedProgrammeFilter] = useState('all')
   const [selectedSessionFilter, setSelectedSessionFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter || 'all')
@@ -66,6 +67,7 @@ export function SessionHistoryList({
   const [configuredProgrammes, setConfiguredProgrammes] = useState([])
 
   const filterRef = useRef(null)
+  const eventDropdownRef = useRef(null)
 
   useEffect(() => {
     if (initialStatusFilter) {
@@ -110,6 +112,25 @@ export function SessionHistoryList({
     }
   }, [isFilterOpen])
 
+  // Close event selector dropdown on outside click or escape
+  useEffect(() => {
+    if (!isEventDropdownOpen) return
+    const handleClickOutside = (e) => {
+      if (eventDropdownRef.current && !eventDropdownRef.current.contains(e.target)) {
+        setIsEventDropdownOpen(false)
+      }
+    }
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setIsEventDropdownOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isEventDropdownOpen])
+
   // Active sessions belonging to currently selected programme filter
   const activeProgrammeObj = configuredProgrammes.find(
     (p) => p.name === selectedProgrammeFilter || p.id === selectedProgrammeFilter
@@ -132,7 +153,6 @@ export function SessionHistoryList({
   }
 
   const activeFilterCount =
-    (selectedProgrammeFilter !== 'all' ? 1 : 0) +
     (selectedSessionFilter !== 'all' ? 1 : 0) +
     (statusFilter !== 'all' ? 1 : 0) +
     (dateFilter !== 'all' ? 1 : 0)
@@ -173,8 +193,13 @@ export function SessionHistoryList({
     }
   }
 
+  // Ensure newest sessions appear first by default
+  const sortedSessions = [...sessions].sort((a, b) => {
+    return new Date(b.date_created || 0) - new Date(a.date_created || 0)
+  })
+
   // Filter sessions
-  const filteredSessions = sessions.filter((s) => {
+  const filteredSessions = sortedSessions.filter((s) => {
     const query = searchTerm.toLowerCase().trim()
     const matchesSearch =
       !query ||
@@ -296,6 +321,52 @@ export function SessionHistoryList({
           />
         </div>
 
+        {/* Event / Programme Visible Selector */}
+        <div className="sessions-event-selector-anchor" ref={eventDropdownRef}>
+          <button
+            type="button"
+            className={`sessions-event-selector-btn ${selectedProgrammeFilter !== 'all' ? 'sessions-event-selector-btn--active' : ''}`}
+            onClick={() => setIsEventDropdownOpen(!isEventDropdownOpen)}
+            aria-expanded={isEventDropdownOpen}
+            aria-label="Filter by Event or Programme"
+            id="btn-sessions-event-selector"
+          >
+            <span className="event-selector-label">Event:</span>
+            <span className="event-selector-value">
+              {selectedProgrammeFilter === 'all' ? 'All Events' : selectedProgrammeFilter}
+            </span>
+            <span className="event-selector-caret" aria-hidden="true">▾</span>
+          </button>
+
+          {isEventDropdownOpen && (
+            <div className="sessions-event-dropdown-menu" role="menu">
+              <button
+                type="button"
+                className={`event-dropdown-item ${selectedProgrammeFilter === 'all' ? 'event-dropdown-item--selected' : ''}`}
+                onClick={() => {
+                  handleProgrammeFilterChange('all')
+                  setIsEventDropdownOpen(false)
+                }}
+              >
+                All Events
+              </button>
+              {configuredProgrammes.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`event-dropdown-item ${selectedProgrammeFilter === p.name ? 'event-dropdown-item--selected' : ''}`}
+                  onClick={() => {
+                    handleProgrammeFilterChange(p.name)
+                    setIsEventDropdownOpen(false)
+                  }}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Filter Popover Trigger */}
         <div className="sessions-filter-anchor" ref={filterRef}>
           <button
@@ -315,7 +386,7 @@ export function SessionHistoryList({
             <div className="sessions-filter-popover" role="dialog" aria-label="Session filter options">
               <div className="filter-popover-header">
                 <span className="filter-popover-title">Filter Sessions</span>
-                {activeFilterCount > 0 && (
+                {(activeFilterCount > 0 || selectedProgrammeFilter !== 'all') && (
                   <button
                     type="button"
                     className="filter-popover-clear-btn"
@@ -327,27 +398,7 @@ export function SessionHistoryList({
               </div>
 
               <div className="filter-popover-body">
-                {/* 1. Programme / Event Filter */}
-                <div className="filter-popover-field">
-                  <label className="filter-field-label" htmlFor="filter-select-event">
-                    Event / Programme
-                  </label>
-                  <select
-                    id="filter-select-event"
-                    className="form-control form-select filter-popover-select"
-                    value={selectedProgrammeFilter}
-                    onChange={(e) => handleProgrammeFilterChange(e.target.value)}
-                  >
-                    <option value="all">All Events</option>
-                    {configuredProgrammes.map((p) => (
-                      <option key={p.id} value={p.name}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 2. Session / Section Filter (Cascading) */}
+                {/* 1. Session / Section Filter (Cascading) */}
                 <div className="filter-popover-field">
                   <label className="filter-field-label" htmlFor="filter-select-session">
                     Session / Section
@@ -374,7 +425,7 @@ export function SessionHistoryList({
                   </select>
                 </div>
 
-                {/* 3. Status Filter */}
+                {/* 2. Status Filter */}
                 <div className="filter-popover-field">
                   <label className="filter-field-label" htmlFor="filter-select-status">
                     Status
@@ -395,7 +446,7 @@ export function SessionHistoryList({
                   </select>
                 </div>
 
-                {/* 4. Timeframe Filter */}
+                {/* 3. Timeframe Filter */}
                 <div className="filter-popover-field">
                   <label className="filter-field-label" htmlFor="filter-select-date">
                     Time Period
@@ -508,12 +559,8 @@ export function SessionHistoryList({
 
             return (
               <div key={s.session_id} className="refined-session-card">
-                {/* Top Row: Programme Name (Secondary) + Status Pill */}
+                {/* Top Row: Status Pill */}
                 <div className="session-card-top-row">
-                  <span className="session-card-programme" title={programmeName}>
-                    {programmeName}
-                  </span>
-
                   <span className={`session-card-pill ${statusPillClass}`}>
                     <span className="pill-dot">●</span>
                     <span className="pill-label">{statusLabel}</span>

@@ -420,9 +420,6 @@ export function VerificationWorkflow({
                     <div className="flagged-item-columns">
                       <span className="item-time-pill">{formatSegmentTime(timeStart)}</span>
                       <span className="item-quote-text">&ldquo;{displayText}&rdquo;</span>
-                      <span className={`item-reason-pill ${isResolved ? 'item-reason-pill--resolved' : ''}`}>
-                        {pillLabel}
-                      </span>
                       <span className="item-chevron-icon" aria-hidden="true">›</span>
                     </div>
                   </div>
