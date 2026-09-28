@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
 function HomeIcon() {
   return (
@@ -75,9 +75,47 @@ export function AppShell({
       return false
     }
   })
+  const [isHoverExpanded, setIsHoverExpanded] = useState(false)
+  const hoverEnterTimerRef = useRef(null)
+  const hoverLeaveTimerRef = useRef(null)
 
   const openMobileNav = () => setMobileNavOpen(true)
   const closeMobileNav = () => setMobileNavOpen(false)
+
+  // Handle pointer hover on collapsed rail to temporarily expand
+  const handleSidebarMouseEnter = () => {
+    if (!isCollapsed) return
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      return
+    }
+    if (hoverLeaveTimerRef.current) {
+      clearTimeout(hoverLeaveTimerRef.current)
+      hoverLeaveTimerRef.current = null
+    }
+    hoverEnterTimerRef.current = setTimeout(() => {
+      setIsHoverExpanded(true)
+    }, 110)
+  }
+
+  const handleSidebarMouseLeave = () => {
+    if (!isCollapsed) return
+    if (hoverEnterTimerRef.current) {
+      clearTimeout(hoverEnterTimerRef.current)
+      hoverEnterTimerRef.current = null
+    }
+    hoverLeaveTimerRef.current = setTimeout(() => {
+      setIsHoverExpanded(false)
+    }, 180)
+  }
+
+  const handleToggleCollapse = () => {
+    if (hoverEnterTimerRef.current) clearTimeout(hoverEnterTimerRef.current)
+    if (hoverLeaveTimerRef.current) clearTimeout(hoverLeaveTimerRef.current)
+    setIsHoverExpanded(false)
+    setIsCollapsed(!isCollapsed)
+  }
+
+  const isEffectivelyExpanded = !isCollapsed || isHoverExpanded
 
   useEffect(() => {
     if (!mobileNavOpen) return
@@ -100,7 +138,11 @@ export function AppShell({
       {/* ------------------------------------------------------------- */}
       {/* LEFT SIDEBAR                                                  */}
       {/* ------------------------------------------------------------- */}
-      <aside className={`app-sidebar ${isCollapsed ? 'app-sidebar--collapsed' : ''} ${mobileNavOpen ? 'app-sidebar--mobile-open' : ''}`}>
+      <aside
+        className={`app-sidebar ${isCollapsed ? 'app-sidebar--collapsed' : ''} ${isCollapsed && isHoverExpanded ? 'app-sidebar--hover-expanded' : ''} ${mobileNavOpen ? 'app-sidebar--mobile-open' : ''}`}
+        onMouseEnter={handleSidebarMouseEnter}
+        onMouseLeave={handleSidebarMouseLeave}
+      >
         <div className="sidebar-top">
           {/* Brand Logo & Collapse Toggle */}
           <div className="sidebar-brand-row">
@@ -112,14 +154,14 @@ export function AppShell({
               }}
               role="button"
               tabIndex={0}
-              title={isCollapsed ? 'DLBC Information Unit' : undefined}
+              title={!isEffectivelyExpanded ? 'DLBC Information Unit' : undefined}
             >
               <img
                 src="/dlbc-logo.png"
                 alt="DLBC logo"
                 className="sidebar-brand-logo"
               />
-              {!isCollapsed && (
+              {isEffectivelyExpanded && (
                 <div className="sidebar-brand-text">
                   <span className="brand-name">DLBC</span>
                   <span className="brand-sub">INFORMATION UNIT</span>
@@ -131,11 +173,11 @@ export function AppShell({
             <button
               type="button"
               className="sidebar-desktop-collapse-btn"
-              onClick={() => setIsCollapsed(!isCollapsed)}
+              onClick={handleToggleCollapse}
               aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              {isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+              {isCollapsed && !isHoverExpanded ? <ChevronRightIcon /> : <ChevronLeftIcon />}
             </button>
 
             {/* Close button inside mobile drawer */}
@@ -163,7 +205,7 @@ export function AppShell({
                 title="Return to active recording monitor"
               >
                 <span className="live-pulse-dot">●</span>
-                {!isCollapsed && <span className="live-btn-text">ACTIVE RECORDING</span>}
+                {isEffectivelyExpanded && <span className="live-btn-text">ACTIVE RECORDING</span>}
               </button>
             </div>
           )}
@@ -178,10 +220,10 @@ export function AppShell({
                 closeMobileNav()
               }}
               id="nav-link-dashboard"
-              title={isCollapsed ? 'Dashboard' : undefined}
+              title={!isEffectivelyExpanded ? 'Dashboard' : undefined}
             >
               <span className="nav-icon"><HomeIcon /></span>
-              {!isCollapsed && <span className="nav-label">Dashboard</span>}
+              {isEffectivelyExpanded && <span className="nav-label">Dashboard</span>}
             </button>
 
             <button
@@ -192,10 +234,10 @@ export function AppShell({
                 closeMobileNav()
               }}
               id="nav-link-sessions"
-              title={isCollapsed ? 'Sessions' : undefined}
+              title={!isEffectivelyExpanded ? 'Sessions' : undefined}
             >
               <span className="nav-icon"><SessionsIcon /></span>
-              {!isCollapsed && <span className="nav-label">Sessions</span>}
+              {isEffectivelyExpanded && <span className="nav-label">Sessions</span>}
             </button>
           </nav>
         </div>
@@ -210,10 +252,10 @@ export function AppShell({
               closeMobileNav()
             }}
             id="nav-link-settings"
-            title={isCollapsed ? 'Settings' : undefined}
+            title={!isEffectivelyExpanded ? 'Settings' : undefined}
           >
             <span className="nav-icon"><SettingsIcon /></span>
-            {!isCollapsed && <span className="nav-label">Settings</span>}
+            {isEffectivelyExpanded && <span className="nav-label">Settings</span>}
           </button>
         </div>
       </aside>

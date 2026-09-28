@@ -344,8 +344,8 @@ export function DashboardView({
             </button>
           </div>
 
-          {/* Each attention item is its OWN independent floating row */}
-          <div className="attention-items-container">
+          {/* ONE premium floating parent surface for all attention sessions */}
+          <div className="attention-parent-surface">
             {attentionSessions.map((sess) => {
               const isInterrupted = !!sess.is_interrupted
               const isVerified = sess.verification_status === 'completed' || !!sess.verified_text || !!sess.verified_at
@@ -356,19 +356,23 @@ export function DashboardView({
               let stageLabel = `Verification · ${sess.flag_count || 1}`
               let stagePillClass = 'stage-pill--verification'
               let actionBtnText = 'Review'
+              let targetStage = 'verification'
 
               if (isInterrupted) {
                 stageLabel = 'Interrupted'
                 stagePillClass = 'stage-pill--interrupted'
                 actionBtnText = 'Review'
+                targetStage = 'overview'
               } else if (readyProofreading) {
                 stageLabel = 'Proofreading'
                 stagePillClass = 'stage-pill--proofreading'
                 actionBtnText = 'Continue'
+                targetStage = 'proofreading'
               } else if (readyEditing) {
                 stageLabel = 'Editing'
                 stagePillClass = 'stage-pill--editing'
                 actionBtnText = 'Continue'
+                targetStage = 'editing'
               }
 
               const { sessionTitle } = getSessionHierarchy(sess)
@@ -378,13 +382,18 @@ export function DashboardView({
               return (
                 <div
                   key={sess.session_id}
-                  className="attention-floating-card"
-                  onClick={() => onOpenSession(sess.session_id)}
+                  className="attention-list-row"
+                  onClick={() => onOpenSession(sess.session_id, 'overview')}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSession(sess.session_id); } }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onOpenSession(sess.session_id, 'overview')
+                    }
+                  }}
                 >
-                  <div className="attention-card-left">
+                  <div className="attention-row-left">
                     <div className="attention-doc-box">
                       <DocumentItemIcon />
                     </div>
@@ -408,7 +417,7 @@ export function DashboardView({
                     </div>
                   </div>
 
-                  <div className="attention-card-right">
+                  <div className="attention-row-right">
                     <span className={`attention-stage-pill ${stagePillClass}`}>
                       <span className="pill-dot">●</span>
                       <span className="pill-label">{stageLabel}</span>
@@ -419,7 +428,7 @@ export function DashboardView({
                       className="attention-action-btn"
                       onClick={(e) => {
                         e.stopPropagation()
-                        onOpenSession(sess.session_id)
+                        onOpenSession(sess.session_id, targetStage)
                       }}
                     >
                       {actionBtnText}

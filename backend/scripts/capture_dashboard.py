@@ -53,6 +53,7 @@ async def capture_all():
             # 1. Dashboard Expanded
             await asyncio.sleep(1.0)
             await shot('dashboard_desktop_latest.png')
+            await shot('pre_stage6_dashboard_attention.png')
 
             # 2. Dashboard Collapsed
             await send_cmd('Runtime.evaluate', {
@@ -60,6 +61,15 @@ async def capture_all():
             })
             await asyncio.sleep(0.8)
             await shot('dashboard_collapsed_latest.png')
+
+            # 2b. Hover over collapsed sidebar to test overlay
+            await send_cmd('Input.dispatchMouseEvent', {'type': 'mouseMoved', 'x': 30, 'y': 200})
+            await asyncio.sleep(0.5)
+            await shot('pre_stage6_sidebar_hover_overlay.png')
+
+            # Move mouse away to retract
+            await send_cmd('Input.dispatchMouseEvent', {'type': 'mouseMoved', 'x': 600, 'y': 200})
+            await asyncio.sleep(0.4)
 
             # Expand sidebar back
             await send_cmd('Runtime.evaluate', {
@@ -73,6 +83,7 @@ async def capture_all():
             })
             await asyncio.sleep(1.2)
             await shot('sessions_history_cards.png')
+            await shot('pre_stage6_sessions_history_blue_ctas.png')
 
             # 4. Open first session workspace by clicking card body
             await send_cmd('Runtime.evaluate', {

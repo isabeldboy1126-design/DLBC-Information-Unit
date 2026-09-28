@@ -590,11 +590,8 @@ export function SessionHistoryList({
                   </span>
                 </div>
 
-                {/* Primary Dominant Session Title with Programme Eyebrow */}
+                {/* Primary Dominant Session Title (Session-focused) */}
                 <div className="session-card-title-stack">
-                  {programmeName && (
-                    <span className="session-card-eyebrow">{programmeName}</span>
-                  )}
                   <h2 className="session-card-dominant-title" title={sessionName}>
                     {sessionName}
                   </h2>
