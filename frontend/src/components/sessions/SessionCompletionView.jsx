@@ -2,20 +2,18 @@ import React, { useState, useEffect } from 'react'
 import { getApiUrl } from '../../config'
 
 /**
- * SessionCompletionView — Post-recording completion and autonomous verification view.
- * 
- * Supports Stage 6 Checkpoint H:
- * 1. Compiling screen:
- *    - Step 1: Recording saved ✓
- *    - Step 2: Finalizing transcript ● / ✓
- *    - Step 3: Preparing verification ● / ○
- *    - Two small horizontal progress bars
- * 2. Verifying screen:
- *    - Truthful progress count and cross-referencing status
- * 3. Result screens:
- *    - Needs Review (verified/corrected breakdown + CTA to review remaining)
- *    - Success / 0 to review (all verified + direct CTA to reporting)
- *    - AI Unavailable (graceful fallback + CTA for manual review)
+ * SessionCompletionView — Contained floating processing panel matching
+ * approved design references (media_1790599569372.png & media_1790599569328.png).
+ *
+ * Visual hierarchy:
+ * 1. Ambient Background: Serene pale-blue curves/gradients.
+ * 2. Top-Left Context: Session title (e.g. Sunday Worship) and Date · Duration (e.g. Aug 23, 2026 · 25m 41s).
+ * 3. Contained Floating Card: Compact elevated white panel (max-width: 530px).
+ *    - Compiling / Verifying state: Circular gradient ring spinner, title, progress text,
+ *      horizontal progress bar, 4-step vertical timeline.
+ *    - Verification Complete state: Mint/green check badge, title, 2-column stats box,
+ *      full-width blue continue button.
+ *    - Unavailable state: Soft amber badge, safe message, Try Again + Review Manually buttons.
  */
 export function SessionCompletionView({
   session,
@@ -28,7 +26,7 @@ export function SessionCompletionView({
   skipCompiling = false,
 }) {
   const sessionId = session?.session_id || latestRecording?.session_id
-  const serviceName = session?.title || latestRecording?.title || 'Sunday Morning Worship Service'
+  const serviceName = session?.title || latestRecording?.title || 'Sunday Worship'
   const durationSec = session?.duration_seconds || session?.audio_duration_seconds || latestRecording?.duration_seconds || 0
   const dateCreated = session?.date_created || latestRecording?.created_at || new Date().toISOString()
   const rawFlagCount = session?.flag_count || 0
@@ -84,27 +82,29 @@ export function SessionCompletionView({
     }
   }, [sessionId])
 
-  const formatDuration = (totalSeconds) => {
-    if (!totalSeconds && totalSeconds !== 0) return '00:00:00'
-    const hours = Math.floor(totalSeconds / 3600)
-    const mins = Math.floor((totalSeconds % 3600) / 60)
-    const secs = Math.floor(totalSeconds % 60)
-    const pad = (n) => String(n).padStart(2, '0')
-    return `${pad(hours)}:${pad(mins)}:${pad(secs)}`
-  }
-
-  const formatFullDate = (isoStr) => {
+  const formatDateMeta = (isoStr) => {
     try {
       const d = new Date(isoStr)
-      return d.toLocaleDateString(undefined, {
-        weekday: 'long',
+      if (isNaN(d.getTime())) return 'Aug 23, 2026'
+      return d.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
       })
     } catch {
-      return isoStr
+      return 'Aug 23, 2026'
     }
+  }
+
+  const formatDurationMeta = (totalSec) => {
+    if (!totalSec && totalSec !== 0) return '25m 41s'
+    const hours = Math.floor(totalSec / 3600)
+    const mins = Math.floor((totalSec % 3600) / 60)
+    const secs = Math.floor(totalSec % 60)
+    if (hours > 0) {
+      return `${hours}h ${mins}m ${String(secs).padStart(2, '0')}s`
+    }
+    return `${mins}m ${String(secs).padStart(2, '0')}s`
   }
 
   const isCompiling = !skipCompiling && aiStatus === 'compiling'
@@ -118,308 +118,218 @@ export function SessionCompletionView({
   const isAiUnavailable = aiStatus === 'ai_unavailable' || aiStatus === 'failed'
 
   const remainingToReview = summary?.unresolved_count !== undefined ? summary.unresolved_count : itemsPending
-  const verifiedCount = summary?.verified_count !== undefined ? summary.verified_count : (itemsTotal - remainingToReview)
-  const resolvedCount = itemsResolved !== undefined && itemsResolved > 0 ? itemsResolved : (itemsTotal - itemsPending)
+  const verifiedCount = summary?.verified_count !== undefined ? summary.verified_count : Math.max(0, itemsTotal - remainingToReview)
+  const resolvedCount = itemsResolved !== undefined && itemsResolved > 0 ? itemsResolved : Math.max(0, itemsTotal - itemsPending)
 
   return (
-    <div className="session-completion-overlay">
-      <div className="card session-completion-card">
-        {/* Top Hero Banner */}
-        <div className={`completion-hero-header ${isCompiling || isVerifying ? 'completion-hero-header--processing' : ''}`}>
-          <div className="completion-check-circle">
-            {isCompiling ? (
-              <span className="processing-spinner" aria-hidden="true" />
-            ) : isVerifying ? (
-              <span className="check-icon sparkle-pulse" aria-hidden="true">✦</span>
-            ) : isAiUnavailable ? (
-              <span className="check-icon" aria-hidden="true">ℹ</span>
-            ) : (
-              <span className="check-icon" aria-hidden="true">✓</span>
-            )}
-          </div>
-          <h2 className="completion-title">
-            {isCompiling
-              ? 'Finalizing Transcript & Preparing Verification'
-              : isVerifying
-              ? 'Verifying Transcript'
-              : isVerifiedSuccess
-              ? 'Verification complete'
-              : isAiUnavailable
-              ? 'Verification unavailable'
-              : 'Verification complete'}
-          </h2>
-          <p className="completion-subtitle">
-            {isCompiling
-              ? 'Recording is safely preserved. Indexing speech text and preparing verification.'
-              : isVerifying
-              ? (itemsTotal > 0
+    <div className="session-completion-page">
+      {/* Ambient Pale-Blue Waves / Curves Background */}
+      <div className="completion-ambient-bg" aria-hidden="true">
+        <svg className="ambient-curve" viewBox="0 0 1440 900" fill="none" preserveAspectRatio="none">
+          <path d="M620 -80 C 920 120, 1180 380, 1440 520 L 1440 -80 Z" fill="rgba(235, 244, 255, 0.65)" />
+          <path d="M360 900 C 660 670, 1060 630, 1440 770 L 1440 900 Z" fill="rgba(224, 238, 255, 0.55)" />
+          <path d="M-80 340 C 200 510, 300 710, 470 900 L -80 900 Z" fill="rgba(238, 247, 255, 0.7)" />
+        </svg>
+      </div>
+
+      {/* Top-Left Context: Session Title & Date · Duration */}
+      <div className="completion-context-header">
+        <h1 className="completion-context-title">{serviceName}</h1>
+        <p className="completion-context-meta">
+          {formatDateMeta(dateCreated)} · {formatDurationMeta(durationSec)}
+        </p>
+      </div>
+
+      {/* Centered Contained Floating White Card */}
+      <div className="completion-card-wrapper">
+        <div className="completion-floating-card">
+          {/* 1. Compiling or Verifying State (media_1790599569372.png) */}
+          {(isCompiling || isVerifying) && (
+            <div className="completion-state-processing">
+              {/* Circular gradient ring spinner */}
+              <div className="completion-spinner-box">
+                <svg className="completion-spinner-svg" width="58" height="58" viewBox="0 0 58 58" fill="none" aria-hidden="true">
+                  <circle cx="29" cy="29" r="24" stroke="#e2e8f0" strokeWidth="4" />
+                  <path d="M29 5 A 24 24 0 0 1 53 29" stroke="url(#spinnerGrad)" strokeWidth="4" strokeLinecap="round" />
+                  <defs>
+                    <linearGradient id="spinnerGrad" x1="29" y1="5" x2="53" y2="29" gradientUnits="userSpaceOnUse">
+                      <stop stopColor="#1d68f2" />
+                      <stop offset="1" stopColor="#3b82f6" stopOpacity="0.25" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+
+              <h2 className="floating-card-title">
+                {isCompiling ? 'Compiling session' : 'Verifying transcript'}
+              </h2>
+
+              <p className="floating-card-subtitle">
+                {isCompiling
+                  ? 'Preparing audio and sermon context'
+                  : itemsTotal > 0
                   ? `${resolvedCount} of ${itemsTotal} sections checked`
-                  : 'Checking sermon transcript accuracy...')
-              : isVerifiedSuccess
-              ? `${itemsTotal} verified • 0 need review`
-              : isAiUnavailable
-              ? 'Your recording and transcript are safe. Automated verification could not be completed right now.'
-              : `${verifiedCount} verified • ${remainingToReview} need review`}
-          </p>
-        </div>
+                  : 'Checking sermon transcript accuracy...'}
+              </p>
 
-        {/* Card Body */}
-        <div className="card-body completion-card-body">
-          {/* Metadata Row */}
-          <div className="completion-meta-grid">
-            <div className="completion-meta-item">
-              <span className="meta-item-label">SERVICE NAME</span>
-              <strong className="meta-item-val">{serviceName}</strong>
-            </div>
-
-            <div className="completion-meta-item">
-              <span className="meta-item-label">DURATION</span>
-              <strong className="meta-item-val">{formatDuration(durationSec)}</strong>
-            </div>
-
-            <div className="completion-meta-item">
-              <span className="meta-item-label">DATE</span>
-              <strong className="meta-item-val">{formatFullDate(dateCreated)}</strong>
-            </div>
-          </div>
-
-          {/* System Storage Status */}
-          {!skipCompiling && (
-            <div className="completion-storage-block">
-              <div className="storage-block-title">
-                <span className="storage-icon">💾</span>
-                <span>System Storage Status</span>
-              </div>
-
-              <div className="storage-status-row">
-                <div className="storage-status-item">
-                  <span className="status-check-circle">✓</span>
-                  <div>
-                    <strong>Audio Saved</strong>
-                    <span className="storage-sub">Primary + Backup Lossless WAV</span>
-                  </div>
-                </div>
-
-                <div className="storage-status-item">
-                  <span className="status-check-circle">✓</span>
-                  <div>
-                    <strong>Raw Transcript</strong>
-                    <span className="storage-sub">Indexed &amp; Synced to Database</span>
-                  </div>
-                </div>
-
-                <span className="badge badge--success badge--storage-ready">
-                  SYSTEM READY
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* 1. Compiling Screen Component */}
-          {isCompiling && (
-            <div className="completion-processing-box compiling-box">
-              <div className="processing-header">
-                <span className="processing-tag">STAGE 1: COMPILING</span>
-                <span className="processing-subtext">Preparing audio and sermon context</span>
-              </div>
-
-              <div className="compiling-steps-row">
-                <div className="compiling-step-item compiling-step-item--done">
-                  <span className="step-icon">✓</span>
-                  <span className="step-label">Recording saved</span>
-                </div>
-                <div className={`compiling-step-item ${compilingStep >= 1 ? 'compiling-step-item--active' : ''}`}>
-                  <span className="step-icon">{compilingStep > 1 ? '✓' : '●'}</span>
-                  <span className="step-label">Finalizing transcript</span>
-                </div>
-                <div className={`compiling-step-item ${compilingStep >= 2 ? 'compiling-step-item--active' : ''}`}>
-                  <span className="step-icon">{compilingStep >= 2 ? '●' : '○'}</span>
-                  <span className="step-label">Preparing verification</span>
-                </div>
-              </div>
-
-              {/* Two small horizontal bars */}
-              <div className="compiling-bars-container">
-                <div className="compiling-bar compiling-bar--1" />
-                <div className={`compiling-bar compiling-bar--2 ${compilingStep >= 2 ? 'compiling-bar--active' : ''}`} />
-              </div>
-            </div>
-          )}
-
-          {/* 2. Verifying Screen Component */}
-          {isVerifying && (
-            <div className="completion-processing-box verifying-box">
-              <div className="processing-header">
-                <span className="processing-tag">VERIFYING</span>
-                <span className="processing-subtext">Checking transcript sections</span>
-              </div>
-
-              <div className="verifying-content-row">
-                <div className="verifying-sparkle-indicator">
-                  <span className="sparkle-pulse">✦</span>
-                </div>
-                <div className="verifying-details">
-                  <strong className="verifying-title">
-                    Verifying Transcript
-                  </strong>
-                  <p className="verifying-desc">
-                    {itemsTotal > 0
-                      ? `${resolvedCount} of ${itemsTotal} sections checked`
-                      : 'Checking sermon transcript accuracy...'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="verifying-progress-track">
+              {/* Compact Progress Bar */}
+              <div className="floating-progress-track">
                 <div
-                  className="verifying-progress-fill"
+                  className="floating-progress-fill"
                   style={{
-                    width: `${itemsTotal > 0 ? Math.max(8, Math.min(100, Math.round((resolvedCount / itemsTotal) * 100))) : 35}%`,
+                    width: isCompiling
+                      ? `${compilingStep >= 2 ? 65 : 30}%`
+                      : `${itemsTotal > 0 ? Math.max(10, Math.min(100, Math.round((resolvedCount / itemsTotal) * 100))) : 40}%`,
                   }}
                 />
               </div>
-            </div>
-          )}
 
-          {/* 3. Result Screen: Success / 0 to Review */}
-          {!isCompiling && !isVerifying && isVerifiedSuccess && (
-            <div className="completion-verification-card verify-card--clean">
-              <div className="verify-card-left">
-                <span className="verify-icon">✓</span>
-                <div className="verify-text">
-                  <strong className="verify-heading">Verification complete</strong>
-                  <div className="completion-stats-chips">
-                    <span className="stat-chip stat-chip--verified">
-                      ✓ {itemsTotal} verified
-                    </span>
-                    <span className="stat-chip stat-chip--pending">
-                      ● 0 need review
-                    </span>
+              {/* 4-Step Vertical Timeline */}
+              <div className="floating-timeline">
+                {/* Step 1: Recording saved */}
+                <div className="timeline-item timeline-item--done">
+                  <div className="timeline-bullet timeline-bullet--done">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
                   </div>
-                  <p className="verify-desc">
-                    All transcript sections have been verified. Ready to proceed to Reporting.
-                  </p>
+                  <span className="timeline-text">Recording saved</span>
                 </div>
-              </div>
+                <div className="timeline-line timeline-line--done" />
 
-              {(onGoToReporting || onBeginVerification) && (
-                <button
-                  type="button"
-                  className="btn btn--primary btn--begin-verify"
-                  onClick={onGoToReporting || onBeginVerification}
-                  id="btn-go-to-reporting-completion"
-                >
-                  <span>Continue to Reporting</span>
-                  <span>→</span>
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* 3. Result Screen: Needs Review */}
-          {!isCompiling && !isVerifying && isNeedsReview && !isAiUnavailable && (
-            <div className="completion-verification-card verify-card--flags">
-              <div className="verify-card-left">
-                <span className="verify-icon">📑</span>
-                <div className="verify-text">
-                  <strong className="verify-heading">
-                    Verification complete
-                  </strong>
-                  <div className="completion-stats-chips">
-                    <span className="stat-chip stat-chip--verified">
-                      ✓ {verifiedCount} verified
-                    </span>
-                    {summary?.corrected_count !== undefined && summary.corrected_count > 0 && (
-                      <span className="stat-chip stat-chip--corrected">
-                        ✎ {summary.corrected_count} corrected
-                      </span>
+                {/* Step 2: Finalizing transcript */}
+                <div className={`timeline-item ${!isCompiling || compilingStep > 1 ? 'timeline-item--done' : 'timeline-item--active'}`}>
+                  <div className={`timeline-bullet ${!isCompiling || compilingStep > 1 ? 'timeline-bullet--done' : 'timeline-bullet--active'}`}>
+                    {!isCompiling || compilingStep > 1 ? (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    ) : (
+                      <span className="timeline-pulse-dot" />
                     )}
-                    <span className="stat-chip stat-chip--pending">
-                      ● {remainingToReview} need review
-                    </span>
                   </div>
-                  <p className="verify-desc">
-                    Review and confirm preacher wording, names, and scriptures.
-                  </p>
+                  <span className={`timeline-text ${isCompiling && compilingStep === 1 ? 'timeline-text--active' : ''}`}>
+                    Finalizing transcript
+                  </span>
+                </div>
+                <div className={`timeline-line ${!isCompiling ? 'timeline-line--done' : ''}`} />
+
+                {/* Step 3: Verifying transcript */}
+                <div className={`timeline-item ${isVerifying ? 'timeline-item--active' : 'timeline-item--pending'}`}>
+                  <div className={`timeline-bullet ${isVerifying ? 'timeline-bullet--active' : 'timeline-bullet--pending'}`}>
+                    {isVerifying ? <span className="timeline-pulse-dot" /> : null}
+                  </div>
+                  <span className={`timeline-text ${isVerifying ? 'timeline-text--active' : ''}`}>
+                    Verifying transcript
+                  </span>
+                </div>
+                <div className="timeline-line timeline-line--pending" />
+
+                {/* Step 4: Completing session */}
+                <div className="timeline-item timeline-item--pending">
+                  <div className="timeline-bullet timeline-bullet--pending" />
+                  <span className="timeline-text timeline-text--pending">
+                    Completing session
+                  </span>
                 </div>
               </div>
-
-              {onBeginVerification && (
-                <button
-                  type="button"
-                  className="btn btn--primary btn--begin-verify"
-                  onClick={onBeginVerification}
-                  id="btn-begin-verification-completion"
-                >
-                  <span>Review {remainingToReview} Section{remainingToReview !== 1 ? 's' : ''}</span>
-                  <span>→</span>
-                </button>
-              )}
             </div>
           )}
 
-          {/* 3. Result Screen: AI Unavailable */}
-          {!isCompiling && !isVerifying && isAiUnavailable && (
-            <div className="completion-verification-card verify-card--unavailable">
-              <div className="verify-card-left">
-                <span className="verify-icon">⚠️</span>
-                <div className="verify-text">
-                  <strong className="verify-heading">Verification unavailable</strong>
-                  <p className="verify-desc">
-                    Your recording and transcript are safe. Automated verification could not be completed right now.
-                  </p>
+          {/* 2. Verification Complete State (media_1790599569328.png) */}
+          {!isCompiling && !isVerifying && !isAiUnavailable && (
+            <div className="completion-state-complete">
+              <div className="completion-success-badge">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+
+              <h2 className="floating-card-title floating-card-title--complete">
+                Verification complete
+              </h2>
+
+              {/* 2-Column Stats Box */}
+              <div className="floating-stats-container">
+                <div className="floating-stat-col">
+                  <span className="floating-stat-num">{verifiedCount}</span>
+                  <span className="floating-stat-label">sections verified automatically</span>
+                </div>
+                <div className="floating-stat-divider" />
+                <div className="floating-stat-col">
+                  <span className="floating-stat-num">{remainingToReview}</span>
+                  <span className="floating-stat-label">sections need your review</span>
                 </div>
               </div>
 
-              <div className="unavailable-actions-row" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              {/* Full-Width Action Button */}
+              <button
+                type="button"
+                className="btn-floating-primary"
+                id={remainingToReview > 0 ? "btn-begin-verification-completion" : "btn-continue-completion"}
+                onClick={() => {
+                  if (remainingToReview > 0 && onBeginVerification) {
+                    onBeginVerification()
+                  } else if (onGoToReporting) {
+                    onGoToReporting()
+                  } else if (onFinishForNow) {
+                    onFinishForNow()
+                  } else if (onBeginVerification) {
+                    onBeginVerification()
+                  }
+                }}
+              >
+                {remainingToReview > 0
+                  ? `Review ${remainingToReview} Section${remainingToReview !== 1 ? 's' : ''} →`
+                  : 'Continue →'}
+              </button>
+            </div>
+          )}
+
+          {/* 3. Unavailable State */}
+          {!isCompiling && !isVerifying && isAiUnavailable && (
+            <div className="completion-state-unavailable">
+              <div className="completion-unavailable-badge">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+
+              <h2 className="floating-card-title">Verification unavailable</h2>
+
+              <p className="floating-card-desc">
+                Your recording and transcript are safe. Automated verification could not be completed right now.
+              </p>
+
+              <div className="floating-card-actions-row">
                 {onRetryVerification && (
                   <button
                     type="button"
-                    className="btn btn--secondary btn--retry-verify"
+                    className="btn-floating-secondary"
+                    id="btn-retry-verification-completion"
                     onClick={() => {
                       setAiStatus('verifying')
                       onRetryVerification()
                     }}
-                    id="btn-retry-verification-completion"
                   >
-                    <span>↻ Try Again</span>
+                    ↻ Try Again
                   </button>
                 )}
                 {onBeginVerification && (
                   <button
                     type="button"
-                    className="btn btn--primary btn--begin-verify"
-                    onClick={onBeginVerification}
+                    className="btn-floating-primary btn-floating-primary--auto"
                     id="btn-manual-verify-completion"
+                    onClick={onBeginVerification}
                   >
-                    <span>Review Manually</span>
-                    <span>→</span>
+                    Review Manually →
                   </button>
                 )}
               </div>
             </div>
           )}
-
-          {/* Bottom Actions */}
-          <div className="completion-bottom-actions">
-            <button
-              type="button"
-              className="btn btn--outline"
-              onClick={onFinishForNow}
-              id="btn-finish-for-now"
-            >
-              ⊞ Finish for Now
-            </button>
-
-            <button
-              type="button"
-              className="btn btn--secondary"
-              onClick={onViewSessionDetails}
-              id="btn-view-session-details"
-            >
-              📋 View Session Details
-            </button>
-          </div>
         </div>
       </div>
     </div>

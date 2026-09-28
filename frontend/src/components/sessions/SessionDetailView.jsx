@@ -143,8 +143,23 @@ export function SessionDetailView({
   onConfirmAllRemaining,
   onFinaliseVerification,
   onConfirmRawAsVerified,
+  // Navigation props
+  onNavigateStage,
+  verificationProcessing,
+  onTriggerVerificationProcessing,
+  onCloseVerificationProcessing,
 }) {
   const getDefaultView = () => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace(/^#\/?/, '').trim()
+      if (hash.startsWith('session/')) {
+        const parts = hash.split('/')
+        if (parts[2]) return parts[2]
+      }
+      if (hash === 'session_workspace') return 'overview'
+      if (hash === 'verification_workspace') return 'verification'
+    }
+
     if (initialStage) {
       return initialStage
     }
@@ -154,12 +169,6 @@ export function SessionDetailView({
     const eStatus = session?.editing_status || 'not_started'
     const rStatus = session?.reporting_status || 'not_started'
     const vStatus = session?.verification_status || 'not_started'
-
-    if (typeof window !== 'undefined') {
-      const hash = window.location.hash.replace('#', '')
-      if (hash === 'session_workspace') return 'overview'
-      if (hash === 'verification_workspace') return 'verification'
-    }
 
     if (fStatus === 'complete') return 'overview'
     if (pStatus === 'complete') return 'overview'
@@ -175,6 +184,13 @@ export function SessionDetailView({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const mediaElementRef = useRef(null)
 
+  const changeStage = (newStage) => {
+    setActiveView(newStage)
+    if (onNavigateStage) {
+      onNavigateStage(newStage)
+    }
+  }
+
   // Synchronize activeView when opening a new session or changing initialStage or hash route
   useEffect(() => {
     setActiveView(getDefaultView())
@@ -182,7 +198,11 @@ export function SessionDetailView({
       setActiveView(getDefaultView())
     }
     window.addEventListener('hashchange', handleHash)
-    return () => window.removeEventListener('hashchange', handleHash)
+    window.addEventListener('popstate', handleHash)
+    return () => {
+      window.removeEventListener('hashchange', handleHash)
+      window.removeEventListener('popstate', handleHash)
+    }
   }, [session?.session_id, initialStage])
 
   // Inform parent AppShell about current subview title and back action
@@ -199,7 +219,7 @@ export function SessionDetailView({
       final_report: 'Final Report',
     }
     const title = titles[activeView] || 'Session Workspace'
-    const backFn = activeView === 'overview' ? onBack : () => setActiveView('overview')
+    const backFn = activeView === 'overview' ? onBack : () => changeStage('overview')
     onSubViewChange({ title, onBack: backFn })
   }, [activeView, onBack, onSubViewChange])
 
@@ -212,8 +232,8 @@ export function SessionDetailView({
     return (
       <ReportingView
         session={session}
-        onBack={() => setActiveView('overview')}
-        onNavigateToEditing={() => setActiveView('editing')}
+        onBack={() => changeStage('overview')}
+        onNavigateToEditing={() => changeStage('editing')}
       />
     )
   }
@@ -222,8 +242,8 @@ export function SessionDetailView({
     return (
       <EditingView
         session={session}
-        onBack={() => setActiveView('overview')}
-        onNavigateToProofreading={() => setActiveView('proofreading')}
+        onBack={() => changeStage('overview')}
+        onNavigateToProofreading={() => changeStage('proofreading')}
       />
     )
   }
@@ -232,8 +252,8 @@ export function SessionDetailView({
     return (
       <ProofreadingView
         session={session}
-        onBack={() => setActiveView('overview')}
-        onNavigateToFinalReport={() => setActiveView('final_report')}
+        onBack={() => changeStage('overview')}
+        onNavigateToFinalReport={() => changeStage('final_report')}
       />
     )
   }
@@ -242,7 +262,7 @@ export function SessionDetailView({
     return (
       <FinalReportView
         session={session}
-        onBack={() => setActiveView('overview')}
+        onBack={() => changeStage('overview')}
       />
     )
   }
@@ -325,7 +345,7 @@ export function SessionDetailView({
           onJumpToTime={handleJumpToTime}
           onBeginVerification={() => {
             onStartVerification(session.session_id)
-            setActiveView('verification')
+            changeStage('verification')
           }}
           flagCount={flagCount}
         />
@@ -349,15 +369,18 @@ export function SessionDetailView({
           onConfirmAllRemaining={onConfirmAllRemaining}
           onFinalise={async (sId) => {
             await onFinaliseVerification(sId)
-            setActiveView('overview')
+            changeStage('overview')
           }}
           onConfirmRawAsVerified={async (sId) => {
             await onConfirmRawAsVerified(sId)
-            setActiveView('overview')
+            changeStage('overview')
           }}
           onPlaySegment={handleJumpToTime}
-          onNavigateToReporting={() => setActiveView('reporting')}
-          onFinishForNow={() => setActiveView('overview')}
+          onNavigateToReporting={() => changeStage('reporting')}
+          onFinishForNow={() => changeStage('overview')}
+          isProcessingProp={verificationProcessing}
+          onTriggerProcessing={onTriggerVerificationProcessing}
+          onCloseProcessing={onCloseVerificationProcessing}
         />
       </div>
     )
@@ -378,10 +401,10 @@ export function SessionDetailView({
               </p>
             </div>
             <div className="verified-top-actions">
-              <button type="button" className="btn btn--outline" onClick={() => setActiveView('overview')}>
+              <button type="button" className="btn btn--outline" onClick={() => changeStage('overview')}>
                 Finish for Now
               </button>
-              <button type="button" className="btn btn--primary" onClick={() => setActiveView('reporting')}>
+              <button type="button" className="btn btn--primary" onClick={() => changeStage('reporting')}>
                 Continue to Reporting →
               </button>
             </div>
@@ -475,13 +498,13 @@ export function SessionDetailView({
         session={session}
         activeStage={isVerified ? (rStatus === 'reports_ready' ? 'editing' : 'reporting') : 'verification'}
         onSelectStage={(stageId) => {
-          if (stageId === 'raw_transcript') setActiveView('raw_transcript')
-          else if (stageId === 'verification') setActiveView('verification')
-          else if (stageId === 'verified_transcript') setActiveView('verified_transcript')
-          else if (stageId === 'reporting') setActiveView('reporting')
-          else if (stageId === 'editing') setActiveView('editing')
-          else if (stageId === 'proofreading') setActiveView('proofreading')
-          else if (stageId === 'final_report') setActiveView('final_report')
+          if (stageId === 'raw_transcript') changeStage('raw_transcript')
+          else if (stageId === 'verification') changeStage('verification')
+          else if (stageId === 'verified_transcript') changeStage('verified_transcript')
+          else if (stageId === 'reporting') changeStage('reporting')
+          else if (stageId === 'editing') changeStage('editing')
+          else if (stageId === 'proofreading') changeStage('proofreading')
+          else if (stageId === 'final_report') changeStage('final_report')
         }}
       />
 
@@ -501,7 +524,7 @@ export function SessionDetailView({
             className="btn-verify-cta"
             onClick={() => {
               onStartVerification(session.session_id)
-              setActiveView('verification')
+              changeStage('verification')
             }}
             id="btn-workspace-begin-verify"
           >
@@ -521,7 +544,7 @@ export function SessionDetailView({
           <button
             type="button"
             className="btn-verify-cta"
-            onClick={() => setActiveView('reporting')}
+            onClick={() => changeStage('reporting')}
             id="btn-workspace-go-to-reporting"
           >
             Go to Reporting →
@@ -540,7 +563,7 @@ export function SessionDetailView({
           <button
             type="button"
             className="btn-verify-cta"
-            onClick={() => setActiveView('editing')}
+            onClick={() => changeStage('editing')}
             id="btn-workspace-open-editing"
           >
             Open Editing →
@@ -559,7 +582,7 @@ export function SessionDetailView({
           <button
             type="button"
             className="btn-verify-cta"
-            onClick={() => setActiveView('proofreading')}
+            onClick={() => changeStage('proofreading')}
             id="btn-workspace-open-proofreading"
           >
             Open Proofreading →
@@ -578,7 +601,7 @@ export function SessionDetailView({
           <button
             type="button"
             className="btn-verify-cta"
-            onClick={() => setActiveView('final_report')}
+            onClick={() => changeStage('final_report')}
             id="btn-workspace-open-final-report"
           >
             Download .docx →
@@ -606,7 +629,7 @@ export function SessionDetailView({
             <button
               type="button"
               className="btn-tile-action btn-tile-action--active"
-              onClick={() => setActiveView('raw_transcript')}
+              onClick={() => changeStage('raw_transcript')}
             >
               ▶ Play Recording
             </button>
@@ -627,7 +650,7 @@ export function SessionDetailView({
             <button
               type="button"
               className="btn-tile-action btn-tile-action--active"
-              onClick={() => setActiveView('raw_transcript')}
+              onClick={() => changeStage('raw_transcript')}
             >
               View Raw Transcript
             </button>
@@ -655,7 +678,7 @@ export function SessionDetailView({
               <button
                 type="button"
                 className="btn-tile-action btn-tile-action--active"
-                onClick={() => setActiveView('verified_transcript')}
+                onClick={() => changeStage('verified_transcript')}
               >
                 View Verified Transcript
               </button>
@@ -695,7 +718,7 @@ export function SessionDetailView({
               <button
                 type="button"
                 className="btn-tile-action btn-tile-action--active"
-                onClick={() => setActiveView('reporting')}
+                onClick={() => changeStage('reporting')}
               >
                 View Reports
               </button>
@@ -735,7 +758,7 @@ export function SessionDetailView({
               <button
                 type="button"
                 className="btn-tile-action btn-tile-action--active"
-                onClick={() => setActiveView('editing')}
+                onClick={() => changeStage('editing')}
               >
                 Open Editing
               </button>
@@ -775,7 +798,7 @@ export function SessionDetailView({
               <button
                 type="button"
                 className="btn-tile-action btn-tile-action--active"
-                onClick={() => setActiveView('final_report')}
+                onClick={() => changeStage('final_report')}
               >
                 Download .docx
               </button>

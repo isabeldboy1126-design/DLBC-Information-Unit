@@ -20,6 +20,9 @@ export function VerificationWorkflow({
   onPlaySegment,
   onNavigateToReporting,
   onFinishForNow,
+  isProcessingProp,
+  onTriggerProcessing,
+  onCloseProcessing,
 }) {
   const [filter, setFilter] = useState('pending') // 'pending' | 'resolved' | 'all'
   const [activeItemIndex, setActiveItemIndex] = useState(0)
@@ -240,6 +243,11 @@ export function VerificationWorkflow({
     if (!sessionId) return
     setIsAiVerifying(true)
     setAiFeedback(null)
+    if (onTriggerProcessing) {
+      onTriggerProcessing()
+    } else {
+      setShowProcessingScreen(true)
+    }
     try {
       const res = await fetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/verify-ai`), {
         method: 'POST',
@@ -250,23 +258,27 @@ export function VerificationWorkflow({
         const errJson = await res.json().catch(() => ({}))
         console.error('AI verification trigger failed:', res.status, errJson)
       }
-      setShowProcessingScreen(true)
     } catch (err) {
       console.error('Error triggering AI verification:', err)
-      setShowProcessingScreen(true)
     } finally {
       setIsAiVerifying(false)
     }
   }
 
   // If user triggered "Use AI to Verify", switch immediately to the dedicated processing screen
-  if (showProcessingScreen) {
+  const isCurrentlyProcessing = isProcessingProp !== undefined ? isProcessingProp : showProcessingScreen
+
+  if (isCurrentlyProcessing) {
     return (
       <SessionCompletionView
         session={session}
         skipCompiling={true}
         onBeginVerification={async () => {
-          setShowProcessingScreen(false)
+          if (onCloseProcessing) {
+            onCloseProcessing()
+          } else {
+            setShowProcessingScreen(false)
+          }
           if (onLoadVerificationState) {
             await onLoadVerificationState(sessionId)
           }

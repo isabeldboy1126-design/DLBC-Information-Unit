@@ -25,50 +25,73 @@ import { ErrorBanner } from './components/ErrorBanner'
 import './App.css'
 
 function App() {
-  // Read initial view from URL hash if present (e.g. #sessions, #new_live)
-  const getInitialView = () => {
-    try {
-      const hash = window.location.hash.replace('#', '')
-      if (hash.startsWith('sessions') || hash === 'session_workspace' || hash === 'verification_workspace') return 'sessions'
-      if (['dashboard', 'sessions', 'new_live', 'transcribe', 'youtube', 'settings', 'live_recording'].includes(hash)) {
-        return hash
-      }
-    } catch {}
-    return 'dashboard'
-  }
-
-  // Navigation: 'dashboard' | 'sessions' | 'new_live' | 'transcribe' | 'youtube' | 'settings' | 'live_recording'
-  const [currentView, setCurrentView] = useState(getInitialView)
-  const [isRecorderMinimized, setIsRecorderMinimized] = useState(false)
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '')
-      if (hash.startsWith('sessions') || hash === 'session_workspace' || hash === 'verification_workspace') {
-        setCurrentView('sessions')
-        return
-      }
-      if (['dashboard', 'sessions', 'new_live', 'transcribe', 'youtube', 'settings', 'live_recording'].includes(hash)) {
-        setCurrentView(hash)
+  const parseRoute = (rawHash) => {
+    const clean = (rawHash || '').replace(/^#\/?/, '').trim()
+    if (!clean || clean === 'dashboard') {
+      return { view: 'dashboard', sessionId: null, stage: null, subAction: null }
+    }
+    if (clean === 'sessions') {
+      return { view: 'sessions', sessionId: null, stage: null, subAction: null }
+    }
+    if (clean.startsWith('session/')) {
+      const parts = clean.split('/')
+      return {
+        view: 'sessions',
+        sessionId: parts[1] || null,
+        stage: parts[2] || 'overview',
+        subAction: parts[3] || null,
       }
     }
-    window.addEventListener('hashchange', handleHashChange)
-    return () => window.removeEventListener('hashchange', handleHashChange)
-  }, [])
+    if (clean.startsWith('completion/')) {
+      const parts = clean.split('/')
+      return {
+        view: 'completion',
+        sessionId: parts[1] || null,
+        stage: null,
+        subAction: null,
+      }
+    }
+    if (clean === 'session_workspace') {
+      return { view: 'sessions', sessionId: null, stage: 'overview', subAction: null }
+    }
+    if (clean === 'verification_workspace') {
+      return { view: 'sessions', sessionId: null, stage: 'verification', subAction: null }
+    }
+    if (['new_live', 'transcribe', 'youtube', 'settings', 'live_recording'].includes(clean)) {
+      return { view: clean, sessionId: null, stage: null, subAction: null }
+    }
+    return { view: 'dashboard', sessionId: null, stage: null, subAction: null }
+  }
+
+  // Navigation state initialized from URL hash
+  const [currentView, setCurrentView] = useState(() => {
+    return parseRoute(typeof window !== 'undefined' ? window.location.hash : '').view
+  })
+  const [sessionInitialStage, setSessionInitialStage] = useState(() => {
+    return parseRoute(typeof window !== 'undefined' ? window.location.hash : '').stage || 'overview'
+  })
+  const [verificationProcessing, setVerificationProcessing] = useState(() => {
+    return parseRoute(typeof window !== 'undefined' ? window.location.hash : '').subAction === 'processing'
+  })
+  const [isRecorderMinimized, setIsRecorderMinimized] = useState(false)
+  const [showCompletionModal, setShowCompletionModal] = useState(() => {
+    return parseRoute(typeof window !== 'undefined' ? window.location.hash : '').view === 'completion'
+  })
+  const [completedSessionId, setCompletedSessionId] = useState(() => {
+    return parseRoute(typeof window !== 'undefined' ? window.location.hash : '').sessionId
+  })
+
   const [sessionMetadata, setSessionMetadata] = useState({
     title: 'Sunday Morning Worship Service',
     eventType: 'Sunday Worship Service',
     minister: '',
     messageTitle: '',
   })
-  const [showCompletionModal, setShowCompletionModal] = useState(false)
-  const [completedSessionId, setCompletedSessionId] = useState(null)
   const [sessionSubViewInfo, setSessionSubViewInfo] = useState({
     title: 'Session Workspace',
     onBack: null,
   })
   const [sessionsStatusFilter, setSessionsStatusFilter] = useState('all')
-  const [sessionInitialStage, setSessionInitialStage] = useState('overview')
 
   // Phase 1 & 3: Audio Capture & Live Transcription Hook
   const liveAudio = useAudioCapture()
@@ -79,15 +102,123 @@ function App() {
   // Phase 4: Persistent Church Sessions Hook
   const sessionsHook = useSessions()
 
-  // Auto-load first session when directly loading #session_workspace or #verification_workspace
-  useEffect(() => {
-    const hash = window.location.hash.replace('#', '')
-    if (hash === 'session_workspace' || hash === 'verification_workspace') {
-      if (sessionsHook.sessions && sessionsHook.sessions.length > 0 && !sessionsHook.activeSession) {
-        sessionsHook.loadSession(sessionsHook.sessions[0].session_id)
+  const applyRoute = (rawHash) => {
+    const route = parseRoute(rawHash)
+
+    if (route.view === 'completion') {
+      setShowCompletionModal(true)
+      if (route.sessionId) {
+        setCompletedSessionId(route.sessionId)
+        if (sessionsHook.activeSession?.session_id !== route.sessionId) {
+          sessionsHook.loadSession(route.sessionId)
+        }
+      }
+      return
+    }
+
+    setShowCompletionModal(false)
+
+    if (route.view === 'sessions') {
+      setCurrentView('sessions')
+      if (route.sessionId) {
+        if (sessionsHook.activeSession?.session_id !== route.sessionId) {
+          sessionsHook.loadSession(route.sessionId)
+        }
+        setSessionInitialStage(route.stage || 'overview')
+        setVerificationProcessing(route.subAction === 'processing')
+      } else {
+        sessionsHook.closeActiveSession()
+        setSessionInitialStage('overview')
+        setVerificationProcessing(false)
+      }
+      return
+    }
+
+    setCurrentView(route.view)
+    sessionsHook.closeActiveSession()
+    setSessionInitialStage('overview')
+    setVerificationProcessing(false)
+  }
+
+  const navigateTo = (targetHash, state = {}) => {
+    if (liveAudio.isRecording) {
+      const clean = targetHash.replace(/^#\/?/, '')
+      if (clean === 'live_recording') {
+        setIsRecorderMinimized(false)
+        return
+      }
+      setIsRecorderMinimized(true)
+    }
+
+    const cleanTarget = targetHash.replace(/^#\/?/, '')
+    const currentClean = window.location.hash.replace(/^#\/?/, '')
+
+    const currentDepth = (window.history.state && typeof window.history.state.depth === 'number')
+      ? window.history.state.depth
+      : 0
+    const nextDepth = currentDepth + 1
+
+    if (currentClean !== cleanTarget) {
+      window.history.pushState({ ...state, depth: nextDepth }, '', '#' + cleanTarget)
+    }
+    applyRoute('#' + cleanTarget)
+  }
+
+  const handleInAppBack = () => {
+    const currentDepth = (window.history.state && typeof window.history.state.depth === 'number')
+      ? window.history.state.depth
+      : 0
+
+    if (currentDepth > 0) {
+      window.history.back()
+    } else {
+      // Fallback: If no browser history exists (e.g. user refreshed or opened direct link),
+      // safely navigate to the logical parent screen:
+      const clean = window.location.hash.replace(/^#\/?/, '').trim()
+      if (clean.startsWith('session/')) {
+        const parts = clean.split('/')
+        const sId = parts[1]
+        const stage = parts[2]
+        const sub = parts[3]
+        if (sub === 'processing') {
+          navigateTo(`session/${sId}/verification`)
+        } else if (stage && stage !== 'overview') {
+          navigateTo(`session/${sId}`)
+        } else {
+          navigateTo('sessions')
+        }
+      } else if (clean.startsWith('completion/')) {
+        navigateTo('sessions')
+      } else if (['sessions', 'new_live', 'transcribe', 'youtube', 'settings'].includes(clean)) {
+        navigateTo('dashboard')
+      } else {
+        navigateTo('dashboard')
       }
     }
-  }, [sessionsHook.sessions, sessionsHook.activeSession])
+  }
+
+  // Handle browser popstate events (browser back, swipe gesture, mobile back)
+  useEffect(() => {
+    if (!window.history.state || typeof window.history.state.depth !== 'number') {
+      const initialHash = window.location.hash || '#dashboard'
+      window.history.replaceState({ depth: 0 }, '', initialHash)
+    }
+
+    const onPopState = () => {
+      applyRoute(window.location.hash)
+    }
+
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  // Auto-load session if direct URL loaded
+  useEffect(() => {
+    const route = parseRoute(window.location.hash)
+    if (route.sessionId && (!sessionsHook.activeSession || sessionsHook.activeSession.session_id !== route.sessionId)) {
+      sessionsHook.loadSession(route.sessionId)
+    }
+  }, [sessionsHook.sessions])
 
   // Synchronize modal and minimized state when recording starts/stops
   useEffect(() => {
@@ -121,32 +252,26 @@ function App() {
     if (targetId) {
       setCompletedSessionId(targetId)
       await sessionsHook.loadSession(targetId)
+      navigateTo(`completion/${targetId}`)
+    } else {
+      setShowCompletionModal(true)
     }
-    setShowCompletionModal(true)
   }
 
-  // Seamless Navigation Handler allowing background recording in floating mode
+  // Navigation Handler for AppShell Sidebar
   const handleNavigate = (view) => {
-    if (liveAudio.isRecording) {
-      if (view === 'live_recording') {
-        setIsRecorderMinimized(false)
-        return
-      }
-      // Switch to floating recorder mode on navigation to any other section
-      setIsRecorderMinimized(true)
-    }
     if (view === 'sessions') {
       sessionsHook.closeActiveSession()
       sessionsHook.fetchSessions()
       setSessionsStatusFilter('all')
     }
-    setCurrentView(view)
+    navigateTo(view)
   }
 
   // Handle direct file selection from Dashboard dropzone
   const handleDashboardFileSelect = (file) => {
     recordedTranscription.handleFileSelect(file)
-    setCurrentView('transcribe')
+    navigateTo('transcribe')
   }
 
   // Contextual Top Header computation: Screen Title & Back Action
@@ -159,11 +284,8 @@ function App() {
     }
     if (showCompletionModal) {
       return {
-        title: 'Session Completion',
-        onBack: () => {
-          setShowCompletionModal(false)
-          setCurrentView('dashboard')
-        },
+        title: '',
+        onBack: handleInAppBack,
       }
     }
     if (currentView === 'dashboard') {
@@ -175,37 +297,43 @@ function App() {
     if (currentView === 'new_live') {
       return {
         title: 'New Live Recording',
-        onBack: () => setCurrentView('dashboard'),
+        onBack: handleInAppBack,
       }
     }
     if (currentView === 'transcribe') {
       return {
         title: 'Transcribe Recording File',
-        onBack: () => setCurrentView('dashboard'),
+        onBack: handleInAppBack,
       }
     }
     if (currentView === 'youtube') {
       return {
         title: 'YouTube Session',
-        onBack: () => setCurrentView('dashboard'),
+        onBack: handleInAppBack,
       }
     }
     if (currentView === 'settings') {
       return {
         title: 'Settings & Standards',
-        onBack: () => setCurrentView('dashboard'),
+        onBack: handleInAppBack,
       }
     }
     if (currentView === 'sessions') {
       if (sessionsHook.activeSession) {
+        if (verificationProcessing) {
+          return {
+            title: '',
+            onBack: handleInAppBack,
+          }
+        }
         return {
-          title: sessionSubViewInfo.title,
-          onBack: sessionSubViewInfo.onBack || (() => sessionsHook.closeActiveSession()),
+          title: sessionSubViewInfo.title || '',
+          onBack: handleInAppBack,
         }
       }
       return {
         title: '',
-        onBack: () => setCurrentView('dashboard'),
+        onBack: handleInAppBack,
       }
     }
     return {
@@ -277,18 +405,15 @@ function App() {
           }
           latestRecording={liveAudio.latestRecording}
           onBeginVerification={() => {
-            setShowCompletionModal(false)
             const targetSession =
               sessionsHook.activeSession ||
               sessionsHook.sessions.find((s) => s.session_id === completedSessionId) ||
               sessionsHook.sessions[0]
             if (targetSession) {
-              sessionsHook.loadSession(targetSession.session_id)
-              setCurrentView('sessions')
+              navigateTo(`session/${targetSession.session_id}/verification`)
             }
           }}
           onGoToReporting={async () => {
-            setShowCompletionModal(false)
             const targetSession =
               sessionsHook.activeSession ||
               sessionsHook.sessions.find((s) => s.session_id === completedSessionId) ||
@@ -297,25 +422,20 @@ function App() {
               if (targetSession.flag_count === 0 && !targetSession.verified_text) {
                 await sessionsHook.confirmRawAsVerified(targetSession.session_id)
               }
-              await sessionsHook.loadSession(targetSession.session_id)
-              setCurrentView('sessions')
+              navigateTo(`session/${targetSession.session_id}/reporting`)
             }
           }}
           onFinishForNow={() => {
-            setShowCompletionModal(false)
-            setCurrentView('dashboard')
-            sessionsHook.fetchSessions()
+            navigateTo('sessions')
           }}
           onViewSessionDetails={() => {
-            setShowCompletionModal(false)
             const targetSession =
               sessionsHook.activeSession ||
               sessionsHook.sessions.find((s) => s.session_id === completedSessionId) ||
               sessionsHook.sessions[0]
             if (targetSession) {
-              sessionsHook.loadSession(targetSession.session_id)
+              navigateTo(`session/${targetSession.session_id}`)
             }
-            setCurrentView('sessions')
           }}
         />
       ) : currentView === 'dashboard' ? (
@@ -328,29 +448,25 @@ function App() {
             if (liveAudio.isRecording) {
               setIsRecorderMinimized(false)
             } else {
-              setCurrentView('new_live')
+              navigateTo('new_live')
             }
           }}
-          onStartYouTubeSession={() => setCurrentView('youtube')}
+          onStartYouTubeSession={() => navigateTo('youtube')}
           onOpenSession={(sessionId, initialStage = 'overview') => {
             const activeRecId = liveAudio.latestSession?.session_id || liveAudio.latestRecording?.session_id
             if (liveAudio.isRecording && (sessionId === activeRecId || sessionsHook.sessions.find((s) => s.session_id === sessionId)?.status === 'recording')) {
               setIsRecorderMinimized(false)
               return
             }
-            setSessionInitialStage(initialStage)
-            sessionsHook.loadSession(sessionId)
-            setCurrentView('sessions')
+            navigateTo(`session/${sessionId}${initialStage && initialStage !== 'overview' ? `/${initialStage}` : ''}`)
           }}
           onViewAllSessions={() => {
-            sessionsHook.closeActiveSession()
             setSessionsStatusFilter('all')
-            setCurrentView('sessions')
+            navigateTo('sessions')
           }}
           onViewNeedsVerification={() => {
-            sessionsHook.closeActiveSession()
             setSessionsStatusFilter('needs_verification')
-            setCurrentView('sessions')
+            navigateTo('sessions')
           }}
           onFileSelect={handleDashboardFileSelect}
         />
@@ -374,7 +490,7 @@ function App() {
           <NewLiveSessionView
             liveAudio={liveAudio}
             onStartRecording={handleStartRecording}
-            onBack={() => setCurrentView('dashboard')}
+            onBack={handleInAppBack}
           />
         )
       ) : currentView === 'sessions' ? (
@@ -390,8 +506,7 @@ function App() {
                 setIsRecorderMinimized(false)
                 return
               }
-              setSessionInitialStage(initialStage)
-              sessionsHook.loadSession(sessionId)
+              navigateTo(`session/${sessionId}${initialStage && initialStage !== 'overview' ? `/${initialStage}` : ''}`)
             }}
             onDeleteSession={sessionsHook.deleteSession}
             onRefresh={sessionsHook.fetchSessions}
@@ -399,7 +514,7 @@ function App() {
               if (liveAudio.isRecording) {
                 setIsRecorderMinimized(false)
               } else {
-                setCurrentView('new_live')
+                navigateTo('new_live')
               }
             }}
             isLoading={sessionsHook.isLoading}
@@ -409,7 +524,7 @@ function App() {
           <SessionDetailView
             session={sessionsHook.activeSession}
             initialStage={sessionInitialStage}
-            onBack={sessionsHook.closeActiveSession}
+            onBack={handleInAppBack}
             onUpdateTitle={sessionsHook.updateSessionTitle}
             onUpdateDetails={sessionsHook.updateSessionDetails}
             onSubViewChange={setSessionSubViewInfo}
@@ -421,6 +536,21 @@ function App() {
             onConfirmAllRemaining={sessionsHook.confirmAllRemaining}
             onFinaliseVerification={sessionsHook.finaliseVerification}
             onConfirmRawAsVerified={sessionsHook.confirmRawAsVerified}
+            onNavigateStage={(stage) => {
+              const sId = sessionsHook.activeSession?.session_id
+              if (!sId) return
+              const target = stage && stage !== 'overview' ? `session/${sId}/${stage}` : `session/${sId}`
+              navigateTo(target)
+            }}
+            verificationProcessing={verificationProcessing}
+            onTriggerVerificationProcessing={() => {
+              const sId = sessionsHook.activeSession?.session_id
+              if (!sId) return
+              navigateTo(`session/${sId}/verification/processing`)
+            }}
+            onCloseVerificationProcessing={() => {
+              handleInAppBack()
+            }}
           />
         )
       ) : currentView === 'transcribe' ? (
@@ -481,16 +611,15 @@ function App() {
         /* ----------------------------------------------------------- */
         /* VIEW 5: SETTINGS & STANDARDS                                */
         /* ----------------------------------------------------------- */
-        <SettingsView onBack={() => handleNavigate('dashboard')} />
+        <SettingsView onBack={handleInAppBack} />
       ) : currentView === 'youtube' ? (
         /* ----------------------------------------------------------- */
         /* VIEW 6: YOUTUBE INGESTION PIPELINE                          */
         /* ----------------------------------------------------------- */
         <YouTubeSessionView
-          onBack={() => setCurrentView('dashboard')}
+          onBack={handleInAppBack}
           onOpenSession={(sessionId) => {
-            sessionsHook.loadSession(sessionId)
-            setCurrentView('sessions')
+            navigateTo(`session/${sessionId}`)
           }}
           liveAudio={liveAudio}
           onStartTabCapture={async (meta) => {
@@ -499,7 +628,7 @@ function App() {
             const success = await liveAudio.startTabCapture(meta.title, meta)
             if (success) {
               setIsRecorderMinimized(false)
-              setCurrentView('live_recording')
+              navigateTo('live_recording')
             }
             return success
           }}
