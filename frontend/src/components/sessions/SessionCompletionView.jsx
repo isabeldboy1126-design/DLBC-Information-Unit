@@ -24,6 +24,8 @@ export function SessionCompletionView({
   onGoToReporting,
   onFinishForNow,
   onViewSessionDetails,
+  onRetryVerification,
+  skipCompiling = false,
 }) {
   const sessionId = session?.session_id || latestRecording?.session_id
   const serviceName = session?.title || latestRecording?.title || 'Sunday Morning Worship Service'
@@ -31,11 +33,12 @@ export function SessionCompletionView({
   const dateCreated = session?.date_created || latestRecording?.created_at || new Date().toISOString()
   const rawFlagCount = session?.flag_count || 0
 
-  const [aiStatus, setAiStatus] = useState(session?.ai_verification_status || 'compiling')
+  const [aiStatus, setAiStatus] = useState(skipCompiling ? 'verifying' : (session?.ai_verification_status || 'compiling'))
   const [summary, setSummary] = useState(session?.ai_verification_summary || null)
   const [itemsTotal, setItemsTotal] = useState(session?.verification_items_total || rawFlagCount)
   const [itemsPending, setItemsPending] = useState(rawFlagCount)
-  const [compilingStep, setCompilingStep] = useState(1)
+  const [itemsResolved, setItemsResolved] = useState(session?.verification_items_resolved || 0)
+  const [compilingStep, setCompilingStep] = useState(skipCompiling ? 2 : 1)
 
   // Poll verification status while compiling or verifying
   useEffect(() => {
@@ -60,6 +63,7 @@ export function SessionCompletionView({
           }
           if (data.items_total !== undefined) setItemsTotal(data.items_total)
           if (data.items_pending !== undefined) setItemsPending(data.items_pending)
+          if (data.items_resolved !== undefined) setItemsResolved(data.items_resolved)
 
           if (['completed_verified', 'completed_needs_review', 'ai_unavailable', 'failed'].includes(status)) {
             if (pollInterval) clearInterval(pollInterval)
@@ -103,13 +107,19 @@ export function SessionCompletionView({
     }
   }
 
-  const isCompiling = aiStatus === 'compiling'
-  const isVerifying = aiStatus === 'verifying'
-  const isVerifiedSuccess = aiStatus === 'completed_verified' || (aiStatus === 'idle' && itemsPending === 0 && rawFlagCount === 0)
-  const isNeedsReview = aiStatus === 'completed_needs_review' || (aiStatus === 'idle' && itemsPending > 0)
+  const isCompiling = !skipCompiling && aiStatus === 'compiling'
+  const isVerifying =
+    (skipCompiling && (aiStatus === 'compiling' || aiStatus === 'verifying')) ||
+    (!skipCompiling && aiStatus === 'verifying')
+  const isVerifiedSuccess =
+    aiStatus === 'completed_verified' || (aiStatus === 'idle' && itemsPending === 0 && rawFlagCount === 0)
+  const isNeedsReview =
+    aiStatus === 'completed_needs_review' || (aiStatus === 'idle' && itemsPending > 0)
   const isAiUnavailable = aiStatus === 'ai_unavailable' || aiStatus === 'failed'
 
   const remainingToReview = summary?.unresolved_count !== undefined ? summary.unresolved_count : itemsPending
+  const verifiedCount = summary?.verified_count !== undefined ? summary.verified_count : (itemsTotal - remainingToReview)
+  const resolvedCount = itemsResolved !== undefined && itemsResolved > 0 ? itemsResolved : (itemsTotal - itemsPending)
 
   return (
     <div className="session-completion-overlay">
@@ -131,23 +141,25 @@ export function SessionCompletionView({
             {isCompiling
               ? 'Finalizing Transcript & Preparing Verification'
               : isVerifying
-              ? 'Autonomous AI Verification in Progress'
+              ? 'Verifying Transcript'
               : isVerifiedSuccess
-              ? 'Session Verified Successfully'
+              ? 'Verification complete'
               : isAiUnavailable
-              ? 'Session Captured — Manual Review Available'
-              : 'Session Captured — Review Required'}
+              ? 'Verification unavailable'
+              : 'Verification complete'}
           </h2>
           <p className="completion-subtitle">
             {isCompiling
-              ? 'Recording is safely preserved. Indexing speech text and extracting bounded audio windows.'
+              ? 'Recording is safely preserved. Indexing speech text and preparing verification.'
               : isVerifying
-              ? 'Evaluating audio slices, Azure speech transcript, and King James Bible doctrinal context.'
+              ? (itemsTotal > 0
+                  ? `${resolvedCount} of ${itemsTotal} sections checked`
+                  : 'Checking sermon transcript accuracy...')
               : isVerifiedSuccess
-              ? 'All segments verified against King James Scripture and DLBC church vocabulary. 0 items to review.'
+              ? `${itemsTotal} verified • 0 need review`
               : isAiUnavailable
-              ? 'Audio and raw transcripts are safely saved. AI verification service is unreachable; proceed with manual review.'
-              : `AI verification resolved known passages. ${remainingToReview} segment${remainingToReview !== 1 ? 's' : ''} require reviewer confirmation.`}
+              ? 'Your recording and transcript are safe. Automated verification could not be completed right now.'
+              : `${verifiedCount} verified • ${remainingToReview} need review`}
           </p>
         </div>
 
@@ -172,41 +184,43 @@ export function SessionCompletionView({
           </div>
 
           {/* System Storage Status */}
-          <div className="completion-storage-block">
-            <div className="storage-block-title">
-              <span className="storage-icon">💾</span>
-              <span>System Storage Status</span>
-            </div>
-
-            <div className="storage-status-row">
-              <div className="storage-status-item">
-                <span className="status-check-circle">✓</span>
-                <div>
-                  <strong>Audio Saved</strong>
-                  <span className="storage-sub">Primary + Backup Lossless WAV</span>
-                </div>
+          {!skipCompiling && (
+            <div className="completion-storage-block">
+              <div className="storage-block-title">
+                <span className="storage-icon">💾</span>
+                <span>System Storage Status</span>
               </div>
 
-              <div className="storage-status-item">
-                <span className="status-check-circle">✓</span>
-                <div>
-                  <strong>Raw Transcript</strong>
-                  <span className="storage-sub">Indexed &amp; Synced to Database</span>
+              <div className="storage-status-row">
+                <div className="storage-status-item">
+                  <span className="status-check-circle">✓</span>
+                  <div>
+                    <strong>Audio Saved</strong>
+                    <span className="storage-sub">Primary + Backup Lossless WAV</span>
+                  </div>
                 </div>
-              </div>
 
-              <span className="badge badge--success badge--storage-ready">
-                SYSTEM READY
-              </span>
+                <div className="storage-status-item">
+                  <span className="status-check-circle">✓</span>
+                  <div>
+                    <strong>Raw Transcript</strong>
+                    <span className="storage-sub">Indexed &amp; Synced to Database</span>
+                  </div>
+                </div>
+
+                <span className="badge badge--success badge--storage-ready">
+                  SYSTEM READY
+                </span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* 1. Compiling Screen Component */}
           {isCompiling && (
             <div className="completion-processing-box compiling-box">
               <div className="processing-header">
                 <span className="processing-tag">STAGE 1: COMPILING</span>
-                <span className="processing-subtext">Preparing audio windows &amp; KJV doctrinal context</span>
+                <span className="processing-subtext">Preparing audio and sermon context</span>
               </div>
 
               <div className="compiling-steps-row">
@@ -236,8 +250,8 @@ export function SessionCompletionView({
           {isVerifying && (
             <div className="completion-processing-box verifying-box">
               <div className="processing-header">
-                <span className="processing-tag">STAGE 2: VERIFYING</span>
-                <span className="processing-subtext">Comparing Azure Speech, Gemini Audio &amp; KJV Context</span>
+                <span className="processing-tag">VERIFYING</span>
+                <span className="processing-subtext">Checking transcript sections</span>
               </div>
 
               <div className="verifying-content-row">
@@ -246,16 +260,23 @@ export function SessionCompletionView({
                 </div>
                 <div className="verifying-details">
                   <strong className="verifying-title">
-                    Verifying {itemsTotal > 0 ? `${itemsTotal} flagged segment${itemsTotal !== 1 ? 's' : ''}` : 'segments'} with AI...
+                    Verifying Transcript
                   </strong>
                   <p className="verifying-desc">
-                    Cross-referencing acoustic phonetics against 66 King James Bible books and DLBC ministry vocabulary.
+                    {itemsTotal > 0
+                      ? `${resolvedCount} of ${itemsTotal} sections checked`
+                      : 'Checking sermon transcript accuracy...'}
                   </p>
                 </div>
               </div>
 
               <div className="verifying-progress-track">
-                <div className="verifying-progress-fill" />
+                <div
+                  className="verifying-progress-fill"
+                  style={{
+                    width: `${itemsTotal > 0 ? Math.max(8, Math.min(100, Math.round((resolvedCount / itemsTotal) * 100))) : 35}%`,
+                  }}
+                />
               </div>
             </div>
           )}
@@ -266,9 +287,17 @@ export function SessionCompletionView({
               <div className="verify-card-left">
                 <span className="verify-icon">✓</span>
                 <div className="verify-text">
-                  <strong className="verify-heading">All Segments Verified (0 to Review)</strong>
+                  <strong className="verify-heading">Verification complete</strong>
+                  <div className="completion-stats-chips">
+                    <span className="stat-chip stat-chip--verified">
+                      ✓ {itemsTotal} verified
+                    </span>
+                    <span className="stat-chip stat-chip--pending">
+                      ● 0 need review
+                    </span>
+                  </div>
                   <p className="verify-desc">
-                    All transcript sections met high-confidence doctrinal matching. Ready to proceed directly to Information Unit Reporting.
+                    All transcript sections have been verified. Ready to proceed to Reporting.
                   </p>
                 </div>
               </div>
@@ -280,7 +309,7 @@ export function SessionCompletionView({
                   onClick={onGoToReporting || onBeginVerification}
                   id="btn-go-to-reporting-completion"
                 >
-                  <span>Go to Reporting</span>
+                  <span>Continue to Reporting</span>
                   <span>→</span>
                 </button>
               )}
@@ -294,25 +323,23 @@ export function SessionCompletionView({
                 <span className="verify-icon">📑</span>
                 <div className="verify-text">
                   <strong className="verify-heading">
-                    {remainingToReview} Segment{remainingToReview !== 1 ? 's' : ''} Require Human Review
+                    Verification complete
                   </strong>
                   <div className="completion-stats-chips">
-                    {summary?.verified_count !== undefined && (
-                      <span className="stat-chip stat-chip--verified">
-                        ✓ {summary.verified_count} Verified by AI
-                      </span>
-                    )}
+                    <span className="stat-chip stat-chip--verified">
+                      ✓ {verifiedCount} verified
+                    </span>
                     {summary?.corrected_count !== undefined && summary.corrected_count > 0 && (
                       <span className="stat-chip stat-chip--corrected">
-                        ✎ {summary.corrected_count} Corrected by AI
+                        ✎ {summary.corrected_count} corrected
                       </span>
                     )}
                     <span className="stat-chip stat-chip--pending">
-                      ● {remainingToReview} Pending Review
+                      ● {remainingToReview} need review
                     </span>
                   </div>
                   <p className="verify-desc">
-                    Review and confirm preacher wording, names, and scriptures. AI suggestions are pre-filled for rapid one-click approval.
+                    Review and confirm preacher wording, names, and scriptures.
                   </p>
                 </div>
               </div>
@@ -324,7 +351,7 @@ export function SessionCompletionView({
                   onClick={onBeginVerification}
                   id="btn-begin-verification-completion"
                 >
-                  <span>Review {remainingToReview} Item{remainingToReview !== 1 ? 's' : ''}</span>
+                  <span>Review {remainingToReview} Section{remainingToReview !== 1 ? 's' : ''}</span>
                   <span>→</span>
                 </button>
               )}
@@ -337,24 +364,39 @@ export function SessionCompletionView({
               <div className="verify-card-left">
                 <span className="verify-icon">⚠️</span>
                 <div className="verify-text">
-                  <strong className="verify-heading">AI Verification Unavailable</strong>
+                  <strong className="verify-heading">Verification unavailable</strong>
                   <p className="verify-desc">
-                    The autonomous AI verification service is currently offline or unreachable. Your master audio and raw transcript are 100% safe. You can proceed with standard manual verification.
+                    Your recording and transcript are safe. Automated verification could not be completed right now.
                   </p>
                 </div>
               </div>
 
-              {onBeginVerification && (
-                <button
-                  type="button"
-                  className="btn btn--primary btn--begin-verify"
-                  onClick={onBeginVerification}
-                  id="btn-manual-verify-completion"
-                >
-                  <span>Proceed to Manual Review</span>
-                  <span>→</span>
-                </button>
-              )}
+              <div className="unavailable-actions-row" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                {onRetryVerification && (
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--retry-verify"
+                    onClick={() => {
+                      setAiStatus('verifying')
+                      onRetryVerification()
+                    }}
+                    id="btn-retry-verification-completion"
+                  >
+                    <span>↻ Try Again</span>
+                  </button>
+                )}
+                {onBeginVerification && (
+                  <button
+                    type="button"
+                    className="btn btn--primary btn--begin-verify"
+                    onClick={onBeginVerification}
+                    id="btn-manual-verify-completion"
+                  >
+                    <span>Review Manually</span>
+                    <span>→</span>
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

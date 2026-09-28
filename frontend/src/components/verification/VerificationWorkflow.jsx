@@ -2,68 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { getApiUrl } from '../../config'
 import { getSessionHierarchy } from '../sessions/SessionDetailView'
 import { ConfirmationModal } from '../common/ConfirmationModal'
-
-/**
- * Detects whether AI verification failed or was unavailable for a specific item
- * due to quota limits, provider downtime, or missing configuration.
- */
-function isItemAiUnavailable(item, sessionObj, vState) {
-  if (!item) return false
-
-  // Session-level AI failure
-  if (
-    sessionObj?.ai_verification_status === 'ai_unavailable' ||
-    vState?.ai_verification_status === 'ai_unavailable'
-  ) {
-    if (item.ai_decision !== 'VERIFIED' && item.ai_decision !== 'CORRECTED') {
-      return true
-    }
-  }
-
-  const decision = String(item.ai_decision || '').trim().toUpperCase()
-  const explanation = String(item.ai_explanation || '').toLowerCase()
-
-  // Service failure or unavailability keywords
-  const failureKeywords = [
-    'quota_exceeded_429',
-    'quota',
-    '429',
-    '503',
-    'provider unavailable',
-    'providers unavailable',
-    'both gemini providers',
-    'configuration failure',
-    'unconfigured',
-    'not configured',
-    'ai service unavailable',
-    'service unavailable',
-    'ai evaluation error',
-    'resourceexhausted',
-    'rate limit',
-    'temporarily unavailable',
-    'unreachable',
-    'gateway not configured',
-    'gateway_unavailable',
-  ]
-
-  if (failureKeywords.some((kw) => explanation.includes(kw))) {
-    return true
-  }
-
-  // UNRESOLVED decision caused by error or unhandled exception
-  if (decision === 'UNRESOLVED') {
-    if (
-      explanation.includes('error') ||
-      explanation.includes('unavailable') ||
-      explanation.includes('fail') ||
-      !item.ai_explanation
-    ) {
-      return true
-    }
-  }
-
-  return false
-}
+import { SessionCompletionView } from '../sessions/SessionCompletionView'
 
 /**
  * VerificationWorkflow — Human verification workspace matching verification-workspace.png.
@@ -86,6 +25,7 @@ export function VerificationWorkflow({
   const [activeItemIndex, setActiveItemIndex] = useState(0)
   const [editedText, setEditedText] = useState('')
   const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(false)
+  const [showProcessingScreen, setShowProcessingScreen] = useState(false)
   const [isAiVerifying, setIsAiVerifying] = useState(false)
   const [aiFeedback, setAiFeedback] = useState(null)
   const [isBulkConfirming, setIsBulkConfirming] = useState(false)
@@ -256,29 +196,20 @@ export function VerificationWorkflow({
     }
   }
 
-  // Item resolution actions
+  // Single Primary Action: Save & Next →
   const handleSaveCorrection = async () => {
     if (!activeItem) return
-    const textToSave = editedText.trim() || activeItem.original_text || activeItem.text || ''
+    const originalText = (activeItem.original_text || activeItem.text || '').trim()
+    const textToSave = (editedText || '').trim() || originalText
+    const isUnmodified = textToSave === originalText
+
     await onResolveItem(sessionId, activeItem.segment_index, {
       verified_text: textToSave,
-      action: 'corrected',
-      correction_note: 'Operator correction',
+      action: isUnmodified ? 'confirmed' : 'corrected',
+      correction_note: isUnmodified ? 'Confirmed transcript' : 'Operator correction',
     })
-    // Advance to next pending item if available
-    if (activeItemIndex < filteredItems.length - 1) {
-      setActiveItemIndex(activeItemIndex + 1)
-    }
-  }
 
-  const handleOriginalCorrect = async () => {
-    if (!activeItem) return
-    const originalText = activeItem.original_text || activeItem.text || ''
-    await onResolveItem(sessionId, activeItem.segment_index, {
-      verified_text: originalText,
-      action: 'confirmed',
-      correction_note: 'Confirmed original transcript',
-    })
+    // Advance to next pending item if available
     if (activeItemIndex < filteredItems.length - 1) {
       setActiveItemIndex(activeItemIndex + 1)
     }
@@ -306,60 +237,45 @@ export function VerificationWorkflow({
   }
 
   const handleTriggerAiVerification = async () => {
-    if (!sessionId || isAiVerifying) return
+    if (!sessionId) return
+    setShowProcessingScreen(true)
     setIsAiVerifying(true)
-    setAiFeedback({ type: 'info', message: 'Analyzing audio windows and checking KJV scriptures...' })
+    setAiFeedback(null)
     try {
       const res = await fetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/verify-ai`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, auto_resolve: true, background: false }),
+        body: JSON.stringify({ session_id: sessionId, auto_resolve: true, background: true }),
       })
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}))
-        const status = res.status
-        console.error('AI verification failed with status', status, errJson)
-        if (status === 405 || (errJson.detail && String(errJson.detail).toLowerCase().includes('method not allowed'))) {
-          throw new Error('AI verification could not start. Please try again.')
-        }
-        throw new Error(errJson.detail || 'AI verification could not start. Please try again.')
-      }
-      const data = await res.json()
-      if (onLoadVerificationState) {
-        await onLoadVerificationState(sessionId)
-      }
-      const sum = data.summary || {}
-      if (data.status === 'completed_verified' || sum.unresolved_count === 0) {
-        setAiFeedback({
-          type: 'success',
-          message: `✓ AI successfully verified all segments! Zero items remaining.`,
-        })
-      } else if (data.status === 'completed_needs_review') {
-        setAiFeedback({
-          type: 'info',
-          message: `✦ AI resolved ${sum.verified_count || 0} verified and ${sum.corrected_count || 0} corrected. ${sum.unresolved_count} segment${sum.unresolved_count !== 1 ? 's' : ''} require human review.`,
-        })
-      } else if (data.status === 'ai_unavailable') {
-        setAiFeedback({
-          type: 'warning',
-          message: 'AI verification service is unconfigured or unreachable. Manual review is available.',
-        })
-      } else {
-        setAiFeedback({
-          type: 'info',
-          message: 'AI verification complete.',
-        })
+        console.error('AI verification trigger failed:', res.status, errJson)
       }
     } catch (err) {
       console.error('Error triggering AI verification:', err)
-      const isTech = !err.message || err.message.includes('Method Not Allowed') || err.message.includes('405')
-      setAiFeedback({
-        type: 'error',
-        message: isTech ? 'AI verification could not start. Please try again.' : err.message,
-      })
     } finally {
       setIsAiVerifying(false)
     }
+  }
+
+  // If user triggered "Use AI to Verify", switch immediately to the dedicated processing screen
+  if (showProcessingScreen) {
+    return (
+      <SessionCompletionView
+        session={session}
+        skipCompiling={true}
+        onBeginVerification={async () => {
+          setShowProcessingScreen(false)
+          if (onLoadVerificationState) {
+            await onLoadVerificationState(sessionId)
+          }
+        }}
+        onGoToReporting={onNavigateToReporting}
+        onFinishForNow={onFinishForNow}
+        onViewSessionDetails={onFinishForNow}
+        onRetryVerification={handleTriggerAiVerification}
+      />
+    )
   }
 
   return (
@@ -478,19 +394,23 @@ export function VerificationWorkflow({
               </button>
             </div>
 
-            {/* Live AI Verification Status Banner */}
-            {aiFeedback && (
-              <div className={`ai-verify-notice-banner ai-verify-notice-banner--${aiFeedback.type}`}>
+            {/* Live AI Verification Status Banner / Top-level notice */}
+            {(aiFeedback || session?.ai_verification_status === 'ai_unavailable') && (
+              <div className={`ai-verify-notice-banner ai-verify-notice-banner--${aiFeedback?.type || 'warning'}`}>
                 <span className="notice-spark">✦</span>
-                <span className="notice-text">{aiFeedback.message}</span>
-                <button
-                  type="button"
-                  className="btn-close-notice"
-                  onClick={() => setAiFeedback(null)}
-                  aria-label="Dismiss feedback"
-                >
-                  ✕
-                </button>
+                <span className="notice-text">
+                  {aiFeedback?.message || 'Automated verification is currently unavailable. Manual review is available.'}
+                </span>
+                {aiFeedback && (
+                  <button
+                    type="button"
+                    className="btn-close-notice"
+                    onClick={() => setAiFeedback(null)}
+                    aria-label="Dismiss feedback"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -645,20 +565,8 @@ export function VerificationWorkflow({
                 />
               </div>
 
-              {/* Informational AI assistance banner matching reference screenshot */}
-              {isItemAiUnavailable(activeItem, session, verificationState) ? (
-                <div className="ai-hint-box ai-hint-box--unavailable">
-                  <span className="sparkle-icon" aria-hidden="true">✦</span>
-                  <div className="ai-hint-details">
-                    <div className="ai-hint-title-row">
-                      <strong className="ai-hint-title">AI unavailable</strong>
-                    </div>
-                    <p className="ai-hint-explanation">
-                      I could not evaluate this section because the AI service was unavailable.
-                    </p>
-                  </div>
-                </div>
-              ) : activeItem?.ai_decision ? (
+              {/* Only show AI suggestion when a verified or corrected proposal is available */}
+              {activeItem?.ai_decision && ['VERIFIED', 'CORRECTED'].includes(activeItem.ai_decision.toUpperCase()) ? (
                 <div className={`ai-hint-box ai-hint-box--${activeItem.ai_decision.toLowerCase()}`}>
                   <span className="sparkle-icon" aria-hidden="true">✦</span>
                   <div className="ai-hint-details">
@@ -666,11 +574,9 @@ export function VerificationWorkflow({
                       <strong className="ai-hint-title">
                         {activeItem.ai_decision.toUpperCase() === 'CORRECTED'
                           ? 'AI Suggested Correction'
-                          : activeItem.ai_decision.toUpperCase() === 'VERIFIED'
-                          ? 'AI Verified'
-                          : `AI Recommendation (${activeItem.ai_decision})`}
+                          : 'AI Verified'}
                       </strong>
-                      {activeItem.ai_decision.toUpperCase() !== 'UNRESOLVED' && activeItem.ai_confidence && (
+                      {activeItem.ai_confidence && (
                         <span className="ai-hint-confidence">
                           {Math.round(activeItem.ai_confidence * 100)}% confidence
                         </span>
@@ -690,23 +596,10 @@ export function VerificationWorkflow({
                     )}
                   </div>
                 </div>
-              ) : (
-                <div className="ai-hint-box">
-                  <span className="sparkle-icon" aria-hidden="true">✦</span>
-                  <span>AI assistance is available to suggest improvements. Click &ldquo;Use AI to Verify&rdquo; above.</span>
-                </div>
-              )}
+              ) : null}
 
-              {/* Actions Row at Bottom */}
+              {/* Actions Row at Bottom: Single Primary Action */}
               <div className="active-segment-bottom-actions">
-                <button
-                  type="button"
-                  className="btn btn-segment-confirm"
-                  onClick={handleOriginalCorrect}
-                  id="btn-original-was-correct"
-                >
-                  Confirm
-                </button>
                 <button
                   type="button"
                   className="btn btn-segment-save-next"
