@@ -248,11 +248,16 @@ export function VerificationWorkflow({
       const res = await fetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/verify-ai`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ auto_resolve: true, background: false }),
+        body: JSON.stringify({ session_id: sessionId, auto_resolve: true, background: false }),
       })
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}))
-        throw new Error(errJson.detail || 'AI verification failed')
+        const status = res.status
+        console.error('AI verification failed with status', status, errJson)
+        if (status === 405 || (errJson.detail && String(errJson.detail).toLowerCase().includes('method not allowed'))) {
+          throw new Error('AI verification could not start. Please try again.')
+        }
+        throw new Error(errJson.detail || 'AI verification could not start. Please try again.')
       }
       const data = await res.json()
       if (onLoadVerificationState) {
@@ -282,9 +287,10 @@ export function VerificationWorkflow({
       }
     } catch (err) {
       console.error('Error triggering AI verification:', err)
+      const isTech = !err.message || err.message.includes('Method Not Allowed') || err.message.includes('405')
       setAiFeedback({
         type: 'error',
-        message: err.message || 'Failed to complete AI verification.',
+        message: isTech ? 'AI verification could not start. Please try again.' : err.message,
       })
     } finally {
       setIsAiVerifying(false)

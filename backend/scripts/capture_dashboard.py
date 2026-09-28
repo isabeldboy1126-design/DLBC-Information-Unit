@@ -53,14 +53,16 @@ async def capture_all():
             # 1. Dashboard Expanded
             await asyncio.sleep(1.0)
             await shot('dashboard_desktop_latest.png')
+            await shot('sidebar_dock_icon_expanded.png')
             await shot('pre_stage6_dashboard_attention.png')
 
             # 2. Dashboard Collapsed
             await send_cmd('Runtime.evaluate', {
-                'expression': "document.querySelector('.sidebar-toggle-btn')?.click() || document.querySelector('[aria-label=\"Collapse sidebar\"]')?.click()"
+                'expression': "document.querySelector('.sidebar-desktop-collapse-btn')?.click() || document.querySelector('[aria-label=\"Collapse sidebar\"]')?.click()"
             })
             await asyncio.sleep(0.8)
             await shot('dashboard_collapsed_latest.png')
+            await shot('sidebar_dock_icon_collapsed.png')
 
             # 2b. Hover over collapsed sidebar to test overlay
             await send_cmd('Input.dispatchMouseEvent', {'type': 'mouseMoved', 'x': 30, 'y': 200})
@@ -150,6 +152,79 @@ async def capture_all():
             })
             await asyncio.sleep(0.8)
             await shot('session_workspace_edit_modal.png')
+
+            # Close edit modal
+            await send_cmd('Runtime.evaluate', {
+                'expression': "document.querySelector('.modal-close-btn, .btn-close, [aria-label=\"Close\"]')?.click()"
+            })
+            await asyncio.sleep(0.5)
+
+            # 6. Navigate to Verification Workspace
+            await send_cmd('Runtime.evaluate', {
+                'expression': """(() => {
+                    const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Verify'));
+                    if (btn) btn.click();
+                })()"""
+            })
+            await asyncio.sleep(1.2)
+            await shot('stage6_verification_workspace_ai.png')
+
+            # 7. Intercept fetch and click "Use AI to Verify"
+            await send_cmd('Runtime.evaluate', {
+                'expression': """(() => {
+                    window.__lastFetch = null;
+                    const origFetch = window.fetch;
+                    window.fetch = async (...args) => {
+                        const [resource, config] = args;
+                        const method = config?.method || 'GET';
+                        const url = typeof resource === 'string' ? resource : resource?.url;
+                        const postData = config?.body;
+                        try {
+                            const resp = await origFetch(...args);
+                            const clone = resp.clone();
+                            let text = '';
+                            try { text = await clone.text(); } catch(e) {}
+                            window.__lastFetch = { url, method, status: resp.status, statusText: resp.statusText, text, postData };
+                            return resp;
+                        } catch (err) {
+                            window.__lastFetch = { url, method, error: err.message, postData };
+                            throw err;
+                        }
+                    };
+                })()"""
+            })
+
+            print("Clicking Use AI to Verify...")
+            click_eval = await send_cmd('Runtime.evaluate', {
+                'expression': """(() => {
+                    const btn = document.querySelector('.btn-ai-verify-action');
+                    if (!btn) return 'BUTTON_NOT_FOUND';
+                    btn.click();
+                    return 'CLICKED';
+                })()""",
+                'returnByValue': True
+            })
+            print("Click result:", click_eval.get('result', {}).get('value'))
+            await asyncio.sleep(4.0)
+
+            # Retrieve network fetch report
+            fetch_report = await send_cmd('Runtime.evaluate', {
+                'expression': "JSON.stringify(window.__lastFetch)",
+                'returnByValue': True
+            })
+            print("FETCH REPORT:", fetch_report.get('result', {}).get('value'))
+
+            # Check banner message
+            banner_eval = await send_cmd('Runtime.evaluate', {
+                'expression': """(() => {
+                    const b = document.querySelector('.ai-verify-notice-banner');
+                    return b ? b.textContent : 'NO_BANNER';
+                })()""",
+                'returnByValue': True
+            })
+            banner_val = str(banner_eval.get('result', {}).get('value', '')).encode('ascii', 'replace').decode('ascii')
+            print("Banner after click:", banner_val)
+            await shot('stage6_ai_verify_banner_result.png')
 
             print("All captures completed successfully!")
     finally:

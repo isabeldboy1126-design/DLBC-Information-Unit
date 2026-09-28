@@ -86,8 +86,8 @@ from app.youtube.router import router as youtube_router
 
 app.include_router(audio_router)
 app.include_router(transcription_router)
-app.include_router(sessions_router)
 app.include_router(verification_router)
+app.include_router(sessions_router)
 app.include_router(reporting_router)
 app.include_router(editing_router)
 app.include_router(proofreading_router)
