@@ -11,7 +11,7 @@ import { LiveRecordingView } from './components/recording/LiveRecordingView'
 import { FloatingRecordingController } from './components/recording/FloatingRecordingController'
 import { SessionCompletionView } from './components/sessions/SessionCompletionView'
 import { SessionHistoryList } from './components/sessions/SessionHistoryList'
-import { SessionDetailView } from './components/sessions/SessionDetailView'
+import { SessionDetailView, getCleanSessionName } from './components/sessions/SessionDetailView'
 import { SettingsView } from './components/settings/SettingsView'
 import { YouTubeSessionView } from './components/youtube/YouTubeSessionView'
 
@@ -283,8 +283,12 @@ function App() {
       }
     }
     if (showCompletionModal) {
+      const targetSession =
+        sessionsHook.activeSession ||
+        sessionsHook.sessions.find((s) => s.session_id === completedSessionId) ||
+        sessionsHook.sessions[0]
       return {
-        title: '',
+        title: getCleanSessionName(targetSession),
         onBack: handleInAppBack,
       }
     }
@@ -319,13 +323,16 @@ function App() {
       }
     }
     if (currentView === 'sessions') {
-      if (sessionsHook.activeSession) {
-        if (verificationProcessing) {
-          return {
-            title: '',
-            onBack: handleInAppBack,
-          }
+      const activeOrTarget =
+        sessionsHook.activeSession ||
+        sessionsHook.sessions.find((s) => s.session_id === completedSessionId)
+      if (verificationProcessing) {
+        return {
+          title: getCleanSessionName(activeOrTarget),
+          onBack: handleInAppBack,
         }
+      }
+      if (sessionsHook.activeSession) {
         return {
           title: sessionSubViewInfo.title || '',
           onBack: handleInAppBack,

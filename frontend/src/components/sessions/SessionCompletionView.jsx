@@ -132,16 +132,12 @@ export function SessionCompletionView({
         </svg>
       </div>
 
-      {/* Top-Left Context: Session Title & Date · Duration */}
-      <div className="completion-context-header">
-        <h1 className="completion-context-title">{serviceName}</h1>
-        <p className="completion-context-meta">
+      {/* Contained Floating Processing Card with Neat Metadata Above */}
+      <div className="completion-card-wrapper">
+        <p className="completion-meta-above-card">
           {formatDateMeta(dateCreated)} · {formatDurationMeta(durationSec)}
         </p>
-      </div>
 
-      {/* Centered Contained Floating White Card */}
-      <div className="completion-card-wrapper">
         <div className="completion-floating-card">
           {/* 1. Compiling or Verifying State (media_1790599569372.png) */}
           {(isCompiling || isVerifying) && (

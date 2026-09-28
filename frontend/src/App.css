@@ -4339,11 +4339,11 @@ textarea.form-control {
 }
 
 .topbar-screen-title {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: 1.15rem;
+  font-weight: 600;
   color: #0b1329;
   margin: 0;
-  line-height: 1.2;
+  line-height: 1.3;
 }
 
 .topbar-screen-title--root {
@@ -5897,14 +5897,17 @@ textarea.form-control {
 .session-completion-page {
   position: relative;
   min-height: calc(100vh - 72px);
-  padding: 1.75rem 2.5rem 3rem 2.5rem;
+  padding: 1.25rem 2rem 2.5rem 2rem;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
   background: 
     radial-gradient(ellipse 65% 55% at 88% 45%, rgba(219, 234, 254, 0.48) 0%, rgba(239, 246, 255, 0.2) 60%, transparent 80%),
     radial-gradient(ellipse 60% 50% at 12% 78%, rgba(224, 237, 255, 0.42) 0%, rgba(240, 246, 255, 0.15) 50%, transparent 75%),
     #f8fafc;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   box-sizing: border-box;
 }
 
@@ -5924,36 +5927,27 @@ textarea.form-control {
   height: 100%;
 }
 
-.completion-context-header {
-  position: relative;
-  z-index: 1;
-  margin-bottom: 2rem;
-}
-
-.completion-context-title {
-  font-size: 1.65rem;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.03em;
-  margin: 0 0 0.35rem 0;
-  line-height: 1.2;
-}
-
-.completion-context-meta {
-  font-size: 0.92rem;
-  color: #64748b;
-  font-weight: 500;
-  margin: 0;
-}
-
 .completion-card-wrapper {
   position: relative;
   z-index: 1;
-  flex: 1;
+  width: 100%;
+  max-width: 530px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 1rem 0 3rem 0;
+  justify-content: flex-start;
+  padding: 0.25rem 0 2rem 0;
+  margin: 0 auto;
+}
+
+.completion-meta-above-card {
+  font-size: 0.88rem;
+  color: #64748b;
+  font-weight: 500;
+  text-align: center;
+  margin: 0 0 0.85rem 0;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
 }
 
 .completion-floating-card {
@@ -5961,10 +5955,10 @@ textarea.form-control {
   max-width: 530px;
   background: #ffffff;
   border-radius: 26px;
-  padding: 42px 44px;
+  padding: 38px 42px;
   box-shadow: 
-    0 24px 50px -12px rgba(29, 104, 242, 0.09),
-    0 12px 24px -8px rgba(15, 23, 42, 0.04),
+    0 20px 48px -12px rgba(29, 104, 242, 0.09),
+    0 10px 22px -8px rgba(15, 23, 42, 0.04),
     0 0 0 1px rgba(226, 232, 240, 0.65);
   display: flex;
   flex-direction: column;
@@ -6015,12 +6009,12 @@ textarea.form-control {
 }
 
 .floating-card-title {
-  font-size: 1.5rem;
-  font-weight: 800;
+  font-size: 1.45rem;
+  font-weight: 600;
   color: #0f172a;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
   margin: 0 0 0.45rem 0;
-  line-height: 1.25;
+  line-height: 1.3;
 }
 
 .floating-card-title--complete {
@@ -6028,10 +6022,11 @@ textarea.form-control {
 }
 
 .floating-card-subtitle {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: #64748b;
-  font-weight: 500;
+  font-weight: 450;
   margin: 0 0 1.25rem 0;
+  line-height: 1.4;
 }
 
 /* Horizontal Progress Bar */
@@ -6041,7 +6036,7 @@ textarea.form-control {
   background: #e2e8f0;
   border-radius: 9999px;
   overflow: hidden;
-  margin-bottom: 2rem;
+  margin-bottom: 1.75rem;
 }
 
 .floating-progress-fill {
@@ -6109,12 +6104,12 @@ textarea.form-control {
 .timeline-text {
   font-size: 0.88rem;
   color: #64748b;
-  font-weight: 500;
+  font-weight: 450;
 }
 
 .timeline-text--active {
   color: #0f172a;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .timeline-text--pending {
@@ -6167,11 +6162,11 @@ textarea.form-control {
 }
 
 .floating-stat-num {
-  font-size: 2.1rem;
-  font-weight: 800;
+  font-size: 2rem;
+  font-weight: 600;
   color: #1e293b;
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
 }
 
 .floating-stat-label {

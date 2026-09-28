@@ -124,6 +124,62 @@ export function getSessionHierarchy(session) {
   return { programme, sessionTitle, preacher }
 }
 
+export function getCleanSessionName(session) {
+  if (!session) return 'Sunday Worship Service'
+
+  let raw = ''
+  if (typeof session === 'string') {
+    raw = session.trim()
+  } else {
+    raw = (session.session_name || session.session_title || session.title || '').trim()
+  }
+
+  // Deduplicate identical halves first: e.g. "Sunday Worship Service — Sunday Worship Service"
+  const separators = ['—', '–', ' - ', ' \uFFFD ', '  ']
+  for (const sep of separators) {
+    if (raw.includes(sep)) {
+      const parts = raw.split(sep).map((p) => p.trim()).filter(Boolean)
+      if (parts.length >= 2 && parts[0].toLowerCase() === parts[1].toLowerCase()) {
+        return parts[0]
+      }
+    }
+  }
+
+  const { programme, sessionTitle } = getSessionHierarchy(session)
+
+  if (sessionTitle && !sessionTitle.startsWith('Recording') && !sessionTitle.endsWith('.wav')) {
+    return sessionTitle
+  }
+  if (programme && !programme.startsWith('Recording') && !programme.endsWith('.wav')) {
+    return programme
+  }
+
+  for (const sep of separators) {
+    if (raw.includes(sep)) {
+      const parts = raw.split(sep).map((p) => p.trim()).filter(Boolean)
+      if (parts.length >= 2) {
+        if (parts[0].toLowerCase() === parts[1].toLowerCase()) {
+          return parts[0]
+        }
+        if (!parts[1].startsWith('Recording') && !parts[1].endsWith('.wav')) {
+          return parts[1]
+        }
+        if (!parts[0].startsWith('Recording') && !parts[0].endsWith('.wav')) {
+          return parts[0]
+        }
+      }
+    }
+  }
+
+  // Strip leading/trailing dash symbols or extra spaces
+  raw = raw.replace(/^[-—–\s]+|[-—–\s]+$/g, '').trim()
+  if (raw.startsWith('Recording') || raw.endsWith('.wav')) {
+    return 'Sunday Worship Service'
+  }
+
+  return raw || 'Sunday Worship Service'
+}
+
 /**
  * SessionDetailView — Central Session Workspace Hub matching session-workspace.png.
  */
