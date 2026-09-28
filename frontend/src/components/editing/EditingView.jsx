@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { getApiUrl } from '../../config'
 import { EditorStandardsModal } from './EditorStandardsModal'
 import { SourceReferenceDrawer } from './SourceReferenceDrawer'
+import { ConfirmationModal } from '../common/ConfirmationModal'
 
 export function EditingView({ session, onBack, onNavigateToProofreading }) {
   const [editingData, setEditingData] = useState({
@@ -41,6 +42,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
   const [errorBanner, setErrorBanner] = useState(null)
   const [successBanner, setSuccessBanner] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [confirmDialog, setConfirmDialog] = useState(null)
 
   const sessionId = session?.session_id
 
@@ -171,14 +173,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
     }
   }
 
-  const handleCompleteEditing = async () => {
-    if (isDirty) {
-      if (!window.confirm('You have unsaved changes! Save them before completing editing?')) {
-        return
-      }
-      await handleSave()
-    }
-
+  const executeCompleteEditing = async () => {
     try {
       const res = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/complete`), {
         method: 'POST',
@@ -195,6 +190,25 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
     }
   }
 
+  const handleCompleteEditing = async () => {
+    if (isDirty) {
+      setConfirmDialog({
+        title: 'Save Changes and Complete Editing?',
+        message: 'You have unsaved changes in the editor.',
+        supportingText: 'Would you like to save your changes before marking editing as complete?',
+        confirmLabel: 'Save & Complete',
+        variant: 'primary',
+        onConfirm: async () => {
+          await handleSave()
+          await executeCompleteEditing()
+        },
+      })
+      return
+    }
+
+    await executeCompleteEditing()
+  }
+
   const handleCopyReport = () => {
     if (!reportText) return
     navigator.clipboard.writeText(`# ${reportTitle}\n\n${reportText}`)
@@ -205,14 +219,18 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
   const handleExportDocx = async () => {
     if (!activeRev) return
     if (isDirty) {
-      const confirmSave = window.confirm(
-        'You have unsaved manual edits!\n\nDo you want to save your changes before exporting to Word (.docx)?\n\nClick OK to Save & Export, or Cancel to abort export.'
-      )
-      if (confirmSave) {
-        await handleSave()
-      } else {
-        return
-      }
+      setConfirmDialog({
+        title: 'Save Changes Before Export?',
+        message: 'You have unsaved manual edits in this document.',
+        supportingText: 'Do you want to save your changes before exporting to Word (.docx)?',
+        confirmLabel: 'Save & Export',
+        variant: 'primary',
+        onConfirm: async () => {
+          await handleSave()
+          window.location.href = getApiUrl(`/api/editing/sessions/${sessionId}/export-docx`)
+        },
+      })
+      return
     }
     window.location.href = getApiUrl(`/api/editing/sessions/${sessionId}/export-docx`)
   }
@@ -531,34 +549,40 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
       )}
 
       {/* Safety Confirmation Modal for AI Regeneration */}
-      {showRegenConfirm && (
-        <div className="modal-backdrop" onClick={() => setShowRegenConfirm(false)}>
-          <div className="modal-container modal-container--confirm" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>↻ Confirm AI Regeneration</h3>
-              <button type="button" className="btn-close" onClick={() => setShowRegenConfirm(false)}>
-                ✕
-              </button>
-            </div>
-            <div className="modal-body">
-              <p>
-                Regenerating will run the AI Editor again using Reporter A, Reporter B, and the Verified Transcript.
-              </p>
-              <p>
-                <strong>Your existing revision will be safely preserved in the Revisions History</strong> and you can restore it at any time.
-              </p>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn--secondary" onClick={() => setShowRegenConfirm(false)}>
-                Cancel
-              </button>
-              <button type="button" className="btn btn--primary" onClick={handleGenerate}>
-                Yes, Generate New Revision
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationModal
+        isOpen={showRegenConfirm}
+        title="Confirm AI Regeneration"
+        message="Regenerating will run the AI Editor again using Reporter A, Reporter B, and the Verified Transcript."
+        supportingText="Your existing revision will be safely preserved in the Revisions History and you can restore it at any time."
+        confirmLabel="Generate New Revision"
+        cancelLabel="Cancel"
+        variant="primary"
+        isLoading={isGenerating}
+        onConfirm={async () => {
+          setShowRegenConfirm(false)
+          await handleGenerate()
+        }}
+        onCancel={() => setShowRegenConfirm(false)}
+      />
+
+      {/* Confirmation Modal for Complete / Export with unsaved changes */}
+      <ConfirmationModal
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title || 'Confirm Action'}
+        message={confirmDialog?.message || ''}
+        supportingText={confirmDialog?.supportingText}
+        confirmLabel={confirmDialog?.confirmLabel || 'Confirm'}
+        cancelLabel="Cancel"
+        variant={confirmDialog?.variant || 'primary'}
+        isLoading={isSaving}
+        onConfirm={async () => {
+          if (confirmDialog?.onConfirm) {
+            await confirmDialog.onConfirm()
+          }
+          setConfirmDialog(null)
+        }}
+        onCancel={() => setConfirmDialog(null)}
+      />
 
       {/* Editor Standards Management Modal */}
       <EditorStandardsModal

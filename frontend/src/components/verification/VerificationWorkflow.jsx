@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { getApiUrl } from '../../config'
 import { getSessionHierarchy } from '../sessions/SessionDetailView'
+import { ConfirmationModal } from '../common/ConfirmationModal'
 
 /**
  * VerificationWorkflow — Human verification workspace matching verification-workspace.png.
@@ -26,6 +27,7 @@ export function VerificationWorkflow({
   const [isAiVerifying, setIsAiVerifying] = useState(false)
   const [aiFeedback, setAiFeedback] = useState(null)
   const [isBulkConfirming, setIsBulkConfirming] = useState(false)
+  const [showFinaliseModal, setShowFinaliseModal] = useState(false)
   const [isFinalising, setIsFinalising] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isPlayingSegment, setIsPlayingSegment] = useState(false)
@@ -227,17 +229,18 @@ export function VerificationWorkflow({
     setShowBulkConfirmModal(false)
   }
 
-  const handleFinalise = async () => {
-    if (
-      !window.confirm(
-        `All ${itemsTotal} verification items are resolved.\n\nCreate the final Verified Transcript now?\n\nThis will combine all segments with your human corrections as the approved factual source.`
-      )
-    ) {
-      return
-    }
+  const handleFinalise = () => {
+    setShowFinaliseModal(true)
+  }
+
+  const handleConfirmFinalise = async () => {
     setIsFinalising(true)
-    await onFinalise(sessionId)
-    setIsFinalising(false)
+    try {
+      await onFinalise(sessionId)
+      setShowFinaliseModal(false)
+    } finally {
+      setIsFinalising(false)
+    }
   }
 
   const handleTriggerAiVerification = async () => {
@@ -696,6 +699,20 @@ export function VerificationWorkflow({
           </div>
         </div>
       )}
+
+      {/* Finalize Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showFinaliseModal}
+        title="Finalise Verification?"
+        message={`All ${itemsTotal} verification items are resolved. Would you like to create the final Verified Transcript now?`}
+        supportingText="This will combine all segments with your human corrections as the approved factual source for Reporting."
+        confirmLabel="Create Verified Transcript"
+        cancelLabel="Cancel"
+        variant="primary"
+        isLoading={isFinalising}
+        onConfirm={handleConfirmFinalise}
+        onCancel={() => setShowFinaliseModal(false)}
+      />
     </div>
   )
 }

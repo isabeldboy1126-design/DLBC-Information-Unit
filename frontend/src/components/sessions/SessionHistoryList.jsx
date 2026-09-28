@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { getApiUrl } from '../../config'
 import { getSessionHierarchy } from './SessionDetailView'
+import { ConfirmationModal } from '../common/ConfirmationModal'
 
 function ClockIcon() {
   return (
@@ -65,6 +66,8 @@ export function SessionHistoryList({
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter || 'all')
   const [dateFilter, setDateFilter] = useState('all')
   const [configuredProgrammes, setConfiguredProgrammes] = useState([])
+  const [sessionToDelete, setSessionToDelete] = useState(null)
+  const [isDeletingSession, setIsDeletingSession] = useState(false)
 
   const filterRef = useRef(null)
   const eventDropdownRef = useRef(null)
@@ -625,9 +628,7 @@ export function SessionHistoryList({
                       className="session-card-delete-icon-btn"
                       onClick={(e) => {
                         e.stopPropagation()
-                        if (window.confirm(`Delete session "${sessionName}"?`)) {
-                          onDeleteSession(s.session_id)
-                        }
+                        setSessionToDelete({ id: s.session_id, name: sessionName })
                       }}
                       title="Delete session record"
                       aria-label="Delete session"
@@ -641,6 +642,31 @@ export function SessionHistoryList({
           })}
         </div>
       )}
+
+      {/* Reusable Confirmation Modal for Session Deletion */}
+      <ConfirmationModal
+        isOpen={!!sessionToDelete}
+        title="Delete session?"
+        message={`Permanently delete "${sessionToDelete?.name || 'this session'}"?`}
+        supportingText="This action cannot be undone."
+        confirmLabel="Delete Session"
+        cancelLabel="Cancel"
+        variant="danger"
+        isLoading={isDeletingSession}
+        onCancel={() => setSessionToDelete(null)}
+        onConfirm={async () => {
+          if (!sessionToDelete) return
+          setIsDeletingSession(true)
+          try {
+            await onDeleteSession(sessionToDelete.id)
+            setSessionToDelete(null)
+          } catch (err) {
+            console.error('Failed to delete session:', err)
+          } finally {
+            setIsDeletingSession(false)
+          }
+        }}
+      />
     </div>
   )
 }

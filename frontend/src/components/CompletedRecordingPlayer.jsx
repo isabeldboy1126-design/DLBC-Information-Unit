@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { getApiUrl } from '../config'
+import { ConfirmationModal } from './common/ConfirmationModal'
 
 export function CompletedRecordingPlayer({ latestRecording }) {
   const [allRecordings, setAllRecordings] = useState([])
@@ -31,20 +32,31 @@ export function CompletedRecordingPlayer({ latestRecording }) {
     }
   }, [latestRecording])
 
-  const handleDelete = async (recId) => {
-    if (!window.confirm('Delete this test recording?')) return
+  const [recordingToDelete, setRecordingToDelete] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const handleDelete = (recId) => {
+    setRecordingToDelete(recId)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!recordingToDelete) return
+    setIsDeleting(true)
     try {
-      const res = await fetch(getApiUrl(`/api/audio/recordings/${recId}`), {
+      const res = await fetch(getApiUrl(`/api/audio/recordings/${recordingToDelete}`), {
         method: 'DELETE',
       })
       if (res.ok) {
-        if (selectedRecording?.recording_id === recId) {
+        if (selectedRecording?.recording_id === recordingToDelete) {
           setSelectedRecording(null)
         }
-        fetchRecordings()
+        await fetchRecordings()
+        setRecordingToDelete(null)
       }
     } catch (e) {
       console.error('Error deleting recording:', e)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -185,6 +197,20 @@ export function CompletedRecordingPlayer({ latestRecording }) {
           </div>
         )}
       </div>
+
+      {/* Delete Recording Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={!!recordingToDelete}
+        title="Delete Recording?"
+        message="Are you sure you want to delete this test recording?"
+        supportingText="This action cannot be undone and will permanently remove the audio file."
+        confirmLabel="Delete Recording"
+        cancelLabel="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setRecordingToDelete(null)}
+      />
     </div>
   )
 }

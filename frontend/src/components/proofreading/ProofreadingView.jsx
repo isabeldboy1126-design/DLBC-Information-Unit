@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { getApiUrl } from '../../config'
 import { ProofreadingStandardsModal } from './ProofreadingStandardsModal'
 import { ProofreadingChangesList } from './ProofreadingChangesList'
+import { ConfirmationModal } from '../common/ConfirmationModal'
 
 export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
   const [proofreadingData, setProofreadingData] = useState({
@@ -35,6 +36,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
   const [successBanner, setSuccessBanner] = useState(null)
   const [copied, setCopied] = useState(false)
   const [leftTab, setLeftTab] = useState('changes') // 'changes' | 'edited_source'
+  const [confirmDialog, setConfirmDialog] = useState(null)
 
   const sessionId = session?.session_id
 
@@ -153,14 +155,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
     }
   }
 
-  const handleAcceptProofread = async () => {
-    if (isDirty) {
-      if (!window.confirm('You have unsaved manual edits! Save them before accepting?')) {
-        return
-      }
-      await handleSaveAdjustments()
-    }
-
+  const executeAcceptProofread = async () => {
     try {
       const res = await fetch(getApiUrl(`/api/proofreading/sessions/${sessionId}/accept`), {
         method: 'POST',
@@ -178,6 +173,25 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
     } catch (e) {
       setErrorBanner(`Error accepting proofread report: ${e.message}`)
     }
+  }
+
+  const handleAcceptProofread = async () => {
+    if (isDirty) {
+      setConfirmDialog({
+        title: 'Save and Accept Proofread Report?',
+        message: 'You have unsaved manual edits in the proofreader.',
+        supportingText: 'Would you like to save your edits before accepting this proofread report and proceeding to Final Report?',
+        confirmLabel: 'Save & Accept',
+        variant: 'primary',
+        onConfirm: async () => {
+          await handleSaveAdjustments()
+          await executeAcceptProofread()
+        },
+      })
+      return
+    }
+
+    await executeAcceptProofread()
   }
 
   const handleActivateRevision = async (revId) => {
@@ -562,34 +576,40 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
       )}
 
       {/* Safety Confirmation Modal for Re-running AI Proofreading */}
-      {showRerunConfirm && (
-        <div className="modal-backdrop" onClick={() => setShowRerunConfirm(false)}>
-          <div className="modal-container modal-container--confirm" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>↻ Confirm AI Proofreading Re-run</h3>
-              <button type="button" className="btn-close" onClick={() => setShowRerunConfirm(false)}>
-                ✕
-              </button>
-            </div>
-            <div className="modal-body">
-              <p>
-                Re-running will run the AI Proofreader again on the source Edited Report.
-              </p>
-              <p>
-                <strong>Your existing proofread revisions will be safely preserved in the Revisions History</strong> and can be restored at any time.
-              </p>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn--secondary" onClick={() => setShowRerunConfirm(false)}>
-                Cancel
-              </button>
-              <button type="button" className="btn btn--primary" onClick={handleRunProofread}>
-                Yes, Re-run Proofreading
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationModal
+        isOpen={showRerunConfirm}
+        title="Confirm AI Proofreading Re-run"
+        message="Re-running will run the AI Proofreader again on the source Edited Report."
+        supportingText="Your existing proofread revisions will be safely preserved in the Revisions History and can be restored at any time."
+        confirmLabel="Re-run Proofreading"
+        cancelLabel="Cancel"
+        variant="primary"
+        isLoading={isGenerating}
+        onConfirm={async () => {
+          setShowRerunConfirm(false)
+          await handleRunProofread()
+        }}
+        onCancel={() => setShowRerunConfirm(false)}
+      />
+
+      {/* Confirmation Modal for Accept with unsaved adjustments */}
+      <ConfirmationModal
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title || 'Confirm Action'}
+        message={confirmDialog?.message || ''}
+        supportingText={confirmDialog?.supportingText}
+        confirmLabel={confirmDialog?.confirmLabel || 'Confirm'}
+        cancelLabel="Cancel"
+        variant={confirmDialog?.variant || 'primary'}
+        isLoading={isSaving}
+        onConfirm={async () => {
+          if (confirmDialog?.onConfirm) {
+            await confirmDialog.onConfirm()
+          }
+          setConfirmDialog(null)
+        }}
+        onCancel={() => setConfirmDialog(null)}
+      />
 
       {/* Proofreading Standards Modal */}
       <ProofreadingStandardsModal
