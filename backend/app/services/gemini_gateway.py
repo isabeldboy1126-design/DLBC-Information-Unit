@@ -72,7 +72,24 @@ class GatewayResponse:
 
     @property
     def text(self) -> Optional[str]:
-        return getattr(self.response, "text", None)
+        t = getattr(self.response, "text", None)
+        if t:
+            return t
+        try:
+            if hasattr(self.response, "candidates") and self.response.candidates:
+                cand = self.response.candidates[0]
+                if cand.content and cand.content.parts:
+                    part_texts = []
+                    for p in cand.content.parts:
+                        if getattr(p, "text", None):
+                            part_texts.append(p.text)
+                        elif getattr(p, "audio_transcription", None) and getattr(p.audio_transcription, "text", None):
+                            part_texts.append(p.audio_transcription.text)
+                    if part_texts:
+                        return "".join(part_texts)
+        except Exception:
+            pass
+        return None
 
 
 # -----------------------------------------------------------------------------
@@ -351,6 +368,25 @@ class GeminiGateway:
                 primary_category=err_category,
                 backup_category=backup_cat,
             )
+
+    async def transcribe_audio(
+        self,
+        audio_bytes: bytes,
+        mime_type: str = "audio/wav",
+        model: str = "gemini-3.5-transcribe",
+    ) -> GatewayResponse:
+        """
+        Executes an audio transcription request using Gemini 3.5 Transcribe
+        with automatic primary-to-backup failover and safe transcript extraction.
+        """
+        from google.genai import types
+
+        part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
+        return await self.generate(
+            operation="audio_transcription",
+            model=model,
+            contents=[part],
+        )
 
 
 # Global singleton instance

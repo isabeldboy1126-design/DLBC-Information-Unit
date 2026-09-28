@@ -283,3 +283,70 @@ def test_classify_gemini_error_categories():
     assert is_eligible is False
     assert cat == "application_error"
 
+
+# -----------------------------------------------------------------------------
+# 10. Audio Transcription & Extraction Tests
+# -----------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_transcribe_audio_extracts_from_audio_transcription_part(mock_gateway):
+    """Verifies that GatewayResponse.text extracts transcription from part.audio_transcription.text."""
+    mock_primary = MagicMock()
+    mock_part = MagicMock()
+    mock_part.text = None
+    mock_trans = MagicMock()
+    mock_trans.text = "In the beginning was the Word"
+    mock_part.audio_transcription = mock_trans
+
+    mock_candidate = MagicMock()
+    mock_candidate.content.parts = [mock_part]
+
+    mock_resp = MagicMock()
+    mock_resp.text = None
+    mock_resp.candidates = [mock_candidate]
+
+    mock_primary.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+    mock_gateway._get_client = lambda slot: mock_primary
+
+    dummy_audio = b"RIFF....WAVEfmt...."
+    res = await mock_gateway.transcribe_audio(dummy_audio)
+
+    assert res.provider_slot == "primary"
+    assert res.model_name == "gemini-3.5-transcribe"
+    assert res.text == "In the beginning was the Word"
+
+
+@pytest.mark.asyncio
+async def test_transcribe_audio_failover_on_429(mock_gateway):
+    """Verifies that transcribe_audio fails over to backup on 429 quota error."""
+    mock_primary = MagicMock()
+    mock_primary.aio.models.generate_content = AsyncMock(
+        side_effect=ClientError(429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED"}})
+    )
+
+    mock_backup = MagicMock()
+    mock_part = MagicMock()
+    mock_part.text = None
+    mock_trans = MagicMock()
+    mock_trans.text = "God is our refuge and strength"
+    mock_part.audio_transcription = mock_trans
+
+    mock_candidate = MagicMock()
+    mock_candidate.content.parts = [mock_part]
+
+    mock_resp = MagicMock()
+    mock_resp.text = None
+    mock_resp.candidates = [mock_candidate]
+
+    mock_backup.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+
+    mock_gateway._get_client = lambda slot: mock_primary if slot == "primary" else mock_backup
+
+    dummy_audio = b"RIFF....WAVEfmt...."
+    res = await mock_gateway.transcribe_audio(dummy_audio)
+
+    assert res.provider_slot == "backup"
+    assert res.attempts == 2
+    assert res.text == "God is our refuge and strength"
+
+
