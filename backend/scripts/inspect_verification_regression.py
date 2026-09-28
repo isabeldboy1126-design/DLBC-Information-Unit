@@ -15,19 +15,19 @@ os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 
 async def run():
     chrome_path = r'C:\Program Files\Google\Chrome\Application\chrome.exe'
-    user_data = r'C:\Users\Isabel\AppData\Local\Temp\chrome_verify_debug'
+    user_data = r'C:\Users\Isabel\AppData\Local\Temp\chrome_verify_trace'
     proc = subprocess.Popen([
         chrome_path,
         '--headless=new',
-        '--remote-debugging-port=9244',
+        '--remote-debugging-port=9248',
         f'--user-data-dir={user_data}',
         '--no-first-run',
         '--no-default-browser-check',
-        'http://localhost:5173/#verification_workspace'
+        'http://localhost:5173/'
     ])
     try:
-        time.sleep(2)
-        with urllib.request.urlopen('http://127.0.0.1:9244/json') as r:
+        time.sleep(3)
+        with urllib.request.urlopen('http://127.0.0.1:9248/json') as r:
             tabs = json.loads(r.read().decode())
         page_tabs = [t for t in tabs if t.get('type') == 'page']
         ws_url = page_tabs[0]['webSocketDebuggerUrl']
@@ -46,159 +46,127 @@ async def run():
                         return resp.get('result', {})
 
             await send_cmd('Page.enable')
-            await send_cmd('Emulation.setDeviceMetricsOverride', {
-                'width': 1024,
-                'height': 768,
-                'deviceScaleFactor': 1,
-                'mobile': False
+            await send_cmd('Network.enable')
+            await send_cmd('Runtime.enable')
+
+            # Navigate to Sessions
+            print("Navigating to Sessions...")
+            await send_cmd('Runtime.evaluate', {'expression': 'window.location.hash = "#sessions"'})
+            await asyncio.sleep(2.0)
+
+            # Click second session (Sunday Worship Service)
+            print("Clicking Sunday Worship Service session...")
+            await send_cmd('Runtime.evaluate', {
+                'expression': """(() => {
+                    const cards = Array.from(document.querySelectorAll('.refined-session-card, .session-history-card'));
+                    const target = cards.find(c => c.textContent.includes('Sunday') || c.textContent.includes('072106')) || cards[0];
+                    if (target) {
+                        const btn = target.querySelector('.btn-refined-primary') || target;
+                        btn.click();
+                        return 'CLICKED_CARD';
+                    }
+                    return 'NO_CARD';
+                })()"""
+            })
+            await asyncio.sleep(1.5)
+
+            # Click step 3 (Verification) in LifecycleStepper
+            print("Clicking Verification in LifecycleStepper...")
+            await send_cmd('Runtime.evaluate', {
+                'expression': """(() => {
+                    const stepBtns = Array.from(document.querySelectorAll('.lifecycle-step-btn'));
+                    const vBtn = stepBtns.find(b => b.textContent.includes('Verification') || b.textContent.includes('Verify'));
+                    if (vBtn) {
+                        vBtn.click();
+                        return 'CLICKED_STEPPER_BTN';
+                    }
+                    if (stepBtns.length > 2) {
+                        stepBtns[2].click();
+                        return 'CLICKED_STEPPER_INDEX_2';
+                    }
+                    return 'NO_STEPPER_BTN';
+                })()"""
+            })
+            await asyncio.sleep(2.0)
+
+            # Capture console logs and setup fetch spy
+            await send_cmd('Runtime.evaluate', {
+                'expression': """(() => {
+                    window.__networkLogs = [];
+                    window.__consoleLogs = [];
+                    const origLog = console.log;
+                    const origErr = console.error;
+                    console.log = (...args) => { window.__consoleLogs.push({type: 'log', text: args.join(' ')}); origLog(...args); };
+                    console.error = (...args) => { window.__consoleLogs.push({type: 'error', text: args.join(' ')}); origErr(...args); };
+                    
+                    const origFetch = window.fetch;
+                    window.fetch = async (...args) => {
+                        const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url);
+                        const method = (args[1] && args[1].method) || 'GET';
+                        const body = args[1] && args[1].body;
+                        const entry = { url, method, body, timestamp: Date.now() };
+                        try {
+                            const res = await origFetch(...args);
+                            entry.status = res.status;
+                            entry.statusText = res.statusText;
+                            const clone = res.clone();
+                            try { entry.responseText = await clone.text(); } catch(e) {}
+                            window.__networkLogs.push(entry);
+                            return res;
+                        } catch(err) {
+                            entry.error = err.message;
+                            window.__networkLogs.push(entry);
+                            throw err;
+                        }
+                    };
+                })()"""
             })
 
-            # Inspect function for verification
-            inspect_js = """
-            (() => {
-                const grid = document.querySelector('.verification-workspace-grid');
-                const left = document.querySelector('.verification-left-col');
-                const right = document.querySelector('.verification-right-col');
-                const audio = document.querySelector('.master-audio-card');
-                const active = document.querySelector('.active-segment-card');
-                const tabs = Array.from(document.querySelectorAll('.segmented-tab')).map(t => t.textContent.trim());
-                const btns = Array.from(document.querySelectorAll('.verification-action-buttons-row button')).map(b => b.textContent.trim().replace(/\\s+/g, ' '));
-                const items = document.querySelectorAll('.flagged-item-card');
-                
-                let gridStyle = grid ? window.getComputedStyle(grid).gridTemplateColumns : 'NO_GRID';
-                let gridDisplay = grid ? window.getComputedStyle(grid).display : 'NO_GRID';
-                let leftRect = left ? left.getBoundingClientRect() : null;
-                let rightRect = right ? right.getBoundingClientRect() : null;
-                
-                return JSON.stringify({
-                    url: window.location.href,
-                    gridCols: gridStyle,
-                    sideBySide: leftRect && rightRect ? (Math.abs(leftRect.top - rightRect.top) < 10) : false,
-                    leftWidth: leftRect ? leftRect.width : null,
-                    rightWidth: rightRect ? rightRect.width : null,
-                    audioFound: !!audio,
-                    activeFound: !!active,
-                    tabs,
-                    btns,
-                    itemCount: items.length
-                });
-            })()
-            """
-
-            # Check at 0.2s (Initial mount)
-            await asyncio.sleep(0.2)
-            eval02 = await send_cmd('Runtime.evaluate', {'expression': inspect_js})
-            print("At 0.2s @ 1024px:", eval02.get('result', {}).get('value'))
-            shot02 = await send_cmd('Page.captureScreenshot', {'format': 'png'})
-            with open(os.path.join(SCREENSHOTS_DIR, 'verify_02s_1024.png'), 'wb') as f:
-                f.write(base64.b64decode(shot02['data']))
-
-            # Check at 0.6s
-            await asyncio.sleep(0.4)
-            eval06 = await send_cmd('Runtime.evaluate', {'expression': inspect_js})
-            print("At 0.6s @ 1024px:", eval06.get('result', {}).get('value'))
-            shot06 = await send_cmd('Page.captureScreenshot', {'format': 'png'})
-            with open(os.path.join(SCREENSHOTS_DIR, 'verify_06s_1024.png'), 'wb') as f:
-                f.write(base64.b64decode(shot06['data']))
-
-            # Check at 1.5s (Full data loaded)
-            await asyncio.sleep(0.9)
-            eval15 = await send_cmd('Runtime.evaluate', {'expression': inspect_js})
-            print("At 1.5s @ 1024px:", eval15.get('result', {}).get('value'))
-            shot15 = await send_cmd('Page.captureScreenshot', {'format': 'png'})
-            with open(os.path.join(SCREENSHOTS_DIR, 'verify_15s_1024.png'), 'wb') as f:
-                f.write(base64.b64decode(shot15['data']))
-
-            # Check at 1440px
-            await send_cmd('Emulation.setDeviceMetricsOverride', {
-                'width': 1440,
-                'height': 900,
-                'deviceScaleFactor': 1,
-                'mobile': False
+            # Click 'Resolved' tab to show verified items
+            print("Clicking 'Resolved' tab...")
+            await send_cmd('Runtime.evaluate', {
+                'expression': """(() => {
+                    const btns = Array.from(document.querySelectorAll('button'));
+                    const resBtn = btns.find(b => b.textContent.includes('Resolved') || b.textContent.includes('All'));
+                    if (resBtn) {
+                        resBtn.click();
+                        return 'CLICKED_RESOLVED_TAB';
+                    }
+                    return 'NO_RESOLVED_TAB';
+                })()"""
             })
-            await asyncio.sleep(0.5)
-            shot1440 = await send_cmd('Page.captureScreenshot', {'format': 'png'})
-            with open(os.path.join(SCREENSHOTS_DIR, 'verify_1440_fixed.png'), 'wb') as f:
-                f.write(base64.b64decode(shot1440['data']))
+            await asyncio.sleep(1.5)
 
-            # Check Dashboard at 1024px
-            await send_cmd('Emulation.setDeviceMetricsOverride', {
-                'width': 1024,
-                'height': 768,
-                'deviceScaleFactor': 1,
-                'mobile': False
+            # Scroll down and capture full page screenshot
+            shot = await send_cmd('Page.captureScreenshot', {
+                'format': 'png',
+                'captureBeyondViewport': True
             })
-            await send_cmd('Page.navigate', {'url': 'http://localhost:5173/'})
-            await asyncio.sleep(1.2)
-            dash_js = """
-            (() => {
-                const badge = document.querySelector('.attention-counter-badge')?.textContent?.trim();
-                const docBoxes = document.querySelectorAll('.attention-doc-box').length;
-                const metaRows = document.querySelectorAll('.attention-meta-row').length;
-                const liveCard = document.querySelector('.creation-card--live');
-                const liveBoxShadow = liveCard ? window.getComputedStyle(liveCard).boxShadow : null;
-                const progLabels = Array.from(document.querySelectorAll('.attention-programme-label')).map(el => el.textContent.trim());
-                const titles = Array.from(document.querySelectorAll('.attention-session-title')).map(el => el.textContent.trim());
-                return JSON.stringify({ badge, docBoxes, metaRows, liveBoxShadow, progLabels, titles });
-            })()
-            """
-            eval_dash = await send_cmd('Runtime.evaluate', {'expression': dash_js})
-            print("Dashboard @ 1024px:", eval_dash.get('result', {}).get('value'))
-            shot_dash = await send_cmd('Page.captureScreenshot', {'format': 'png'})
-            with open(os.path.join(SCREENSHOTS_DIR, 'dashboard_1024_fixed.png'), 'wb') as f:
-                f.write(base64.b64decode(shot_dash['data']))
+            screenshot_path = os.path.join(SCREENSHOTS_DIR, 'session_verification_full_resolved_detail.png')
+            with open(screenshot_path, 'wb') as f:
+                f.write(base64.b64decode(shot['data']))
+            print("Saved screenshot to:", screenshot_path)
 
-            # Check Session Workspace header at 1024px
-            await send_cmd('Page.navigate', {'url': 'http://localhost:5173/#sessions'})
-            await asyncio.sleep(1.0)
-            await send_cmd('Runtime.evaluate', {'expression': '''(() => {
-                const btns = document.querySelectorAll('.session-card-action-btn');
-                if (btns.length > 2) {
-                    btns[2].click();
-                } else if (btns.length > 0) {
-                    btns[0].click();
-                }
-            })()'''})
-            await asyncio.sleep(1.2)
-            sess_js = """
-            (() => {
-                const metaLine = document.querySelector('.session-workspace-meta-line');
-                const metaItems = Array.from(metaLine ? metaLine.querySelectorAll('.session-meta-item') : []).map(el => el.textContent.trim());
-                const clockSvg = metaLine ? metaLine.querySelector('svg circle') : null;
-                const eyebrow = document.querySelector('.session-programme-eyebrow')?.textContent?.trim();
-                const title = document.querySelector('.session-workspace-main-title')?.textContent?.trim();
-                return JSON.stringify({ eyebrow, title, metaItems, hasClockDuration: !!clockSvg });
-            })()
-            """
-            eval_sess = await send_cmd('Runtime.evaluate', {'expression': sess_js})
-            print("Session Workspace @ 1024px:", eval_sess.get('result', {}).get('value'))
-            shot_sess = await send_cmd('Page.captureScreenshot', {'format': 'png'})
-            with open(os.path.join(SCREENSHOTS_DIR, 'session_workspace_1024_fixed.png'), 'wb') as f:
-                f.write(base64.b64decode(shot_sess['data']))
+            # Check UI state in DOM
+            dom_state = await send_cmd('Runtime.evaluate', {
+                'expression': """(() => {
+                    const statusBadge = document.querySelector('.verification-status-badge, .status-pill, .badge')?.textContent?.trim();
+                    const aiNotice = document.querySelector('.ai-verify-notice-banner')?.textContent?.trim();
+                    const heading = document.querySelector('h1, h2, h3')?.textContent?.trim();
+                    const resolvedCount = document.querySelector('.verification-metric-resolved, .resolved-count')?.textContent?.trim();
+                    const totalCount = document.querySelector('.verification-metric-total, .total-count')?.textContent?.trim();
+                    return JSON.stringify({ statusBadge, aiNotice, heading, resolvedCount, totalCount });
+                })()""",
+                'returnByValue': True
+            })
+            print("DOM STATE:", dom_state.get('result', {}).get('value'))
 
-            # Check Sessions History at 1024px
-            await send_cmd('Page.navigate', {'url': 'http://localhost:5173/#sessions'})
-            await asyncio.sleep(0.8)
-            hist_js = """
-            (() => {
-                const prog = document.querySelector('.session-card-programme');
-                const title = document.querySelector('.session-card-dominant-title');
-                return JSON.stringify({
-                    progText: prog?.textContent?.trim(),
-                    progSize: prog ? window.getComputedStyle(prog).fontSize : null,
-                    progWeight: prog ? window.getComputedStyle(prog).fontWeight : null,
-                    progTransform: prog ? window.getComputedStyle(prog).textTransform : null,
-                    titleText: title?.textContent?.trim(),
-                    titleSize: title ? window.getComputedStyle(title).fontSize : null,
-                    titleWeight: title ? window.getComputedStyle(title).fontWeight : null
-                });
-            })()
-            """
-            eval_hist = await send_cmd('Runtime.evaluate', {'expression': hist_js})
-            print("Sessions History @ 1024px:", eval_hist.get('result', {}).get('value'))
-            shot_hist = await send_cmd('Page.captureScreenshot', {'format': 'png'})
-            with open(os.path.join(SCREENSHOTS_DIR, 'sessions_history_1024_fixed.png'), 'wb') as f:
-                f.write(base64.b64decode(shot_hist['data']))
+            shot = await send_cmd('Page.captureScreenshot', {'format': 'png'})
+            screenshot_path = os.path.join(SCREENSHOTS_DIR, 'session_verification_completed_ui.png')
+            with open(screenshot_path, 'wb') as f:
+                f.write(base64.b64decode(shot['data']))
+            print("Saved screenshot to:", screenshot_path)
+            print("Trace completed successfully.")
 
     finally:
         proc.terminate()

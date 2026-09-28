@@ -142,6 +142,7 @@ Return a valid JSON object matching this EXACT schema:
                 "explanation": "AI Gateway is not configured. Retained for human verification.",
                 "scripture_references": [v.get("reference") for v in local_context.get("verses", []) if v.get("reference")],
                 "is_high_risk": materiality.level == MaterialityLevel.HIGH_RISK,
+                "gateway_unavailable": True,
             }
 
         # 4. Build prompt & call Gemini 3.8 Flash
@@ -191,9 +192,12 @@ Return a valid JSON object matching this EXACT schema:
                 "is_high_risk": is_high_risk,
                 "model_name": resp.model_name,
                 "provider_slot": resp.provider_slot,
+                "gateway_unavailable": False,
             }
         except Exception as e:
             logger.error("AI segment evaluation error: %s", e)
+            from app.services.gemini_gateway import GeminiUnavailableError
+            is_unavail = isinstance(e, GeminiUnavailableError) or "503" in str(e) or "429" in str(e) or "quota" in str(e).lower()
             return {
                 "decision": "UNRESOLVED",
                 "verified_text": azure_text,
@@ -201,6 +205,7 @@ Return a valid JSON object matching this EXACT schema:
                 "explanation": f"AI evaluation error: {str(e)[:150]}",
                 "scripture_references": [],
                 "is_high_risk": True,
+                "gateway_unavailable": is_unavail,
             }
 
     async def verify_session(
@@ -247,11 +252,15 @@ Return a valid JSON object matching this EXACT schema:
         # Transition to verifying
         await session_repo.set_ai_verification_status(session_id, "verifying")
 
-        # Audio file path
+        # Audio file path resolution with robust filesystem fallback
         audio_path = session.get("audio_file_path")
-        if not audio_path and session.get("audio_filename"):
-            from app.config import STORAGE_AUDIO_DIR
-            audio_path = os.path.join(STORAGE_AUDIO_DIR, session["audio_filename"])
+        if not audio_path or not os.path.isfile(audio_path):
+            audio_fname = session.get("audio_filename") or (f"{session.get('recording_id')}.wav" if session.get("recording_id") else None)
+            if audio_fname:
+                from app.config import STORAGE_AUDIO_DIR
+                candidate = os.path.join(STORAGE_AUDIO_DIR, audio_fname)
+                if os.path.isfile(candidate):
+                    audio_path = candidate
 
         # Extract bounded audio windows
         flagged_meta = []
@@ -282,6 +291,7 @@ Return a valid JSON object matching this EXACT schema:
         verified_count = 0
         corrected_count = 0
         unresolved_count = 0
+        eval_results = []
 
         for it in pending_items:
             s_idx = it["segment_index"]
@@ -320,6 +330,7 @@ Return a valid JSON object matching this EXACT schema:
                 gemini_audio_text=gemini_audio_text,
                 external_flags=external_flags,
             )
+            eval_results.append(eval_res)
 
             decision = eval_res["decision"]
             confidence = eval_res["confidence"]
@@ -361,7 +372,11 @@ Return a valid JSON object matching this EXACT schema:
             "unresolved_count": remaining_pending,
         }
 
-        if remaining_pending == 0:
+        # If all evaluated items encountered unavailable AI gateway, gracefully enter ai_unavailable
+        all_unavail = bool(eval_results) and all(r.get("gateway_unavailable") for r in eval_results)
+        if all_unavail:
+            final_status = "ai_unavailable"
+        elif remaining_pending == 0:
             final_status = "completed_verified"
             await session_repo.finalise_verification(session_id)
         else:
@@ -373,6 +388,11 @@ Return a valid JSON object matching this EXACT schema:
             "status": final_status,
             "session_id": session_id,
             "summary": summary,
+            "message": (
+                "AI verification service is temporarily unavailable. Flagged segments are preserved for human review."
+                if final_status == "ai_unavailable"
+                else "AI verification completed."
+            ),
         }
 
 

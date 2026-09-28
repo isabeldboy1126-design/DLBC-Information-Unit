@@ -37,12 +37,12 @@ export function VerificationWorkflow({
   const sessionId = session?.session_id
   const vStatus = session?.verification_status || 'not_started'
 
-  // Load verification state if in progress and not loaded yet
+  // Load verification state if not loaded yet for this session
   useEffect(() => {
-    if (sessionId && vStatus === 'in_progress' && !verificationState) {
+    if (sessionId && (!verificationState || verificationState.session_id !== sessionId)) {
       onLoadVerificationState(sessionId)
     }
-  }, [sessionId, vStatus, verificationState, onLoadVerificationState])
+  }, [sessionId, verificationState, onLoadVerificationState])
 
   const items = verificationState?.items || []
   const itemsTotal = verificationState?.items_total || items.length || 0

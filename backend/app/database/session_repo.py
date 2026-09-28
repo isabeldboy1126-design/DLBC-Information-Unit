@@ -538,8 +538,31 @@ class SessionRepository:
             row = await cursor.fetchone()
             if not row:
                 return None
-
             session = dict(row)
+
+            # Stage 6 compatibility: self-heal stale or broken audio_file_path for older sessions
+            stored_path = session.get("audio_file_path")
+            stored_filename = session.get("audio_filename") or (f"{session.get('recording_id')}.wav" if session.get("recording_id") else None)
+            if stored_filename and (not stored_path or not os.path.isfile(stored_path)):
+                from app.config import STORAGE_AUDIO_DIR
+                candidate = os.path.join(STORAGE_AUDIO_DIR, stored_filename)
+                if os.path.isfile(candidate):
+                    session["audio_file_path"] = candidate
+                    session["audio_filename"] = stored_filename
+                    try:
+                        await conn.execute(
+                            "UPDATE sessions SET audio_file_path = ?, audio_filename = ? WHERE session_id = ?",
+                            (candidate, stored_filename, session_id),
+                        )
+                        await conn.commit()
+                    except Exception:
+                        pass
+
+            # Safe defaults for Stage 6 fields
+            if not session.get("ai_verification_status"):
+                session["ai_verification_status"] = "idle"
+            if not session.get("verification_status"):
+                session["verification_status"] = "not_started"
 
             # Retrieve segments
             seg_cursor = await conn.execute(
@@ -583,7 +606,8 @@ class SessionRepository:
                        editing_standard_version,
                        proofreading_status, proofreading_completed_at,
                        proofreading_standard_version, accepted_proofread_revision_id,
-                       final_report_status, final_report_completed_at, final_report_id
+                       final_report_status, final_report_completed_at, final_report_id,
+                       ai_verification_status, ai_verification_completed_at, event_id
                 FROM sessions
                 ORDER BY date_created DESC
                 """
