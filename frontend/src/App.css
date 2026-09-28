@@ -6071,6 +6071,9 @@ textarea.form-control {
   flex-direction: column;
   gap: 1.5rem;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .sessions-history-header {
@@ -6421,20 +6424,22 @@ textarea.form-control {
 /* 3. Refined 3-Column Card Grid */
 .sessions-cards-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.25rem;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1024px) {
   .sessions-cards-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 720px) {
   .sessions-cards-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -6453,6 +6458,10 @@ textarea.form-control {
   min-height: 175px;
   cursor: pointer;
   outline: none;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .refined-session-card:hover {
@@ -6532,6 +6541,10 @@ textarea.form-control {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .session-card-eyebrow {
@@ -6556,6 +6569,8 @@ textarea.form-control {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Clean Metadata Row (Date & Duration without labels) */
@@ -6566,6 +6581,10 @@ textarea.form-control {
   color: #64748b;
   font-weight: 500;
   gap: 0.65rem;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .session-card-meta-date {
@@ -6592,10 +6611,15 @@ textarea.form-control {
   gap: 0.65rem;
   padding-top: 0.75rem;
   border-top: 1px solid #f1f5f9;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .session-card-action-btn {
   flex: 1;
+  min-width: 0;
   height: 36px;
   background: #eff6ff;
   color: #1d68f2;
