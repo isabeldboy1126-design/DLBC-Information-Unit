@@ -4,6 +4,68 @@ import { getSessionHierarchy } from '../sessions/SessionDetailView'
 import { ConfirmationModal } from '../common/ConfirmationModal'
 
 /**
+ * Detects whether AI verification failed or was unavailable for a specific item
+ * due to quota limits, provider downtime, or missing configuration.
+ */
+function isItemAiUnavailable(item, sessionObj, vState) {
+  if (!item) return false
+
+  // Session-level AI failure
+  if (
+    sessionObj?.ai_verification_status === 'ai_unavailable' ||
+    vState?.ai_verification_status === 'ai_unavailable'
+  ) {
+    if (item.ai_decision !== 'VERIFIED' && item.ai_decision !== 'CORRECTED') {
+      return true
+    }
+  }
+
+  const decision = String(item.ai_decision || '').trim().toUpperCase()
+  const explanation = String(item.ai_explanation || '').toLowerCase()
+
+  // Service failure or unavailability keywords
+  const failureKeywords = [
+    'quota_exceeded_429',
+    'quota',
+    '429',
+    '503',
+    'provider unavailable',
+    'providers unavailable',
+    'both gemini providers',
+    'configuration failure',
+    'unconfigured',
+    'not configured',
+    'ai service unavailable',
+    'service unavailable',
+    'ai evaluation error',
+    'resourceexhausted',
+    'rate limit',
+    'temporarily unavailable',
+    'unreachable',
+    'gateway not configured',
+    'gateway_unavailable',
+  ]
+
+  if (failureKeywords.some((kw) => explanation.includes(kw))) {
+    return true
+  }
+
+  // UNRESOLVED decision caused by error or unhandled exception
+  if (decision === 'UNRESOLVED') {
+    if (
+      explanation.includes('error') ||
+      explanation.includes('unavailable') ||
+      explanation.includes('fail') ||
+      !item.ai_explanation
+    ) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
  * VerificationWorkflow — Human verification workspace matching verification-workspace.png.
  */
 export function VerificationWorkflow({
@@ -584,13 +646,31 @@ export function VerificationWorkflow({
               </div>
 
               {/* Informational AI assistance banner matching reference screenshot */}
-              {activeItem?.ai_decision ? (
+              {isItemAiUnavailable(activeItem, session, verificationState) ? (
+                <div className="ai-hint-box ai-hint-box--unavailable">
+                  <span className="sparkle-icon" aria-hidden="true">✦</span>
+                  <div className="ai-hint-details">
+                    <div className="ai-hint-title-row">
+                      <strong className="ai-hint-title">AI unavailable</strong>
+                    </div>
+                    <p className="ai-hint-explanation">
+                      I could not evaluate this section because the AI service was unavailable.
+                    </p>
+                  </div>
+                </div>
+              ) : activeItem?.ai_decision ? (
                 <div className={`ai-hint-box ai-hint-box--${activeItem.ai_decision.toLowerCase()}`}>
                   <span className="sparkle-icon" aria-hidden="true">✦</span>
                   <div className="ai-hint-details">
                     <div className="ai-hint-title-row">
-                      <strong className="ai-hint-title">AI Recommendation ({activeItem.ai_decision})</strong>
-                      {activeItem.ai_confidence && (
+                      <strong className="ai-hint-title">
+                        {activeItem.ai_decision.toUpperCase() === 'CORRECTED'
+                          ? 'AI Suggested Correction'
+                          : activeItem.ai_decision.toUpperCase() === 'VERIFIED'
+                          ? 'AI Verified'
+                          : `AI Recommendation (${activeItem.ai_decision})`}
+                      </strong>
+                      {activeItem.ai_decision.toUpperCase() !== 'UNRESOLVED' && activeItem.ai_confidence && (
                         <span className="ai-hint-confidence">
                           {Math.round(activeItem.ai_confidence * 100)}% confidence
                         </span>

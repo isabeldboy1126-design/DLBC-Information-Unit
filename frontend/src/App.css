@@ -11989,6 +11989,32 @@ textarea.form-control {
   color: #1e40af;
 }
 
+/* AI Unavailable Neutral State */
+.ai-hint-box--unavailable {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  align-items: flex-start;
+}
+
+.ai-hint-box--unavailable .sparkle-icon {
+  color: #94a3b8;
+  margin-top: 0.12rem;
+}
+
+.ai-hint-box--unavailable .ai-hint-title {
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.ai-hint-box--unavailable .ai-hint-explanation {
+  color: #64748b;
+  font-size: 0.8rem;
+  margin: 0;
+  line-height: 1.4;
+}
+
 /* ==========================================================================
    Global Confirmation Modal (Part B)
    ========================================================================== */
