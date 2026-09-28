@@ -8,13 +8,20 @@ Verified Transcript.
 Does NOT modify Raw Transcript or session.status.
 """
 
-from typing import Optional
+import asyncio
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.database.session_repo import session_repo
+from app.verification.decision_engine import verification_decision_engine
 
 router = APIRouter(prefix="/api/sessions", tags=["Verification"])
+
+
+class VerifyAIRequest(BaseModel):
+    auto_resolve: bool = True
+    background: bool = True
 
 
 class ResolveItemRequest(BaseModel):
@@ -118,4 +125,59 @@ async def confirm_raw_as_verified(session_id: str):
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+
+@router.post("/{session_id}/verification/verify-ai")
+async def trigger_ai_verification(
+    session_id: str,
+    payload: Optional[VerifyAIRequest] = None,
+):
+    """
+    Triggers AI-powered verification across flagged segments using multi-modal
+    Azure transcript, bounded Gemini audio transcription, and KJV doctrinal checking.
+    """
+    session = await session_repo.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    auto_resolve = payload.auto_resolve if payload else True
+    run_background = payload.background if payload else True
+
+    # If already running, return current status without duplication
+    cur_status = await session_repo.get_ai_verification_status(session_id)
+    if cur_status.get("ai_verification_status") in ("compiling", "verifying"):
+        return {
+            "message": "AI verification already in progress",
+            "session_id": session_id,
+            "status": cur_status["ai_verification_status"],
+            "summary": cur_status.get("summary", {}),
+        }
+
+    if run_background:
+        await session_repo.set_ai_verification_status(session_id, "compiling")
+        asyncio.create_task(
+            verification_decision_engine.verify_session(session_id, auto_resolve=auto_resolve)
+        )
+        return {
+            "message": "AI verification initiated",
+            "session_id": session_id,
+            "status": "compiling",
+        }
+    else:
+        res = await verification_decision_engine.verify_session(session_id, auto_resolve=auto_resolve)
+        if res.get("status") == "failed" and "error" in res:
+            raise HTTPException(status_code=400, detail=res["error"])
+        return res
+
+
+@router.get("/{session_id}/verification/ai-status")
+async def get_ai_verification_status_endpoint(session_id: str):
+    """
+    Returns current AI verification lifecycle state, timestamps, and resolution summary.
+    """
+    result = await session_repo.get_ai_verification_status(session_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
 

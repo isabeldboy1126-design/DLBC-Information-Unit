@@ -913,7 +913,8 @@ class SessionRepository:
             cursor = await conn.execute(
                 """
                 SELECT session_id, verification_status, verification_items_total,
-                       verification_items_resolved, verified_at, flag_count, segment_count
+                       verification_items_resolved, verified_at, flag_count, segment_count,
+                       ai_verification_status, ai_verification_summary_json
                 FROM sessions WHERE session_id = ?
                 """,
                 (session_id,),
@@ -922,12 +923,22 @@ class SessionRepository:
             if not row:
                 return {"error": "Session not found"}
 
+            row_dict = dict(row)
+            summary = {}
+            if row_dict.get("ai_verification_summary_json"):
+                try:
+                    summary = json.loads(row_dict["ai_verification_summary_json"])
+                except Exception:
+                    summary = {}
+
             # Get all verification items
             vi_cursor = await conn.execute(
                 """
                 SELECT item_id, segment_index, original_text, verified_text,
                        start_time, end_time, original_confidence, action,
-                       correction_note, verified_at, flag_reasons
+                       correction_note, verified_at, flag_reasons,
+                       ai_decision, ai_verified_text, ai_confidence,
+                       ai_explanation, ai_model_name, ai_scriptures_json
                 FROM verification_items
                 WHERE session_id = ?
                 ORDER BY segment_index ASC
@@ -939,16 +950,25 @@ class SessionRepository:
             for vi in vi_rows:
                 item = dict(vi)
                 item["flag_reasons"] = json.loads(item["flag_reasons"] or "[]")
+                if item.get("ai_scriptures_json"):
+                    try:
+                        item["ai_scriptures"] = json.loads(item["ai_scriptures_json"])
+                    except Exception:
+                        item["ai_scriptures"] = []
+                else:
+                    item["ai_scriptures"] = []
                 items.append(item)
 
             return {
                 "session_id": session_id,
-                "verification_status": row["verification_status"],
-                "items_total": row["verification_items_total"],
-                "items_resolved": row["verification_items_resolved"],
-                "flag_count": row["flag_count"],
-                "segment_count": row["segment_count"],
-                "verified_at": row["verified_at"],
+                "verification_status": row_dict["verification_status"],
+                "ai_verification_status": row_dict.get("ai_verification_status") or "idle",
+                "ai_verification_summary": summary,
+                "items_total": row_dict["verification_items_total"],
+                "items_resolved": row_dict["verification_items_resolved"],
+                "flag_count": row_dict["flag_count"],
+                "segment_count": row_dict["segment_count"],
+                "verified_at": row_dict["verified_at"],
                 "items": items,
             }
 
