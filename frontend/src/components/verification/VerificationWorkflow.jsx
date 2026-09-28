@@ -238,7 +238,6 @@ export function VerificationWorkflow({
 
   const handleTriggerAiVerification = async () => {
     if (!sessionId) return
-    setShowProcessingScreen(true)
     setIsAiVerifying(true)
     setAiFeedback(null)
     try {
@@ -251,8 +250,10 @@ export function VerificationWorkflow({
         const errJson = await res.json().catch(() => ({}))
         console.error('AI verification trigger failed:', res.status, errJson)
       }
+      setShowProcessingScreen(true)
     } catch (err) {
       console.error('Error triggering AI verification:', err)
+      setShowProcessingScreen(true)
     } finally {
       setIsAiVerifying(false)
     }
@@ -384,6 +385,7 @@ export function VerificationWorkflow({
 
               <button
                 type="button"
+                id="btn-trigger-ai-verify"
                 className={`btn-ai-verify-action ${isAiVerifying ? 'btn-ai-verify-action--loading' : ''}`}
                 onClick={handleTriggerAiVerification}
                 disabled={isAiVerifying || pendingCount === 0}
