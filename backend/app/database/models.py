@@ -286,6 +286,21 @@ PHASE9_MIGRATION_COLUMNS = [
     "ALTER TABLE sessions ADD COLUMN final_report_id TEXT",
 ]
 
+# Stage 6 migration: add AI verification engine workflow columns to sessions & verification_items tables.
+STAGE6_AI_VERIFICATION_COLUMNS = [
+    "ALTER TABLE sessions ADD COLUMN ai_verification_status TEXT DEFAULT 'idle'",
+    "ALTER TABLE sessions ADD COLUMN ai_verification_started_at TEXT",
+    "ALTER TABLE sessions ADD COLUMN ai_verification_completed_at TEXT",
+    "ALTER TABLE sessions ADD COLUMN ai_verification_summary_json TEXT",
+    "ALTER TABLE sessions ADD COLUMN event_id TEXT",
+    "ALTER TABLE verification_items ADD COLUMN ai_decision TEXT",
+    "ALTER TABLE verification_items ADD COLUMN ai_verified_text TEXT",
+    "ALTER TABLE verification_items ADD COLUMN ai_confidence REAL",
+    "ALTER TABLE verification_items ADD COLUMN ai_explanation TEXT",
+    "ALTER TABLE verification_items ADD COLUMN ai_model_name TEXT",
+    "ALTER TABLE verification_items ADD COLUMN ai_scriptures_json TEXT",
+]
+
 # ---------------------------------------------------------------------------
 # Azure SQL / Microsoft SQL Server DDL Schema (Production)
 # ---------------------------------------------------------------------------
@@ -605,5 +620,20 @@ PHASE9_MIGRATION_COLUMNS_MSSQL = [
     "IF COL_LENGTH('sessions', 'final_report_completed_at') IS NULL ALTER TABLE sessions ADD final_report_completed_at VARCHAR(255)",
     "IF COL_LENGTH('sessions', 'final_report_id') IS NULL ALTER TABLE sessions ADD final_report_id VARCHAR(255)",
 ]
+
+STAGE6_AI_VERIFICATION_COLUMNS_MSSQL = [
+    "IF COL_LENGTH('sessions', 'ai_verification_status') IS NULL ALTER TABLE sessions ADD ai_verification_status VARCHAR(50) DEFAULT 'idle'",
+    "IF COL_LENGTH('sessions', 'ai_verification_started_at') IS NULL ALTER TABLE sessions ADD ai_verification_started_at VARCHAR(255)",
+    "IF COL_LENGTH('sessions', 'ai_verification_completed_at') IS NULL ALTER TABLE sessions ADD ai_verification_completed_at VARCHAR(255)",
+    "IF COL_LENGTH('sessions', 'ai_verification_summary_json') IS NULL ALTER TABLE sessions ADD ai_verification_summary_json NVARCHAR(MAX)",
+    "IF COL_LENGTH('sessions', 'event_id') IS NULL ALTER TABLE sessions ADD event_id VARCHAR(255)",
+    "IF COL_LENGTH('verification_items', 'ai_decision') IS NULL ALTER TABLE verification_items ADD ai_decision VARCHAR(50)",
+    "IF COL_LENGTH('verification_items', 'ai_verified_text') IS NULL ALTER TABLE verification_items ADD ai_verified_text NVARCHAR(MAX)",
+    "IF COL_LENGTH('verification_items', 'ai_confidence') IS NULL ALTER TABLE verification_items ADD ai_confidence FLOAT",
+    "IF COL_LENGTH('verification_items', 'ai_explanation') IS NULL ALTER TABLE verification_items ADD ai_explanation NVARCHAR(MAX)",
+    "IF COL_LENGTH('verification_items', 'ai_model_name') IS NULL ALTER TABLE verification_items ADD ai_model_name VARCHAR(100)",
+    "IF COL_LENGTH('verification_items', 'ai_scriptures_json') IS NULL ALTER TABLE verification_items ADD ai_scriptures_json NVARCHAR(MAX)",
+]
+
 
 

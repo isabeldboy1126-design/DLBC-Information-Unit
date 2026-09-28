@@ -207,7 +207,12 @@ class ProgrammesRepository:
         is_archived: bool | None = None,
         sort_order: int | None = None,
     ) -> dict | None:
-        """Updates a programme's properties."""
+        """Updates a programme's properties and relationally propagates renames."""
+        old_prog = await self.get_programme_by_id(programme_id)
+        if not old_prog:
+            return None
+        old_name = old_prog.get("name")
+
         now = datetime.now(timezone.utc).isoformat()
         updates = ["updated_at = ?"]
         params = [now]
@@ -227,6 +232,34 @@ class ProgrammesRepository:
 
         async with get_db_connection() as conn:
             await conn.execute(query, tuple(params))
+
+            # Relational rename propagation across sessions
+            if name is not None and old_name and name.strip() != old_name:
+                import json
+                new_name = name.strip()
+                cursor = await conn.execute(
+                    "SELECT session_id, metadata_json FROM sessions WHERE event_id = ? OR metadata_json LIKE ? OR metadata_json LIKE ?",
+                    (programme_id, f"%{programme_id}%", f"%{old_name}%"),
+                )
+                session_rows = await cursor.fetchall()
+                for s_row in session_rows:
+                    try:
+                        s_meta = json.loads(s_row["metadata_json"] or "{}")
+                        if (
+                            s_meta.get("programme_id") == programme_id
+                            or s_meta.get("event_id") == programme_id
+                            or s_meta.get("programme") == old_name
+                            or s_meta.get("programme_name") == old_name
+                        ):
+                            s_meta["programme"] = new_name
+                            s_meta["programme_name"] = new_name
+                            await conn.execute(
+                                "UPDATE sessions SET metadata_json = ? WHERE session_id = ?",
+                                (json.dumps(s_meta), s_row["session_id"]),
+                            )
+                    except Exception:
+                        pass
+
             await conn.commit()
 
         return await self.get_programme_by_id(programme_id)

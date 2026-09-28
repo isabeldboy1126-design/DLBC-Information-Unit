@@ -25,6 +25,8 @@ from app.database.models import (
     PHASE8_MIGRATION_COLUMNS_MSSQL,
     PHASE9_MIGRATION_COLUMNS,
     PHASE9_MIGRATION_COLUMNS_MSSQL,
+    STAGE6_AI_VERIFICATION_COLUMNS,
+    STAGE6_AI_VERIFICATION_COLUMNS_MSSQL,
 )
 from app.config import (
     STORAGE_AUDIO_DIR,
@@ -50,6 +52,7 @@ class SessionRepository:
                     + PHASE7_MIGRATION_COLUMNS_MSSQL
                     + PHASE8_MIGRATION_COLUMNS_MSSQL
                     + PHASE9_MIGRATION_COLUMNS_MSSQL
+                    + STAGE6_AI_VERIFICATION_COLUMNS_MSSQL
                 ):
                     try:
                         await conn.execute(alter_sql)
@@ -83,6 +86,12 @@ class SessionRepository:
                         pass  # Column already exists
                 # Phase 9 migration: add final report columns (safe if already exist)
                 for alter_sql in PHASE9_MIGRATION_COLUMNS:
+                    try:
+                        await conn.execute(alter_sql)
+                    except Exception:
+                        pass  # Column already exists
+                # Stage 6 migration: add AI verification engine columns
+                for alter_sql in STAGE6_AI_VERIFICATION_COLUMNS:
                     try:
                         await conn.execute(alter_sql)
                     except Exception:
@@ -1352,6 +1361,186 @@ class SessionRepository:
         file_path = os.path.join(STORAGE_VERIFIED_DIR, f"{session_id}.json")
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+
+    # =========================================================================
+    # Stage 6: Autonomous AI Verification Storage Methods
+    # =========================================================================
+
+    async def set_ai_verification_status(
+        self,
+        session_id: str,
+        status: str,  # 'idle' | 'compiling' | 'verifying' | 'completed_verified' | 'completed_needs_review' | 'ai_unavailable' | 'failed'
+        summary: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Updates the session's AI verification processing lifecycle status."""
+        await self.init_db()
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        updates = ["ai_verification_status = ?"]
+        params = [status]
+
+        if status in ("compiling", "verifying"):
+            updates.append("ai_verification_started_at = ?")
+            params.append(now_iso)
+        elif status in ("completed_verified", "completed_needs_review", "ai_unavailable", "failed"):
+            updates.append("ai_verification_completed_at = ?")
+            params.append(now_iso)
+
+        if summary is not None:
+            updates.append("ai_verification_summary_json = ?")
+            params.append(json.dumps(summary, ensure_ascii=False))
+
+        params.append(session_id)
+        query = f"UPDATE sessions SET {', '.join(updates)} WHERE session_id = ?"
+
+        async with get_db_connection() as conn:
+            await conn.execute(query, tuple(params))
+            await conn.commit()
+
+        return await self.get_ai_verification_status(session_id)
+
+    async def get_ai_verification_status(self, session_id: str) -> Dict[str, Any]:
+        """Returns the current AI verification lifecycle state and summary for a session."""
+        await self.init_db()
+        async with get_db_connection() as conn:
+            cursor = await conn.execute(
+                """
+                SELECT session_id, verification_status, ai_verification_status,
+                       ai_verification_started_at, ai_verification_completed_at,
+                       ai_verification_summary_json, verification_items_total,
+                       verification_items_resolved
+                FROM sessions WHERE session_id = ?
+                """,
+                (session_id,),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return {"error": "Session not found", "session_id": session_id}
+
+            row_dict = dict(row)
+            summary = {}
+            if row_dict.get("ai_verification_summary_json"):
+                try:
+                    summary = json.loads(row_dict["ai_verification_summary_json"])
+                except Exception:
+                    summary = {}
+
+            return {
+                "session_id": session_id,
+                "verification_status": row_dict.get("verification_status") or "not_started",
+                "ai_verification_status": row_dict.get("ai_verification_status") or "idle",
+                "started_at": row_dict.get("ai_verification_started_at"),
+                "completed_at": row_dict.get("ai_verification_completed_at"),
+                "summary": summary,
+                "items_total": row_dict.get("verification_items_total") or 0,
+                "items_resolved": row_dict.get("verification_items_resolved") or 0,
+                "items_pending": max(0, (row_dict.get("verification_items_total") or 0) - (row_dict.get("verification_items_resolved") or 0)),
+            }
+
+    async def save_ai_verification_item_result(
+        self,
+        session_id: str,
+        segment_index: int,
+        ai_decision: str,  # 'VERIFIED' | 'CORRECTED' | 'UNRESOLVED'
+        ai_verified_text: str,
+        ai_confidence: float,
+        ai_explanation: str,
+        ai_model_name: str = "gemini-3.8-flash",
+        ai_scriptures: Optional[List[str]] = None,
+        auto_resolve: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Stores AI evaluation result on a verification item.
+        If auto_resolve=True:
+          - Marks item as action='confirmed' (if VERIFIED) or action='corrected' (if CORRECTED)
+          - Updates verified_text and increments verification_items_resolved
+        If auto_resolve=False (or decision is UNRESOLVED):
+          - Retains item as action='pending' for human review, attaching AI proposal & explanation.
+        """
+        await self.init_db()
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        scriptures_json = json.dumps(ai_scriptures or [], ensure_ascii=False)
+
+        async with get_db_connection() as conn:
+            cursor = await conn.execute(
+                "SELECT item_id, action, verified_text FROM verification_items WHERE session_id = ? AND segment_index = ?",
+                (session_id, segment_index),
+            )
+            item_row = await cursor.fetchone()
+            if not item_row:
+                return {"error": f"Verification item for segment {segment_index} not found"}
+
+            item_id = item_row["item_id"]
+            current_action = item_row["action"]
+
+            new_action = current_action
+            new_verified_text = item_row["verified_text"]
+            correction_note = None
+
+            if auto_resolve:
+                if ai_decision == "VERIFIED":
+                    new_action = "confirmed"
+                    new_verified_text = ai_verified_text
+                    correction_note = f"AI Verified: {ai_explanation}"
+                elif ai_decision == "CORRECTED":
+                    new_action = "corrected"
+                    new_verified_text = ai_verified_text
+                    correction_note = f"AI Corrected: {ai_explanation}"
+            else:
+                correction_note = f"AI Suggested ({ai_decision}): {ai_explanation}"
+
+            await conn.execute(
+                """
+                UPDATE verification_items
+                SET ai_decision = ?,
+                    ai_verified_text = ?,
+                    ai_confidence = ?,
+                    ai_explanation = ?,
+                    ai_model_name = ?,
+                    ai_scriptures_json = ?,
+                    action = ?,
+                    verified_text = ?,
+                    correction_note = COALESCE(?, correction_note),
+                    verified_at = CASE WHEN ? IN ('confirmed', 'corrected') THEN ? ELSE verified_at END
+                WHERE item_id = ?
+                """,
+                (
+                    ai_decision,
+                    ai_verified_text,
+                    ai_confidence,
+                    ai_explanation,
+                    ai_model_name,
+                    scriptures_json,
+                    new_action,
+                    new_verified_text,
+                    correction_note,
+                    new_action,
+                    now_iso,
+                    item_id,
+                ),
+            )
+
+            # Update resolved count in sessions
+            count_cursor = await conn.execute(
+                "SELECT COUNT(*) as resolved FROM verification_items WHERE session_id = ? AND action IN ('confirmed', 'corrected')",
+                (session_id,),
+            )
+            resolved_count = (await count_cursor.fetchone())["resolved"]
+
+            await conn.execute(
+                "UPDATE sessions SET verification_items_resolved = ? WHERE session_id = ?",
+                (resolved_count, session_id),
+            )
+            await conn.commit()
+
+        return {
+            "status": "success",
+            "item_id": item_id,
+            "session_id": session_id,
+            "segment_index": segment_index,
+            "ai_decision": ai_decision,
+            "action": new_action,
+            "verified_text": new_verified_text,
+        }
 
 
 # Singleton instance
