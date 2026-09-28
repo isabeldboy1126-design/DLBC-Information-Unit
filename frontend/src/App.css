@@ -2654,6 +2654,61 @@ textarea.form-control {
   box-shadow: var(--shadow-lg, 0 10px 25px rgba(0, 0, 0, 0.2));
 }
 
+.modal-container--edit-details {
+  max-width: 520px;
+  width: 92%;
+  background: #ffffff;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(15, 23, 42, 0.08);
+  animation: modalScaleIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.edit-details-form {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.edit-details-error-banner {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 0.65rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.form-group--nested {
+  margin-left: 0.75rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid #e2e8f0;
+}
+
+.edit-details-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #f1f5f9;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -3466,7 +3521,7 @@ textarea.form-control {
 
 .lifecycle-stepper-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   margin-bottom: 0.45rem;
 }
@@ -4336,7 +4391,7 @@ textarea.form-control {
   background: linear-gradient(135deg, #ffffff 0%, #f4f8ff 60%, #eaf2ff 100%);
   border: 1px solid rgba(29, 104, 242, 0.18);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px -4px rgba(29, 104, 242, 0.12), 0 16px 36px -6px rgba(15, 23, 42, 0.05);
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: min-height 0.28s ease, padding 0.28s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .creation-card--live:hover {
@@ -4401,11 +4456,13 @@ textarea.form-control {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 48%;
+  width: 58%;
   height: 100%;
   pointer-events: none;
   overflow: hidden;
   z-index: 1;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.08) 18%, rgba(0, 0, 0, 0.7) 50%, #000000 80%);
+  mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.08) 18%, rgba(0, 0, 0, 0.7) 50%, #000000 80%);
 }
 
 .creation-mic-hero-img {
@@ -4420,11 +4477,9 @@ textarea.form-control {
   position: absolute;
   inset: 0;
   background: linear-gradient(
-    90deg,
-    #ffffff 0%,
-    rgba(255, 255, 255, 0.9) 15%,
-    rgba(244, 248, 255, 0.5) 45%,
-    rgba(234, 242, 255, 0.05) 80%,
+    to right,
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(244, 248, 255, 0.15) 35%,
     transparent 100%
   );
   pointer-events: none;
@@ -4433,12 +4488,12 @@ textarea.form-control {
 /* Collapsed sidebar proportion preservation */
 .app-main-column--collapsed .creation-card--live,
 .app-main-column--collapsed .creation-card--youtube {
-  min-height: 215px;
-  padding: 28px 32px;
+  min-height: clamp(235px, 24vw, 260px);
+  padding: clamp(28px, 2.5vw, 36px) clamp(30px, 2.8vw, 40px);
 }
 
 .app-main-column--collapsed .creation-card-hero-wrap {
-  width: 50%;
+  width: 58%;
 }
 
 /* YouTube Session Card */
@@ -4450,7 +4505,7 @@ textarea.form-control {
   background: #ffffff;
   border: 1px solid rgba(226, 232, 240, 0.95);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 6px 18px -3px rgba(15, 23, 42, 0.05), 0 10px 24px -5px rgba(29, 104, 242, 0.04);
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: min-height 0.28s ease, padding 0.28s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .creation-card--youtube:hover {
@@ -4904,6 +4959,34 @@ textarea.form-control {
 .session-name-text {
   font-weight: 700;
   color: #0b1329;
+}
+
+.session-hierarchy-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.session-event-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.session-dominant-name {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #0b1329;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  display: block;
 }
 
 .cell-session-date,
@@ -6243,14 +6326,21 @@ textarea.form-control {
   justify-content: space-between;
   gap: 0.85rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 4px 12px rgba(11, 19, 41, 0.03);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
   min-height: 175px;
+  cursor: pointer;
+  outline: none;
 }
 
 .refined-session-card:hover {
   border-color: #cbd5e1;
-  box-shadow: 0 6px 18px rgba(11, 19, 41, 0.06);
-  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(11, 19, 41, 0.08);
+  transform: translateY(-2px);
+}
+
+.refined-session-card:focus-visible {
+  border-color: #1d68f2;
+  box-shadow: 0 0 0 3px rgba(29, 104, 242, 0.25);
 }
 
 .session-card-top-row {
@@ -6313,9 +6403,24 @@ textarea.form-control {
   border: 1px solid #fecaca;
 }
 
-/* Primary Dominant Session Title */
+/* Primary Dominant Session Title with Eyebrow */
 .session-card-title-stack {
   margin: 0.15rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-card-eyebrow {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .session-card-dominant-title {
@@ -6369,9 +6474,9 @@ textarea.form-control {
 .session-card-action-btn {
   flex: 1;
   height: 36px;
-  background: #1d68f2;
-  color: #ffffff;
-  border: 1px solid #1d68f2;
+  background: #ffffff;
+  color: #0b1329;
+  border: 1px solid #e2e8f0;
   border-radius: 7px;
   font-size: 0.84rem;
   font-weight: 600;
@@ -6384,10 +6489,10 @@ textarea.form-control {
 
 .session-card-action-btn:hover,
 .session-card-action-btn:focus {
-  background: #1558d6;
+  background: #1d68f2;
   color: #ffffff;
-  border-color: #1558d6;
-  box-shadow: 0 4px 12px rgba(29, 104, 242, 0.3);
+  border-color: #1d68f2;
+  box-shadow: 0 4px 12px rgba(29, 104, 242, 0.25);
 }
 
 .session-card-delete-icon-btn {

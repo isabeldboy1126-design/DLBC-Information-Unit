@@ -472,7 +472,7 @@ export function DashboardView({
                   </td>
                 </tr>
               ) : (
-                recentSessions.map((sess) => {
+                  recentSessions.map((sess) => {
                   const isInterrupted = !!sess.is_interrupted
                   const isFinalComplete = sess.final_report_status === 'complete'
                   const isProofreadComplete = sess.proofreading_status === 'complete'
@@ -480,6 +480,8 @@ export function DashboardView({
                   const isReportsReady = sess.reporting_status === 'reports_ready'
                   const isVerified = sess.verification_status === 'completed' || !!sess.verified_text || !!sess.verified_at
                   const needsVerification = !isVerified && (sess.flag_count > 0 || sess.verification_status === 'in_progress')
+
+                  const { programme: progName, sessionTitle: sessName } = getSessionHierarchy(sess)
 
                   let statusText = 'IN PROGRESS'
                   let statusClass = 'status-pill--progress'
@@ -507,11 +509,34 @@ export function DashboardView({
                     statusClass = 'status-pill--warning'
                   }
 
+                  let actionBtnText = 'View →'
+                  let targetStage = 'overview'
+
+                  if (isInterrupted) {
+                    actionBtnText = 'Review →'
+                    targetStage = 'overview'
+                  } else if (needsVerification) {
+                    actionBtnText = 'Review →'
+                    targetStage = 'verification'
+                  } else if (isReportsReady) {
+                    actionBtnText = 'Reports →'
+                    targetStage = 'reporting'
+                  } else if (isEditingComplete || sess.editing_status === 'draft_ready') {
+                    actionBtnText = 'Continue →'
+                    targetStage = 'editing'
+                  } else if (isProofreadComplete || sess.proofreading_status === 'ready_for_review') {
+                    actionBtnText = 'Continue →'
+                    targetStage = 'proofreading'
+                  } else if (isFinalComplete) {
+                    actionBtnText = 'View Report →'
+                    targetStage = 'final_report'
+                  }
+
                   return (
                     <tr
                       key={sess.session_id}
                       className="recent-table-row"
-                      onClick={() => onOpenSession(sess.session_id)}
+                      onClick={() => onOpenSession(sess.session_id, 'overview')}
                       title="Open session workspace"
                     >
                       <td className="cell-session-name">
@@ -519,7 +544,14 @@ export function DashboardView({
                           <div className="table-doc-icon">
                             <DocumentItemIcon />
                           </div>
-                          <span className="session-name-text">{sess.title || 'Untitled Session'}</span>
+                          <div className="session-hierarchy-stack">
+                            {progName && (
+                              <span className="session-event-eyebrow">{progName}</span>
+                            )}
+                            <span className="session-dominant-name">
+                              {sessName || sess.title || 'Untitled Session'}
+                            </span>
+                          </div>
                         </div>
                       </td>
 
@@ -545,10 +577,10 @@ export function DashboardView({
                             className="table-view-btn"
                             onClick={(e) => {
                               e.stopPropagation()
-                              onOpenSession(sess.session_id)
+                              onOpenSession(sess.session_id, targetStage)
                             }}
                           >
-                            View <span aria-hidden="true">→</span>
+                            {actionBtnText}
                           </button>
                         </div>
                       </td>
@@ -567,6 +599,8 @@ export function DashboardView({
               const isVerified = sess.verification_status === 'completed' || !!sess.verified_text || !!sess.verified_at
               const needsVerification = !isVerified && (sess.flag_count > 0 || sess.verification_status === 'in_progress')
 
+              const { programme: progName, sessionTitle: sessName } = getSessionHierarchy(sess)
+
               let statusText = 'IN PROGRESS'
               let statusClass = 'status-pill--progress'
 
@@ -584,18 +618,39 @@ export function DashboardView({
                 statusClass = 'status-pill--warning'
               }
 
+              let mobileActionBtnText = 'View →'
+              let mobileTargetStage = 'overview'
+
+              if (isInterrupted) {
+                mobileActionBtnText = 'Review →'
+                mobileTargetStage = 'overview'
+              } else if (needsVerification) {
+                mobileActionBtnText = 'Review →'
+                mobileTargetStage = 'verification'
+              } else if (isFinalComplete) {
+                mobileActionBtnText = 'View Report →'
+                mobileTargetStage = 'final_report'
+              }
+
               return (
                 <div
                   key={sess.session_id}
                   className="recent-mobile-item"
-                  onClick={() => onOpenSession(sess.session_id)}
+                  onClick={() => onOpenSession(sess.session_id, 'overview')}
                 >
                   <div className="mobile-item-top">
                     <div className="mobile-item-title-flex">
                       <div className="table-doc-icon">
                         <DocumentItemIcon />
                       </div>
-                      <span className="mobile-item-title">{sess.title || 'Untitled Session'}</span>
+                      <div className="session-hierarchy-stack">
+                        {progName && (
+                          <span className="session-event-eyebrow">{progName}</span>
+                        )}
+                        <span className="session-dominant-name">
+                          {sessName || sess.title || 'Untitled Session'}
+                        </span>
+                      </div>
                     </div>
 
                     <span className={`recent-status-pill ${statusClass}`}>
@@ -616,10 +671,10 @@ export function DashboardView({
                       className="table-view-btn"
                       onClick={(e) => {
                         e.stopPropagation()
-                        onOpenSession(sess.session_id)
+                        onOpenSession(sess.session_id, mobileTargetStage)
                       }}
                     >
-                      View <span aria-hidden="true">→</span>
+                      {mobileActionBtnText}
                     </button>
                   </div>
                 </div>

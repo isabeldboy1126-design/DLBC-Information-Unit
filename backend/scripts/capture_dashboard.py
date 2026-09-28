@@ -1,17 +1,11 @@
 import asyncio, json, urllib.request, subprocess, time, base64, os, websockets
 
-viewports = [
-    ('dashboard_1440_desktop.png', 1440, 900, False, 0),
-    ('dashboard_1024_tablet.png', 1024, 768, False, 0),
-    ('dashboard_768_tablet_portrait.png', 768, 1024, False, 0),
-    ('dashboard_390_mobile_top.png', 390, 844, True, 0),
-    ('dashboard_390_mobile_scrolled.png', 390, 844, True, 520),
-    ('dashboard_360_small_mobile.png', 360, 780, True, 0),
-]
+SCREENSHOTS_DIR = os.path.abspath(r'C:\Users\Isabel\.gemini\antigravity\brain\247bee94-e881-475c-b2ef-808bc6d16e8b\screenshots')
+os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 
 async def capture_all():
     chrome_path = r'C:\Program Files\Google\Chrome\Application\chrome.exe'
-    user_data = r'C:\Users\Isabel\AppData\Local\Temp\chrome_final_caps'
+    user_data = r'C:\Users\Isabel\AppData\Local\Temp\chrome_final_caps_v2'
     proc = subprocess.Popen([
         chrome_path,
         '--headless=new',
@@ -41,69 +35,62 @@ async def capture_all():
                         return resp.get('result', {})
 
             await send_cmd('Page.enable')
+            await send_cmd('Emulation.setDeviceMetricsOverride', {
+                'width': 1440,
+                'height': 900,
+                'deviceScaleFactor': 1,
+                'mobile': False
+            })
 
-            for filename, w, h, is_mob, scroll_y in viewports:
-                await send_cmd('Emulation.setDeviceMetricsOverride', {
-                    'width': w,
-                    'height': h,
-                    'deviceScaleFactor': 1,
-                    'mobile': is_mob
-                })
-                await asyncio.sleep(1.2)
-                scroll_expr = f"document.querySelector('.app-content-body').scrollTop = {scroll_y};"
-                await send_cmd('Runtime.evaluate', {'expression': scroll_expr})
-                await asyncio.sleep(0.5)
-
-                shot = await send_cmd('Page.captureScreenshot', {'format': 'png'})
-                data = base64.b64decode(shot['data'])
-                out_path = os.path.abspath(os.path.join('ux-review-screenshots', filename))
-                with open(out_path, 'wb') as f:
+            async def shot(filename):
+                res = await send_cmd('Page.captureScreenshot', {'format': 'png'})
+                data = base64.b64decode(res['data'])
+                p = os.path.join(SCREENSHOTS_DIR, filename)
+                with open(p, 'wb') as f:
                     f.write(data)
-                print(f'{filename}: {len(data)} bytes')
+                print(f"Captured: {filename} ({len(data)} bytes)")
 
-            # --- Interactive Flow Validation ---
-            print("\n--- Validating Navigation & Interactive Handlers ---")
-            await send_cmd('Emulation.setDeviceMetricsOverride', {'width': 1440, 'height': 900, 'deviceScaleFactor': 1, 'mobile': False})
-            await send_cmd('Runtime.evaluate', {'expression': "document.querySelector('.app-content-body').scrollTop = 0;"})
+            # 1. Dashboard Expanded
+            await asyncio.sleep(1.0)
+            await shot('dashboard_desktop_latest.png')
+
+            # 2. Dashboard Collapsed
+            await send_cmd('Runtime.evaluate', {
+                'expression': "document.querySelector('.sidebar-toggle-btn')?.click() || document.querySelector('[aria-label=\"Collapse sidebar\"]')?.click()"
+            })
+            await asyncio.sleep(0.8)
+            await shot('dashboard_collapsed_latest.png')
+
+            # Expand sidebar back
+            await send_cmd('Runtime.evaluate', {
+                'expression': "document.querySelector('.sidebar-toggle-btn')?.click() || document.querySelector('[aria-label=\"Expand sidebar\"]')?.click()"
+            })
             await asyncio.sleep(0.5)
 
-            async def eval_js(expr):
-                r = await send_cmd('Runtime.evaluate', {'expression': expr, 'returnByValue': True})
-                return r.get('result', {}).get('value')
+            # 3. Sessions History
+            await send_cmd('Runtime.evaluate', {
+                'expression': "Array.from(document.querySelectorAll('.sidebar-nav-item, .sidebar-nav-btn')).find(el => el.textContent.includes('Sessions'))?.click()"
+            })
+            await asyncio.sleep(1.2)
+            await shot('sessions_history_cards.png')
 
-            t1 = await eval_js("document.querySelector('.topbar-screen-title').innerText")
-            print(f"Initial Screen: '{t1}'")
+            # 4. Open first session workspace by clicking card body
+            await send_cmd('Runtime.evaluate', {
+                'expression': "document.querySelector('.refined-session-card')?.click()"
+            })
+            await asyncio.sleep(1.2)
+            await shot('session_workspace_latest.png')
 
-            # 1. Start Live Session click
-            await eval_js("document.getElementById('hero-card-start-live').click()")
+            # 5. Open Edit Details modal
+            await send_cmd('Runtime.evaluate', {
+                'expression': "document.querySelector('.btn-workspace-edit-details')?.click()"
+            })
             await asyncio.sleep(0.8)
-            t2 = await eval_js("document.querySelector('.topbar-screen-title').innerText")
-            print(f"Clicked Start Live Session -> Screen: '{t2}'")
+            await shot('session_workspace_edit_modal.png')
 
-            # Return to Dashboard
-            await eval_js("document.getElementById('nav-link-dashboard').click()")
-            await asyncio.sleep(0.8)
-
-            # 2. YouTube Session click
-            await eval_js("document.getElementById('hero-card-youtube').click()")
-            await asyncio.sleep(0.8)
-            t3 = await eval_js("document.querySelector('.topbar-screen-title').innerText")
-            print(f"Clicked YouTube Session -> Screen: '{t3}'")
-
-            # Return to Dashboard
-            await eval_js("document.getElementById('nav-link-dashboard').click()")
-            await asyncio.sleep(0.8)
-
-            # 3. Attention Card Action click
-            has_attention = await eval_js("document.querySelector('.attention-action-btn') !== null")
-            if has_attention:
-                await eval_js("document.querySelector('.attention-action-btn').click()")
-                await asyncio.sleep(1.0)
-                t4 = await eval_js("document.querySelector('.topbar-screen-title').innerText")
-                print(f"Clicked Attention Action -> Screen: '{t4}'")
-
-            print("\nALL INTERACTIVE FLOW ASSERTIONS COMPLETED!")
+            print("All captures completed successfully!")
     finally:
         proc.terminate()
+        proc.wait()
 
 asyncio.run(capture_all())

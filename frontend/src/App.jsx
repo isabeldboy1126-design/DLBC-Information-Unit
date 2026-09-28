@@ -68,6 +68,7 @@ function App() {
     onBack: null,
   })
   const [sessionsStatusFilter, setSessionsStatusFilter] = useState('all')
+  const [sessionInitialStage, setSessionInitialStage] = useState('overview')
 
   // Phase 1 & 3: Audio Capture & Live Transcription Hook
   const liveAudio = useAudioCapture()
@@ -331,12 +332,13 @@ function App() {
             }
           }}
           onStartYouTubeSession={() => setCurrentView('youtube')}
-          onOpenSession={(sessionId) => {
+          onOpenSession={(sessionId, initialStage = 'overview') => {
             const activeRecId = liveAudio.latestSession?.session_id || liveAudio.latestRecording?.session_id
             if (liveAudio.isRecording && (sessionId === activeRecId || sessionsHook.sessions.find((s) => s.session_id === sessionId)?.status === 'recording')) {
               setIsRecorderMinimized(false)
               return
             }
+            setSessionInitialStage(initialStage)
             sessionsHook.loadSession(sessionId)
             setCurrentView('sessions')
           }}
@@ -382,12 +384,13 @@ function App() {
         !sessionsHook.activeSession ? (
           <SessionHistoryList
             sessions={sessionsHook.sessions}
-            onOpenSession={(sessionId) => {
+            onOpenSession={(sessionId, initialStage = 'overview') => {
               const activeRecId = liveAudio.latestSession?.session_id || liveAudio.latestRecording?.session_id
               if (liveAudio.isRecording && (sessionId === activeRecId || sessionsHook.sessions.find((s) => s.session_id === sessionId)?.status === 'recording')) {
                 setIsRecorderMinimized(false)
                 return
               }
+              setSessionInitialStage(initialStage)
               sessionsHook.loadSession(sessionId)
             }}
             onDeleteSession={sessionsHook.deleteSession}
@@ -405,8 +408,10 @@ function App() {
         ) : (
           <SessionDetailView
             session={sessionsHook.activeSession}
+            initialStage={sessionInitialStage}
             onBack={sessionsHook.closeActiveSession}
             onUpdateTitle={sessionsHook.updateSessionTitle}
+            onUpdateDetails={sessionsHook.updateSessionDetails}
             onSubViewChange={setSessionSubViewInfo}
             verificationState={sessionsHook.verificationState}
             onStartVerification={sessionsHook.startVerification}

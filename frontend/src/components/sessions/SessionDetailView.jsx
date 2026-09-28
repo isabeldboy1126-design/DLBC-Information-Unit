@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
+import { getApiUrl } from '../../config'
 import { RawTranscriptViewer } from '../transcription/RawTranscriptViewer'
 import { VerificationWorkflow } from '../verification/VerificationWorkflow'
 import { ReportingView } from '../reporting/ReportingView'
@@ -128,8 +129,10 @@ export function getSessionHierarchy(session) {
  */
 export function SessionDetailView({
   session,
+  initialStage = 'overview',
   onBack,
   onUpdateTitle,
+  onUpdateDetails,
   onSubViewChange,
   // Phase 5: Verification props
   verificationState,
@@ -142,6 +145,10 @@ export function SessionDetailView({
   onConfirmRawAsVerified,
 }) {
   const getDefaultView = () => {
+    if (initialStage) {
+      return initialStage
+    }
+
     const fStatus = session?.final_report_status || 'not_started'
     const pStatus = session?.proofreading_status || 'not_started'
     const eStatus = session?.editing_status || 'not_started'
@@ -165,20 +172,18 @@ export function SessionDetailView({
   }
 
   const [activeView, setActiveView] = useState(getDefaultView)
-  const [isEditingTitle, setIsEditingTitle] = useState(false)
-  const [editedTitle, setEditedTitle] = useState(session?.title || '')
-  const [isSavingTitle, setIsSavingTitle] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const mediaElementRef = useRef(null)
 
-  // Synchronize activeView when opening a new session or changing hash route
-  React.useEffect(() => {
+  // Synchronize activeView when opening a new session or changing initialStage or hash route
+  useEffect(() => {
     setActiveView(getDefaultView())
     const handleHash = () => {
       setActiveView(getDefaultView())
     }
     window.addEventListener('hashchange', handleHash)
     return () => window.removeEventListener('hashchange', handleHash)
-  }, [session?.session_id])
+  }, [session?.session_id, initialStage])
 
   // Inform parent AppShell about current subview title and back action
   React.useEffect(() => {
@@ -269,14 +274,11 @@ export function SessionDetailView({
     }
   }
 
-  const handleSaveTitle = async () => {
-    if (!editedTitle.trim()) return
-    setIsSavingTitle(true)
-    const success = await onUpdateTitle(session.session_id, editedTitle.trim())
-    setIsSavingTitle(false)
-    if (success) {
-      setIsEditingTitle(false)
+  const handleSaveDetails = async (details) => {
+    if (onUpdateDetails) {
+      return await onUpdateDetails(session.session_id, details)
     }
+    return false
   }
 
   const handleJumpToTime = (seconds) => {
@@ -442,42 +444,12 @@ export function SessionDetailView({
           <div className="session-programme-eyebrow">{progDisplay}</div>
 
           <div className="session-title-row">
-            {isEditingTitle ? (
-              <div className="workspace-title-edit-box">
-                <input
-                  type="text"
-                  className="form-control title-input-large"
-                  value={editedTitle}
-                  onChange={(e) => setEditedTitle(e.target.value)}
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  className="btn btn--primary btn--small"
-                  onClick={handleSaveTitle}
-                  disabled={isSavingTitle}
-                >
-                  {isSavingTitle ? 'Saving...' : 'Save Title'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--secondary btn--small"
-                  onClick={() => setIsEditingTitle(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <h1 className="session-dominant-title">{sessionDisplay}</h1>
-            )}
+            <h1 className="session-dominant-title">{sessionDisplay}</h1>
 
             <button
               type="button"
               className="btn-workspace-edit-details"
-              onClick={() => {
-                setEditedTitle(session.title || sessionDisplay)
-                setIsEditingTitle(!isEditingTitle)
-              }}
+              onClick={() => setIsEditModalOpen(true)}
               title="Edit session details"
             >
               <PencilIcon />
@@ -831,6 +803,294 @@ export function SessionDetailView({
           </div>
         </div>
       ) : null}
+
+      {/* 5. Centered Floating Dialog for Editing Session Details */}
+      <EditSessionDetailsModal
+        isOpen={isEditModalOpen}
+        session={session}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleSaveDetails}
+      />
+    </div>
+  )
+}
+
+/**
+ * EditSessionDetailsModal — Centered floating dialog for editing:
+ * (1) Event / Programme
+ * (2) Session / Section (cascading dependency)
+ * (3) Pastor / Minister
+ * Persists immediately via onSave, without refresh. No start/stop timestamps.
+ */
+function EditSessionDetailsModal({ isOpen, session, onClose, onSave }) {
+  const { programme: initialProg, sessionTitle: initialSess, preacher: initialPreacher } = getSessionHierarchy(session)
+  const [programmes, setProgrammes] = useState([])
+  const [selectedProgramme, setSelectedProgramme] = useState(initialProg)
+  const [customProgramme, setCustomProgramme] = useState('')
+  const [selectedSession, setSelectedSession] = useState(initialSess)
+  const [customSession, setCustomSession] = useState('')
+  const [minister, setMinister] = useState(initialPreacher)
+  const [isSaving, setIsSaving] = useState(false)
+  const [errorMsg, setErrorMsg] = useState(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    let isMounted = true
+    async function loadProgrammes() {
+      try {
+        const res = await fetch(getApiUrl('/api/programmes?include_archived=false'))
+        if (res.ok && isMounted) {
+          const data = await res.json()
+          setProgrammes(data)
+        }
+      } catch (err) {
+        console.error('Failed to load programmes in EditSessionDetailsModal:', err)
+      }
+    }
+    loadProgrammes()
+    return () => { isMounted = false }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedProgramme(initialProg)
+      setSelectedSession(initialSess)
+      setMinister(initialPreacher)
+      setCustomProgramme('')
+      setCustomSession('')
+      setErrorMsg(null)
+    }
+  }, [isOpen, initialProg, initialSess, initialPreacher])
+
+  if (!isOpen) return null
+
+  const matchedProg = programmes.find((p) => p.name === selectedProgramme || p.id === selectedProgramme)
+  const activeSessions = (matchedProg?.sessions || []).filter((s) => !s.is_archived)
+
+  const handleProgrammeChange = (val) => {
+    setSelectedProgramme(val)
+    if (val === '__custom__') {
+      setSelectedSession('__custom__')
+      return
+    }
+    const found = programmes.find((p) => p.name === val || p.id === val)
+    const progSessions = (found?.sessions || []).filter((s) => !s.is_archived)
+    if (progSessions.length > 0) {
+      setSelectedSession(progSessions[0].name)
+    } else {
+      setSelectedSession('')
+    }
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setErrorMsg(null)
+
+    const finalProgramme = selectedProgramme === '__custom__'
+      ? customProgramme.trim()
+      : selectedProgramme.trim()
+    const finalSession = selectedSession === '__custom__'
+      ? customSession.trim()
+      : selectedSession.trim()
+    const finalMinister = minister.trim()
+
+    if (!finalProgramme) {
+      setErrorMsg('Please select or specify an Event / Programme.')
+      return
+    }
+    if (!finalSession) {
+      setErrorMsg('Please select or enter a Session / Section name.')
+      return
+    }
+
+    try {
+      setIsSaving(true)
+      const success = await onSave({
+        programme: finalProgramme,
+        sessionTitle: finalSession,
+        minister: finalMinister,
+      })
+      if (success) {
+        onClose()
+      } else {
+        setErrorMsg('Failed to update session details. Please try again.')
+      }
+    } catch (err) {
+      setErrorMsg(err.message || 'An unexpected error occurred.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="edit-details-title">
+      <div className="modal-container modal-container--edit-details" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h2 id="edit-details-title" className="modal-title">Edit Session Details</h2>
+            <p className="modal-subtitle">Update event metadata, session classification, and minister</p>
+          </div>
+          <button type="button" className="btn-close" onClick={onClose} aria-label="Close dialog">
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="edit-details-form">
+          {errorMsg && (
+            <div className="edit-details-error-banner" role="alert">
+              {errorMsg}
+            </div>
+          )}
+
+          {/* 1. Event / Programme */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="edit-event-select">
+              Event / Programme <span className="form-required">*</span>
+            </label>
+            <select
+              id="edit-event-select"
+              className="form-control"
+              value={
+                programmes.some((p) => p.name === selectedProgramme)
+                  ? selectedProgramme
+                  : selectedProgramme === '__custom__'
+                  ? '__custom__'
+                  : selectedProgramme
+                  ? selectedProgramme
+                  : ''
+              }
+              onChange={(e) => handleProgrammeChange(e.target.value)}
+              required
+            >
+              <option value="" disabled>Select an Event / Programme...</option>
+              {programmes.map((p) => (
+                <option key={p.id} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
+              {selectedProgramme && !programmes.some((p) => p.name === selectedProgramme) && selectedProgramme !== '__custom__' && (
+                <option value={selectedProgramme}>{selectedProgramme} (Current)</option>
+              )}
+              <option value="__custom__">+ Custom Event / Programme...</option>
+            </select>
+          </div>
+
+          {selectedProgramme === '__custom__' && (
+            <div className="form-group form-group--nested">
+              <label className="form-label" htmlFor="edit-custom-event-input">
+                Custom Event Name <span className="form-required">*</span>
+              </label>
+              <input
+                id="edit-custom-event-input"
+                type="text"
+                className="form-control"
+                placeholder="e.g. Special Ministers Conference"
+                value={customProgramme}
+                onChange={(e) => setCustomProgramme(e.target.value)}
+                autoFocus
+                required
+              />
+            </div>
+          )}
+
+          {/* 2. Session / Section (Cascading) */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="edit-session-select">
+              Session / Section <span className="form-required">*</span>
+            </label>
+            {activeSessions.length > 0 && selectedProgramme !== '__custom__' ? (
+              <select
+                id="edit-session-select"
+                className="form-control"
+                value={
+                  activeSessions.some((s) => s.name === selectedSession)
+                    ? selectedSession
+                    : selectedSession === '__custom__'
+                    ? '__custom__'
+                    : selectedSession || ''
+                }
+                onChange={(e) => setSelectedSession(e.target.value)}
+                required
+              >
+                <option value="" disabled>Select a Session / Section...</option>
+                {activeSessions.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name}
+                  </option>
+                ))}
+                {selectedSession && !activeSessions.some((s) => s.name === selectedSession) && selectedSession !== '__custom__' && (
+                  <option value={selectedSession}>{selectedSession} (Current)</option>
+                )}
+                <option value="__custom__">+ Custom Session Name...</option>
+              </select>
+            ) : (
+              <input
+                id="edit-session-input"
+                type="text"
+                className="form-control"
+                placeholder="e.g. Sunday Morning Worship Service"
+                value={selectedSession === '__custom__' ? customSession : selectedSession}
+                onChange={(e) => {
+                  setSelectedSession(e.target.value)
+                  setCustomSession(e.target.value)
+                }}
+                required
+              />
+            )}
+          </div>
+
+          {selectedSession === '__custom__' && activeSessions.length > 0 && selectedProgramme !== '__custom__' && (
+            <div className="form-group form-group--nested">
+              <label className="form-label" htmlFor="edit-custom-session-input">
+                Custom Session Name <span className="form-required">*</span>
+              </label>
+              <input
+                id="edit-custom-session-input"
+                type="text"
+                className="form-control"
+                placeholder="e.g. Day 2 Morning Impartation"
+                value={customSession}
+                onChange={(e) => setCustomSession(e.target.value)}
+                autoFocus
+                required
+              />
+            </div>
+          )}
+
+          {/* 3. Pastor / Minister */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="edit-minister-input">
+              Pastor / Minister
+            </label>
+            <input
+              id="edit-minister-input"
+              type="text"
+              className="form-control"
+              placeholder="e.g. Pastor W.F. Kumuyi"
+              value={minister}
+              onChange={(e) => setMinister(e.target.value)}
+            />
+          </div>
+
+          <div className="modal-actions edit-details-actions">
+            <button
+              type="button"
+              className="btn btn--secondary"
+              onClick={onClose}
+              disabled={isSaving}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={isSaving}
+            >
+              {isSaving ? 'Saving Changes...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

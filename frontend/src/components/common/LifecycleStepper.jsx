@@ -109,7 +109,6 @@ export function LifecycleStepper({ session, activeStage, onSelectStage, compact 
   return (
     <div className={`lifecycle-stepper-container ${compact ? 'lifecycle-stepper--compact' : ''}`}>
       <div className="lifecycle-stepper-header">
-        <span className="lifecycle-stepper-title">Session Lifecycle</span>
         <span className="lifecycle-stepper-counter">Step {currentStepNumber} of 8</span>
       </div>
 

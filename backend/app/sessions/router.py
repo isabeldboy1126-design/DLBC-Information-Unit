@@ -22,8 +22,12 @@ class CreateSessionRequest(BaseModel):
     verified_text: Optional[str] = None
 
 
-class UpdateTitleRequest(BaseModel):
-    title: str
+class UpdateSessionRequest(BaseModel):
+    title: Optional[str] = None
+    programme: Optional[str] = None
+    session_title: Optional[str] = None
+    session_name: Optional[str] = None
+    minister: Optional[str] = None
 
 
 @router.get("")
@@ -59,11 +63,25 @@ async def get_session(session_id: str):
 
 
 @router.patch("/{session_id}")
-async def update_session_title(session_id: str, payload: UpdateTitleRequest):
-    """Renames a session title cleanly without modifying underlying files or IDs."""
-    if not payload.title or not payload.title.strip():
-        raise HTTPException(status_code=400, detail="Title cannot be empty.")
-    session = await session_repo.update_session_title(session_id, payload.title)
+async def update_session(session_id: str, payload: UpdateSessionRequest):
+    """Updates session metadata (programme, session title, minister) or title cleanly."""
+    if (
+        not payload.title
+        and not payload.programme
+        and not payload.session_title
+        and not payload.session_name
+        and payload.minister is None
+    ):
+        raise HTTPException(status_code=400, detail="No fields provided to update.")
+
+    sess_title = payload.session_title or payload.session_name
+    session = await session_repo.update_session_details(
+        session_id=session_id,
+        title=payload.title,
+        programme=payload.programme,
+        session_name=sess_title,
+        minister=payload.minister,
+    )
     if not session:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
     return {"session": session}

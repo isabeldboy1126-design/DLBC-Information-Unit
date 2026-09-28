@@ -73,6 +73,35 @@ export function useSessions() {
     }
   }, [])
 
+  // Update full session details (programme, session title, minister)
+  const updateSessionDetails = useCallback(async (sessionId, { programme, sessionTitle, minister }) => {
+    setError(null)
+    try {
+      const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          programme: programme !== undefined ? programme.trim() : undefined,
+          session_title: sessionTitle !== undefined ? sessionTitle.trim() : undefined,
+          minister: minister !== undefined ? minister.trim() : undefined,
+        }),
+      })
+      if (!res.ok) throw new Error(`Failed to update session details: ${res.status}`)
+      const data = await res.json()
+      if (data.session) {
+        setActiveSession(data.session)
+        setSessions((prev) =>
+          prev.map((s) => (s.session_id === sessionId ? data.session : s))
+        )
+      }
+      return data.session || true
+    } catch (err) {
+      console.error('Error updating session details:', err)
+      setError(err.message)
+      return false
+    }
+  }, [])
+
   // Explicitly delete a session
   const deleteSession = useCallback(async (sessionId) => {
     setError(null)
@@ -323,6 +352,7 @@ export function useSessions() {
     fetchSessions,
     loadSession,
     updateSessionTitle,
+    updateSessionDetails,
     deleteSession,
     closeActiveSession,
     // Phase 5: Verification

@@ -507,58 +507,81 @@ export function SessionHistoryList({
             const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
             const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress') && !isReportsReady && !isEditingComplete && !isEditingDraft && !isProofreadComplete && !isProofreadingReview && !isFinalComplete
 
-            // Status label and pill color scheme (normal states use neutral/brand; only warning/danger use semantic color)
+            // Status label, pill color scheme, and target workflow stage
             let statusLabel = 'In Progress'
             let statusPillClass = 'session-card-pill--neutral'
             let actionText = 'View →'
+            let targetWorkflowStage = 'overview'
 
             if (isInterrupted) {
               statusLabel = 'Interrupted'
               statusPillClass = 'session-card-pill--danger'
               actionText = 'Review Log →'
+              targetWorkflowStage = 'overview'
             } else if (isLive) {
               statusLabel = 'Live'
               statusPillClass = 'session-card-pill--brand'
               actionText = 'Open Monitor →'
+              targetWorkflowStage = 'overview'
             } else if (isFinalComplete) {
               statusLabel = 'Completed'
               statusPillClass = 'session-card-pill--neutral'
               actionText = 'Download Document →'
+              targetWorkflowStage = 'final_report'
             } else if (isProofreadComplete) {
               statusLabel = 'Proofread'
               statusPillClass = 'session-card-pill--neutral'
               actionText = 'Final Report →'
+              targetWorkflowStage = 'final_report'
             } else if (isProofreadingReview) {
               statusLabel = 'Proofreading'
               statusPillClass = 'session-card-pill--neutral'
               actionText = 'Continue →'
+              targetWorkflowStage = 'proofreading'
             } else if (isEditingComplete) {
               statusLabel = 'Editing Done'
               statusPillClass = 'session-card-pill--neutral'
               actionText = 'Proofreading →'
+              targetWorkflowStage = 'proofreading'
             } else if (isEditingDraft) {
               statusLabel = 'Editing'
               statusPillClass = 'session-card-pill--neutral'
               actionText = 'Continue →'
+              targetWorkflowStage = 'editing'
             } else if (isReportsReady) {
               statusLabel = 'Reports Ready'
               statusPillClass = 'session-card-pill--neutral'
               actionText = 'Continue to Editing →'
+              targetWorkflowStage = 'editing'
             } else if (isVerified) {
               statusLabel = 'Verified'
               statusPillClass = 'session-card-pill--neutral'
               actionText = 'Continue to Reporting →'
+              targetWorkflowStage = 'reporting'
             } else if (needsVerification) {
               statusLabel = 'Needs Verification'
               statusPillClass = 'session-card-pill--warning'
               actionText = 'Review →'
+              targetWorkflowStage = 'verification'
             }
 
             const formattedDate = formatCardDate(s.date_created)
             const humanDuration = formatHumanDuration(s.duration_seconds || s.audio_duration_seconds)
 
             return (
-              <div key={s.session_id} className="refined-session-card">
+              <div
+                key={s.session_id}
+                className="refined-session-card"
+                onClick={() => onOpenSession && onOpenSession(s.session_id, 'overview')}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    if (onOpenSession) onOpenSession(s.session_id, 'overview')
+                  }
+                }}
+              >
                 {/* Top Row: Status Pill */}
                 <div className="session-card-top-row">
                   <span className={`session-card-pill ${statusPillClass}`}>
@@ -567,8 +590,11 @@ export function SessionHistoryList({
                   </span>
                 </div>
 
-                {/* Primary Dominant Session Title */}
+                {/* Primary Dominant Session Title with Programme Eyebrow */}
                 <div className="session-card-title-stack">
+                  {programmeName && (
+                    <span className="session-card-eyebrow">{programmeName}</span>
+                  )}
                   <h2 className="session-card-dominant-title" title={sessionName}>
                     {sessionName}
                   </h2>
@@ -583,12 +609,15 @@ export function SessionHistoryList({
                   </span>
                 </div>
 
-                {/* Footer: Interactive Next Action (white at rest, blue on hover) & Quiet Delete */}
+                {/* Footer: Interactive Next Action & Quiet Delete */}
                 <div className="session-card-footer">
                   <button
                     type="button"
                     className="session-card-action-btn"
-                    onClick={() => onOpenSession(s.session_id)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (onOpenSession) onOpenSession(s.session_id, targetWorkflowStage)
+                    }}
                   >
                     {actionText}
                   </button>

@@ -463,6 +463,54 @@ class SessionRepository:
             await conn.commit()
         return await self.get_session(session_id)
 
+    async def update_session_details(
+        self,
+        session_id: str,
+        title: Optional[str] = None,
+        programme: Optional[str] = None,
+        session_name: Optional[str] = None,
+        minister: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Updates session metadata (programme, session title, minister) and updates title cleanly."""
+        current = await self.get_session(session_id)
+        if not current:
+            return None
+
+        # Parse existing metadata
+        meta = {}
+        raw_meta = current.get("metadata_json")
+        if raw_meta:
+            try:
+                meta = json.loads(raw_meta) if isinstance(raw_meta, str) else raw_meta
+            except Exception:
+                meta = {}
+
+        if programme is not None:
+            meta["programme"] = programme.strip()
+            meta["eventType"] = programme.strip()
+        if session_name is not None:
+            meta["programmeSession"] = session_name.strip()
+            meta["session_name"] = session_name.strip()
+            meta["messageTitle"] = session_name.strip()
+        if minister is not None:
+            meta["minister"] = minister.strip()
+
+        # Determine new title
+        new_title = current.get("title")
+        if title and title.strip():
+            new_title = title.strip()
+        elif session_name and session_name.strip():
+            new_title = session_name.strip()
+
+        async with get_db_connection() as conn:
+            await conn.execute(
+                "UPDATE sessions SET title = ?, metadata_json = ? WHERE session_id = ?",
+                (new_title, json.dumps(meta), session_id),
+            )
+            await conn.commit()
+
+        return await self.get_session(session_id)
+
     async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Retrieves a full session with linked audio, transcript segments, and flags."""
         await self.init_db()
