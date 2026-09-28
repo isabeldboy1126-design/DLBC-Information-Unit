@@ -4446,16 +4446,29 @@ textarea.form-control {
   justify-content: space-between;
   padding: 26px 28px;
   min-height: 200px;
-  background: linear-gradient(135deg, #ffffff 0%, #f4f8ff 60%, #eaf2ff 100%);
-  border: 1px solid rgba(29, 104, 242, 0.18);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px -4px rgba(29, 104, 242, 0.12), 0 16px 36px -6px rgba(15, 23, 42, 0.05);
+  background-color: #0b1528;
+  background-image:
+    linear-gradient(
+      to right,
+      rgba(9, 18, 36, 0.94) 0%,
+      rgba(9, 20, 40, 0.88) 32%,
+      rgba(11, 24, 48, 0.65) 55%,
+      rgba(13, 28, 56, 0.25) 80%,
+      rgba(13, 28, 56, 0.08) 100%
+    ),
+    url('./assets/dashboard/start-live-background.png');
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: right center;
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 8px 24px -4px rgba(11, 24, 48, 0.25), 0 16px 36px -6px rgba(15, 23, 42, 0.18);
   transition: min-height 0.28s ease, padding 0.28s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .creation-card--live:hover {
   transform: translateY(-2px);
-  border-color: rgba(29, 104, 242, 0.32);
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04), 0 14px 34px -4px rgba(29, 104, 242, 0.18), 0 22px 48px -8px rgba(15, 23, 42, 0.08);
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08), 0 14px 34px -4px rgba(11, 24, 48, 0.35), 0 22px 48px -8px rgba(29, 104, 242, 0.22);
 }
 
 .creation-card--live .creation-card-body {
@@ -4465,6 +4478,30 @@ textarea.form-control {
   z-index: 2;
   max-width: 320px;
   gap: 12px;
+}
+
+.creation-card--live .creation-card-title {
+  color: #ffffff;
+  letter-spacing: -0.015em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.creation-card--live .creation-card-desc {
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.creation-card--live .creation-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.75);
+}
+
+.creation-card--live .creation-status-label {
+  color: #e2e8f0;
+  font-weight: 600;
 }
 
 .creation-card-text {
@@ -4509,40 +4546,6 @@ textarea.form-control {
   color: #64748b;
 }
 
-.creation-card-hero-wrap {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 58%;
-  height: 100%;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 1;
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.08) 18%, rgba(0, 0, 0, 0.7) 50%, #000000 80%);
-  mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.08) 18%, rgba(0, 0, 0, 0.7) 50%, #000000 80%);
-}
-
-.creation-mic-hero-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center right;
-  display: block;
-}
-
-.creation-mic-gradient-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    to right,
-    rgba(255, 255, 255, 0.35) 0%,
-    rgba(244, 248, 255, 0.15) 35%,
-    transparent 100%
-  );
-  pointer-events: none;
-}
-
 /* Collapsed sidebar proportion preservation */
 .app-main-column--collapsed .creation-card--live,
 .app-main-column--collapsed .creation-card--youtube {
@@ -4550,8 +4553,8 @@ textarea.form-control {
   padding: clamp(28px, 2.5vw, 36px) clamp(30px, 2.8vw, 40px);
 }
 
-.app-main-column--collapsed .creation-card-hero-wrap {
-  width: 58%;
+.app-main-column--collapsed .creation-card--live {
+  background-position: right center;
 }
 
 /* YouTube Session Card */
@@ -5216,6 +5219,16 @@ textarea.form-control {
 
   .creation-card--live {
     padding: 20px;
+    background-position: 85% center;
+    background-image:
+      linear-gradient(
+        to right,
+        rgba(9, 18, 36, 0.96) 0%,
+        rgba(9, 20, 40, 0.90) 50%,
+        rgba(11, 24, 48, 0.65) 80%,
+        rgba(13, 28, 56, 0.30) 100%
+      ),
+      url('./assets/dashboard/start-live-background.png');
   }
 
   .creation-card--youtube {
@@ -6584,9 +6597,9 @@ textarea.form-control {
 .session-card-action-btn {
   flex: 1;
   height: 36px;
-  background: #1d68f2;
-  color: #ffffff;
-  border: 1px solid #1d68f2;
+  background: #eff6ff;
+  color: #1d68f2;
+  border: 1px solid rgba(29, 104, 242, 0.2);
   border-radius: 7px;
   font-size: 0.84rem;
   font-weight: 600;
@@ -6594,16 +6607,25 @@ textarea.form-control {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 3px rgba(29, 104, 242, 0.2), 0 1px 2px rgba(15, 23, 42, 0.06);
-  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(29, 104, 242, 0.04);
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
 .session-card-action-btn:hover,
 .session-card-action-btn:focus {
+  background: #1d68f2;
+  border-color: #1d68f2;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(29, 104, 242, 0.28);
+  transform: translateY(-1px);
+}
+
+.session-card-action-btn:active {
   background: #1558d6;
   border-color: #1558d6;
   color: #ffffff;
-  box-shadow: 0 4px 14px rgba(29, 104, 242, 0.32);
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(29, 104, 242, 0.24);
 }
 
 .session-card-delete-icon-btn {

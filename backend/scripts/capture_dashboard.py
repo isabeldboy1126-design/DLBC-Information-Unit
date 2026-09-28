@@ -71,19 +71,71 @@ async def capture_all():
             await send_cmd('Input.dispatchMouseEvent', {'type': 'mouseMoved', 'x': 600, 'y': 200})
             await asyncio.sleep(0.4)
 
-            # Expand sidebar back
-            await send_cmd('Runtime.evaluate', {
-                'expression': "document.querySelector('.sidebar-toggle-btn')?.click() || document.querySelector('[aria-label=\"Expand sidebar\"]')?.click()"
+            # 2c. Tablet Dashboard (1024x768)
+            await send_cmd('Emulation.setDeviceMetricsOverride', {
+                'width': 1024,
+                'height': 768,
+                'deviceScaleFactor': 1,
+                'mobile': False
+            })
+            await asyncio.sleep(0.8)
+            await shot('dashboard_tablet.png')
+
+            # 2d. Mobile Dashboard (390x844)
+            await send_cmd('Emulation.setDeviceMetricsOverride', {
+                'width': 390,
+                'height': 844,
+                'deviceScaleFactor': 2,
+                'mobile': True
+            })
+            await asyncio.sleep(0.8)
+            await shot('dashboard_mobile.png')
+
+            # Reset back to Desktop
+            await send_cmd('Emulation.setDeviceMetricsOverride', {
+                'width': 1440,
+                'height': 900,
+                'deviceScaleFactor': 1,
+                'mobile': False
             })
             await asyncio.sleep(0.5)
 
             # 3. Sessions History
+            # Ensure mouse is away from sidebar and cards so resting CTA style is captured
+            await send_cmd('Input.dispatchMouseEvent', {'type': 'mouseMoved', 'x': 600, 'y': 100})
             await send_cmd('Runtime.evaluate', {
-                'expression': "Array.from(document.querySelectorAll('.sidebar-nav-item, .sidebar-nav-btn')).find(el => el.textContent.includes('Sessions'))?.click()"
+                'expression': """(() => {
+                    const btn = document.querySelector('.sidebar-desktop-collapse-btn');
+                    if (document.querySelector('.app-sidebar--collapsed') && btn) {
+                        btn.click();
+                    }
+                    document.getElementById('nav-link-sessions')?.click() || (window.location.hash = '#sessions');
+                })()"""
             })
             await asyncio.sleep(1.2)
             await shot('sessions_history_cards.png')
+            await shot('sessions_history_latest.png')
             await shot('pre_stage6_sessions_history_blue_ctas.png')
+
+            # 3b. Test hover on first session card action button
+            eval_res = await send_cmd('Runtime.evaluate', {
+                'expression': """(() => {
+                    const btn = document.querySelector('.session-card-action-btn');
+                    if (!btn) return null;
+                    const r = btn.getBoundingClientRect();
+                    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+                })()""",
+                'returnByValue': True
+            })
+            coords = eval_res.get('result', {}).get('value')
+            if coords:
+                await send_cmd('Input.dispatchMouseEvent', {
+                    'type': 'mouseMoved',
+                    'x': coords['x'],
+                    'y': coords['y']
+                })
+                await asyncio.sleep(0.5)
+                await shot('sessions_history_hover.png')
 
             # 4. Open first session workspace by clicking card body
             await send_cmd('Runtime.evaluate', {

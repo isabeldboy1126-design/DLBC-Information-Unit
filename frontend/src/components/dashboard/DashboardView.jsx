@@ -234,17 +234,6 @@ export function DashboardView({
               </div>
             </div>
 
-            {/* Right Photographic Microphone Hero with Soft Gradient Transition */}
-            <div className="creation-card-hero-wrap" aria-hidden="true">
-              <img
-                src="/mic-hero.png"
-                alt=""
-                className="creation-mic-hero-img"
-                loading="eager"
-              />
-              <div className="creation-mic-gradient-overlay" />
-            </div>
-
             <div className="creation-card-action-slot">
               <div className="action-circle-btn action-circle-btn--primary" aria-hidden="true">
                 <ArrowRightIcon />
