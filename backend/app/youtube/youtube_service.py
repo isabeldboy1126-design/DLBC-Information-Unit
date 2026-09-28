@@ -26,6 +26,7 @@ from app.config import STORAGE_AUDIO_DIR, STORAGE_TRANSCRIPTS_DIR
 from app.database.session_repo import session_repo
 from app.transcription.audio_extractor import get_ffmpeg_binary
 from app.transcription.live_transcription import LiveTranscriptionSession
+from app.verification.decision_engine import verification_decision_engine
 
 logger = logging.getLogger("youtube_service")
 
@@ -493,6 +494,11 @@ class YouTubeLiveSessionManager:
                     "provider_name": "azure_speech",
                     "duration_seconds": duration_sec,
                 },
+            )
+            # Stage 6: Automatic post-recording AI verification workflow
+            await session_repo.set_ai_verification_status(session_id, "compiling")
+            asyncio.create_task(
+                verification_decision_engine.verify_session(session_id, auto_resolve=True)
             )
         except Exception as e:
             logger.error(f"Error finalizing session in DB for {session_id}: {e}")

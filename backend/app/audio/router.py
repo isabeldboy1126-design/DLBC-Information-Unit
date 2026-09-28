@@ -22,6 +22,7 @@ from app.audio.stream_manager import (
 )
 from app.database.session_repo import session_repo
 from app.transcription.live_transcription import LiveTranscriptionSession
+from app.verification.decision_engine import verification_decision_engine
 
 router = APIRouter(prefix="/api/audio", tags=["Audio Capture"])
 
@@ -165,6 +166,11 @@ async def audio_stream_websocket(websocket: WebSocket):
                                     audio_summary=summary,
                                     transcript_summary=transcript_summary,
                                 )
+                                # Stage 6: Automatic post-recording AI verification workflow
+                                await session_repo.set_ai_verification_status(current_session_id, "compiling")
+                                asyncio.create_task(
+                                    verification_decision_engine.verify_session(current_session_id, auto_resolve=True)
+                                )
                             except Exception as db_err:
                                 print(f"Notice: Error finalizing session in DB: {db_err}")
 
@@ -221,6 +227,10 @@ async def audio_stream_websocket(websocket: WebSocket):
                         session_id=current_session_id,
                         audio_summary=summary,
                         transcript_summary=transcript_summary,
+                    )
+                    await session_repo.set_ai_verification_status(current_session_id, "compiling")
+                    asyncio.create_task(
+                        verification_decision_engine.verify_session(current_session_id, auto_resolve=True)
                     )
                 except Exception:
                     pass
