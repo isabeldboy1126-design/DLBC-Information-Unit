@@ -170,9 +170,14 @@ export function SessionDetailView({
   const [isSavingTitle, setIsSavingTitle] = useState(false)
   const mediaElementRef = useRef(null)
 
-  // Synchronize activeView when opening a new session
+  // Synchronize activeView when opening a new session or changing hash route
   React.useEffect(() => {
     setActiveView(getDefaultView())
+    const handleHash = () => {
+      setActiveView(getDefaultView())
+    }
+    window.addEventListener('hashchange', handleHash)
+    return () => window.removeEventListener('hashchange', handleHash)
   }, [session?.session_id])
 
   // Inform parent AppShell about current subview title and back action
@@ -488,10 +493,6 @@ export function SessionDetailView({
             <span className="session-meta-item">
               <UserIcon />
               <span>{preacherDisplay}</span>
-            </span>
-            <span className="session-meta-item">
-              <ClockIcon />
-              <span>{durationDisplay}</span>
             </span>
           </div>
         </div>

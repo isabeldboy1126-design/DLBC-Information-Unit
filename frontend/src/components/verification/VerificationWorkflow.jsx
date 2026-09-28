@@ -280,7 +280,7 @@ export function VerificationWorkflow({
           <div className="card verification-progress-card">
             <div className="progress-info-row">
               <span className="progress-fraction-label">
-                <strong>{itemsResolved} of {itemsTotal || 59} resolved</strong>
+                <strong>{itemsResolved} of {itemsTotal} resolved</strong>
               </span>
               <span className="progress-percentage-label">
                 {itemsTotal ? Math.round((itemsResolved / itemsTotal) * 100) : 0}%
@@ -304,7 +304,7 @@ export function VerificationWorkflow({
                   setActiveItemIndex(0)
                 }}
               >
-                Pending ({items.filter((i) => i.action === 'pending').length})
+                Pending ({items.length > 0 ? items.filter((i) => i.action === 'pending').length : pendingCount})
               </button>
 
               <button
@@ -315,7 +315,7 @@ export function VerificationWorkflow({
                   setActiveItemIndex(0)
                 }}
               >
-                Resolved ({items.filter((i) => i.action !== 'pending').length})
+                Resolved ({items.length > 0 ? items.filter((i) => i.action !== 'pending').length : itemsResolved})
               </button>
 
               <button
@@ -326,7 +326,7 @@ export function VerificationWorkflow({
                   setActiveItemIndex(0)
                 }}
               >
-                All ({items.length})
+                All ({items.length > 0 ? items.length : itemsTotal})
               </button>
             </div>
 

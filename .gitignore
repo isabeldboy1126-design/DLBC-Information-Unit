@@ -47,6 +47,9 @@ npm-debug.log*
 *.db
 *.sqlite
 *.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+setup/
 
 # --- Storage (local audio, documents) ---
 # The storage/ directory structure is tracked, but actual

@@ -1,0 +1,30 @@
+{
+  "purpose": "AI-assisted verification of Azure sermon transcript flags",
+  "rules": {
+    "raw_transcript_immutable": true,
+    "kjv_is_context_not_rewrite_authority": true,
+    "paraphrases_must_be_preserved_as_spoken": true,
+    "ai_failure_must_not_block_human_verification": true
+  },
+  "high_risk_categories": [
+    "scripture_reference",
+    "scripture_quotation_mismatch",
+    "negation",
+    "doctrinally_consequential_wording",
+    "person_or_place_name",
+    "date_or_number",
+    "model_disagreement",
+    "very_low_audio_confidence",
+    "manual_flag"
+  ],
+  "ai_result_schema": {
+    "flag_id": "string",
+    "suggested_text": "string|null",
+    "status": "auto_resolved|human_review_required|unchanged",
+    "reason": "string",
+    "detected_reference": "string|null",
+    "reference_exists": "boolean|null",
+    "speech_relation_to_kjv": "exact|close_quote|paraphrase|reference_only|unrelated|unknown",
+    "risk_categories": ["string"]
+  }
+}

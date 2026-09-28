@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 from app.services.gemini_error_handler import handle_gemini_error
+from app.services.gemini_gateway import gemini_gateway, GeminiGateway, GeminiGatewayError
 
 load_dotenv()
 
@@ -138,13 +139,13 @@ class ReportingProvider(ABC):
 
 
 class GeminiReportingProvider(ReportingProvider):
-    def __init__(self):
+    def __init__(self, gateway: Optional[GeminiGateway] = None):
         # Allow model override via environment variable
         self._default_model = os.getenv("GEMINI_REPORTING_MODEL", "gemini-3.5-flash-lite")
+        self._gateway = gateway or gemini_gateway
 
     def is_configured(self) -> bool:
-        key = os.getenv("GEMINI_API_KEY", "").strip()
-        return bool(key)
+        return self._gateway.is_configured()
 
     def get_provider_name(self) -> str:
         return "gemini"
@@ -247,8 +248,7 @@ Remember: Do not fabricate or extrapolate beyond what is in the verified transcr
         model_name = self.get_model_name()
 
         # 1. Check configuration
-        api_key = os.getenv("GEMINI_API_KEY", "").strip()
-        if not api_key:
+        if not self.is_configured():
             return ReportingResult(
                 is_success=False,
                 reporter_role=reporter_role,
@@ -276,12 +276,9 @@ Remember: Do not fabricate or extrapolate beyond what is in the verified transcr
             standard=standard,
         )
 
-        # 3. Call Gemini SDK
+        # 3. Call Gemini Gateway
         try:
-            from google import genai
             from google.genai import types
-
-            client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=120000))
 
             # Request structured JSON output
             config = types.GenerateContentConfig(
@@ -290,29 +287,16 @@ Remember: Do not fabricate or extrapolate beyond what is in the verified transcr
                 response_schema=ReportOutputSchema,
             )
 
-            # Use non-blocking async generation with fallback
-            models_to_try = [model_name]
-            for fb in ["gemini-3.5-flash-lite", "gemini-3.6-flash"]:
-                if fb not in models_to_try:
-                    models_to_try.append(fb)
+            gateway_res = await self._gateway.generate(
+                operation=f"reporting_{reporter_role}",
+                model=model_name,
+                contents=prompt,
+                config=config,
+            )
 
-            response = None
-            last_err = None
-            for m in models_to_try:
-                try:
-                    response = await client.aio.models.generate_content(
-                        model=m,
-                        contents=prompt,
-                        config=config,
-                    )
-                    model_name = m
-                    break
-                except Exception as ex:
-                    last_err = ex
-                    continue
-
-            if response is None:
-                raise last_err or RuntimeError("All Gemini models failed.")
+            response = gateway_res.response
+            model_name = gateway_res.model_name
+            provider_slot = gateway_res.provider_slot
 
             response_text = response.text or "{}"
             parsed_json = json.loads(response_text)
@@ -329,6 +313,12 @@ Remember: Do not fabricate or extrapolate beyond what is in the verified transcr
             scriptures = parsed_json.get("scriptures", [])
             warnings = parsed_json.get("warnings", [])
             evidence = parsed_json.get("evidence_notes", {})
+            if isinstance(evidence, dict):
+                evidence["provider_slot"] = provider_slot
+            elif isinstance(evidence, list):
+                evidence = {"notes": evidence, "provider_slot": provider_slot}
+            else:
+                evidence = {"provider_slot": provider_slot}
 
             return ReportingResult(
                 is_success=True,

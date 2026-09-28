@@ -103,6 +103,34 @@ function DotsMenuIcon() {
 }
 
 /**
+ * Calculates the total sum of actionable verification items and pending session actions
+ * across all attention sessions, rather than merely counting the session records.
+ */
+export function calculateTotalAttentionItems(sessionsList) {
+  if (!Array.isArray(sessionsList)) return 0
+  return sessionsList.reduce((total, s) => {
+    const isInterrupted = !!s.is_interrupted
+    const isFinalComplete = s.final_report_status === 'complete'
+    if (isFinalComplete) return total
+
+    const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
+    const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress')
+    const readyEditing = isVerified && s.reporting_status === 'reports_ready' && s.editing_status !== 'complete'
+    const readyProofreading = s.editing_status === 'complete' && s.proofreading_status !== 'complete'
+
+    if (!isInterrupted && !needsVerification && !readyEditing && !readyProofreading) {
+      return total
+    }
+
+    if (needsVerification) {
+      const count = Number(s.flag_count) || Number(s.verification_items_total) || 1
+      return total + count
+    }
+    return total + 1
+  }, 0)
+}
+
+/**
  * DashboardView — Polished production dashboard matching the authoritative reference.
  */
 export function DashboardView({
@@ -121,7 +149,7 @@ export function DashboardView({
   // 2. Unverified sessions with flagged items or in-progress review
   // 3. Reports ready, pending editorial synthesis
   // 4. Editing complete, pending proofreading review
-  const attentionSessions = sessions.filter((s) => {
+  const allAttentionSessions = sessions.filter((s) => {
     const isInterrupted = !!s.is_interrupted
     const isFinalComplete = s.final_report_status === 'complete'
     if (isFinalComplete) return false
@@ -132,7 +160,10 @@ export function DashboardView({
     const readyProofreading = s.editing_status === 'complete' && s.proofreading_status !== 'complete'
 
     return isInterrupted || needsVerification || readyEditing || readyProofreading
-  }).slice(0, 3)
+  })
+
+  const attentionSessions = allAttentionSessions.slice(0, 3)
+  const totalAttentionCount = calculateTotalAttentionItems(allAttentionSessions)
 
   // Recent 6 sessions
   const recentSessions = [...sessions].sort((a, b) => {
@@ -320,12 +351,12 @@ export function DashboardView({
       {/* ------------------------------------------------------------- */}
       {/* 2. NEEDS YOUR ATTENTION SECTION (ALWAYS BELOW UPLOAD)         */}
       {/* ------------------------------------------------------------- */}
-      {attentionSessions.length > 0 && (
+      {allAttentionSessions.length > 0 && (
         <section className="dashboard-section dashboard-attention-section" aria-label="Actionable Sessions">
           <div className="dashboard-section-header">
             <div className="section-title-wrapper">
               <h2 className="dashboard-section-title">Needs Your Attention</h2>
-              <span className="attention-counter-badge">{attentionSessions.length}</span>
+              <span className="attention-counter-badge">{totalAttentionCount}</span>
             </div>
 
             <button
@@ -378,10 +409,30 @@ export function DashboardView({
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSession(sess.session_id); } }}
                 >
                   <div className="attention-card-left">
+                    <div className="attention-doc-box">
+                      <DocumentItemIcon />
+                    </div>
                     <div className="attention-info-stack">
                       {programme && <span className="attention-programme-label">{programme}</span>}
                       <h3 className="attention-session-title">{sessionTitle}</h3>
-                      {sessionDate && <span className="attention-session-date">{sessionDate}</span>}
+                      <div className="attention-meta-row">
+                        {sessionDate && (
+                          <span className="attention-meta-chip">
+                            <CalendarIcon />
+                            <span>{sessionDate}</span>
+                          </span>
+                        )}
+                        <span className="attention-meta-chip">
+                          <UserIcon />
+                          <span>{getSpeakerName(sess)}</span>
+                        </span>
+                        {sess.duration_seconds > 0 && (
+                          <span className="attention-meta-chip attention-meta-chip--duration">
+                            <ClockIcon />
+                            <span>{formatDuration(sess.duration_seconds)}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 

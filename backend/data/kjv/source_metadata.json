@@ -1,0 +1,43 @@
+{
+  "title": "DLBC KJV Context & Biblical Knowledge Base",
+  "built_at": "2026-09-27T22:20:41.285454+00:00",
+  "build_duration_seconds": 5.2,
+  "translation": "King James Version (KJV 1769)",
+  "canon": "66-book Protestant Canon",
+  "book_count": 66,
+  "verse_count": 31102,
+  "proper_names_count": 2808,
+  "name_categories": [
+    "book",
+    "people_group",
+    "person",
+    "place",
+    "tribe"
+  ],
+  "kjv_vocabulary_count": 67,
+  "church_vocabulary_count": 20,
+  "sources": {
+    "kjv_text": {
+      "source": "npm kjv@1.0.0 (verses-1769.json)",
+      "url": "https://cdn.jsdelivr.net/npm/kjv@1.0.0/json/verses-1769.json",
+      "license": "Public Domain",
+      "notes": "1769 Authorized Version with cleaned paragraph/supplied markers"
+    },
+    "biblical_proper_names": {
+      "source": "BibleNLP biblical-names-data (names.tsv) + Canonical Entities Supplement",
+      "url": "https://raw.githubusercontent.com/BibleNLP/biblical-names-data/main/names.tsv",
+      "license": "Open Data / MIT",
+      "notes": "Aligned proper names aligned with verse references"
+    },
+    "kjv_speech_lexicon": {
+      "source": "DLBC KJV Verification Pack v3 (kjv_speech_lexicon.txt)",
+      "notes": "Curated Early Modern English spoken forms"
+    },
+    "church_vocabulary": {
+      "source": "DLBC Vocabulary Seed (dlbc_vocabulary_seed.json) + DLBC Standard Ministries",
+      "notes": "Church programmes, leader names, and publications"
+    }
+  },
+  "database_file": "kjv_context.sqlite",
+  "database_size_bytes": 13901824
+}
