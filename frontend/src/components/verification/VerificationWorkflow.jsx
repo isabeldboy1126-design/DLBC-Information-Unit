@@ -409,7 +409,7 @@ export function VerificationWorkflow({
             </div>
 
             {/* Live AI Verification Status Banner / Top-level notice */}
-            {(aiFeedback || session?.ai_verification_status === 'ai_unavailable') && (
+            {aiFeedback && (
               <div className={`ai-verify-notice-banner ai-verify-notice-banner--${aiFeedback?.type || 'warning'}`}>
                 <span className="notice-spark">✦</span>
                 <span className="notice-text">

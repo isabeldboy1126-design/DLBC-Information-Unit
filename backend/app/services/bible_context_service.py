@@ -438,14 +438,13 @@ class BibleContextService:
                 except Exception:
                     pass
 
-        # Score candidates across tokens
+        # Score candidates across unique tokens
         scored: Dict[str, Dict[str, Any]] = {}
+        unique_tokens = {t for t in tokens if len(t) >= 3}
 
-        for token in tokens:
+        for token in unique_tokens:
             t_lower = token.lower()
-            if len(t_lower) < 3:
-                continue
-
+            len_t = len(t_lower)
             t_soundex = soundex(token)
 
             for entry in self._all_names:
@@ -466,16 +465,20 @@ class BibleContextService:
                     sim = difflib.SequenceMatcher(None, t_lower, n_name).ratio()
                     score = 0.70 + (sim * 0.20)
                     match_type = "phonetic"
-                # 3. Fuzzy similarity match
+                # 3. Fuzzy similarity match (with mathematical length filter)
                 else:
-                    sim = difflib.SequenceMatcher(None, t_lower, n_name).ratio()
-                    for alias in aliases:
-                        a_sim = difflib.SequenceMatcher(None, t_lower, alias).ratio()
-                        if a_sim > sim:
-                            sim = a_sim
-                    if sim >= 0.75:
-                        score = sim * 0.85
-                        match_type = "fuzzy"
+                    len_n = len(n_name)
+                    if (2 * min(len_t, len_n) / (len_t + len_n)) >= 0.75:
+                        sim = difflib.SequenceMatcher(None, t_lower, n_name).ratio()
+                        for alias in aliases:
+                            len_a = len(alias)
+                            if (2 * min(len_t, len_a) / (len_t + len_a)) >= 0.75:
+                                a_sim = difflib.SequenceMatcher(None, t_lower, alias).ratio()
+                                if a_sim > sim:
+                                    sim = a_sim
+                        if sim >= 0.75:
+                            score = sim * 0.85
+                            match_type = "fuzzy"
 
                 if score > 0.0:
                     # 4. Apply Contextual Boost
@@ -624,9 +627,12 @@ class BibleContextService:
             "reference_valid": parsed_ref["valid"] if parsed_ref else None,
             "reference_matched_text": parsed_ref["matched_text"] if parsed_ref else None,
             "kjv_context": kjv_context,
+            "verses": kjv_context,
             "biblical_name_candidates": name_candidates,
+            "biblical_names": [n["canonical_name"] for n in name_candidates],
             "kjv_vocabulary_candidates": [k["term"] for k in kjv_vocab],
             "church_terms": church_vocab,
+            "dlbc_terms": [c["term"] for c in church_vocab],
             "token_count_estimate": est_tokens,
         }
 

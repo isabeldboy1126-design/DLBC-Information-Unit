@@ -16,7 +16,7 @@ import io
 import os
 import wave
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("app.verification.audio_window_extractor")
 
@@ -188,3 +188,128 @@ def batch_extract_windows(
             win["audio_bytes"] = None
 
     return windows
+
+
+def build_verification_reel(
+    audio_file_path: Optional[str],
+    flagged_items: List[Dict[str, Any]],
+    buffer_seconds: float = 2.5,
+    silence_gap_ms: int = 600,
+) -> Tuple[Optional[bytes], List[Dict[str, Any]], float]:
+    """
+    Constructs ONE continuous in-memory WAV verification reel concatenating
+    bounded audio windows for all flagged verification items, separated by a
+    deterministic silence gap (500–750ms).
+
+    Never modifies the immutable master WAV recording.
+    Does not add spoken labels or modify speech audio.
+
+    Returns:
+    - reel_bytes: Valid WAV bytes of the continuous reel (or None if audio missing/unreadable)
+    - manifest: List of manifest dicts mapping item_id to source and reel intervals:
+      [
+        {
+          "item_id": "V001",
+          "segment_index": 0,
+          "source_start_ms": 12000,
+          "source_end_ms": 18000,
+          "reel_start_ms": 0,
+          "reel_end_ms": 6000,
+          "reel_start_sec": 0.0,
+          "reel_end_sec": 6.0
+        },
+        ...
+      ]
+    - total_duration_sec: Total duration of the reel in seconds.
+    """
+    if not audio_file_path or not os.path.isfile(audio_file_path) or not flagged_items:
+        return None, [], 0.0
+
+    try:
+        with wave.open(audio_file_path, "rb") as wf:
+            nchannels = wf.getnchannels()
+            sampwidth = wf.getsampwidth()
+            framerate = wf.getframerate()
+            total_frames = wf.getnframes()
+
+            if framerate <= 0 or total_frames <= 0:
+                logger.warning("Invalid master WAV properties: framerate=%d, frames=%d", framerate, total_frames)
+                return None, [], 0.0
+
+            bytes_per_frame = nchannels * sampwidth
+            silence_frames_count = int((silence_gap_ms / 1000.0) * framerate)
+            silence_raw_bytes = b"\x00" * (silence_frames_count * bytes_per_frame)
+
+            accumulated_frames = bytearray()
+            manifest: List[Dict[str, Any]] = []
+            current_reel_frames = 0
+
+            for idx, item in enumerate(flagged_items):
+                item_id = str(item.get("clean_id") or item.get("item_id") or f"V{idx+1:03d}")
+                seg_idx = item.get("segment_index", idx)
+
+                s_start = float(item.get("start_time", 0.0))
+                s_end = float(item.get("end_time", s_start + 1.0))
+                if s_end < s_start:
+                    s_end = s_start + 1.0
+
+                clip_start = max(0.0, s_start - buffer_seconds)
+                clip_end = min(total_frames / framerate, s_end + buffer_seconds)
+                if clip_end <= clip_start:
+                    clip_end = clip_start + 1.0
+
+                start_frame = max(0, min(total_frames, int(clip_start * framerate)))
+                end_frame = max(start_frame, min(total_frames, int(clip_end * framerate)))
+                num_frames = end_frame - start_frame
+
+                if num_frames > 0:
+                    wf.setpos(start_frame)
+                    clip_raw = wf.readframes(num_frames)
+                else:
+                    clip_raw = b""
+
+                actual_clip_frames = len(clip_raw) // bytes_per_frame
+                reel_start_ms = int((current_reel_frames * 1000) / framerate)
+                reel_end_ms = int(((current_reel_frames + actual_clip_frames) * 1000) / framerate)
+
+                manifest.append({
+                    "item_id": item_id,
+                    "segment_index": seg_idx,
+                    "source_start_ms": int(clip_start * 1000),
+                    "source_end_ms": int(clip_end * 1000),
+                    "reel_start_ms": reel_start_ms,
+                    "reel_end_ms": reel_end_ms,
+                    "reel_start_sec": round(reel_start_ms / 1000.0, 2),
+                    "reel_end_sec": round(reel_end_ms / 1000.0, 2),
+                })
+
+                accumulated_frames.extend(clip_raw)
+                current_reel_frames += actual_clip_frames
+
+                # Append silence gap between items (except after the final item)
+                if idx < len(flagged_items) - 1:
+                    accumulated_frames.extend(silence_raw_bytes)
+                    current_reel_frames += silence_frames_count
+
+            # Assemble valid WAV container
+            buf = io.BytesIO()
+            with wave.open(buf, "wb") as out_wf:
+                out_wf.setnchannels(nchannels)
+                out_wf.setsampwidth(sampwidth)
+                out_wf.setframerate(framerate)
+                out_wf.writeframes(accumulated_frames)
+
+            total_duration_sec = round(current_reel_frames / framerate, 2)
+            logger.info(
+                "Verification reel constructed: %d clips, duration=%.2fs, size=%d bytes, manifest_entries=%d",
+                len(flagged_items),
+                total_duration_sec,
+                len(buf.getvalue()),
+                len(manifest),
+            )
+            return buf.getvalue(), manifest, total_duration_sec
+
+    except Exception as e:
+        logger.error("Failed to construct verification reel from %s: %s", audio_file_path, e)
+        return None, [], 0.0
+

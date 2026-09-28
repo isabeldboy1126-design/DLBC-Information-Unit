@@ -181,7 +181,28 @@ async def test_verify_session_full_lifecycle():
 
     async def mock_generate(operation, model, contents, config=None):
         prompt_text = str(contents)
-        if "John" in prompt_text or "loved the world" in prompt_text:
+        if "ITEMS TO EVALUATE" in prompt_text:
+            ai_data = [
+                {
+                    "item_id": "V001",
+                    "decision": "VERIFIED",
+                    "verified_text": "For God so loved the world that he gave his only begotten Son",
+                    "confidence": 0.95,
+                    "explanation": "Verified John 3:16 citation",
+                    "scripture_references": ["John 3:16"],
+                    "is_high_risk": False,
+                },
+                {
+                    "item_id": "V002",
+                    "decision": "CORRECTED",
+                    "verified_text": "Saul was on the way to Damascus",
+                    "confidence": 0.92,
+                    "explanation": "Corrected Paul to Saul based on Acts 9",
+                    "scripture_references": ["Acts 9:3"],
+                    "is_high_risk": False,
+                },
+            ]
+        elif "John" in prompt_text or "loved the world" in prompt_text:
             ai_data = {
                 "decision": "VERIFIED",
                 "verified_text": "For God so loved the world that he gave his only begotten Son",

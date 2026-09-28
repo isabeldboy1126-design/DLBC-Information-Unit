@@ -374,6 +374,7 @@ class GeminiGateway:
         audio_bytes: bytes,
         mime_type: str = "audio/wav",
         model: str = "gemini-3.5-transcribe",
+        prompt: Optional[str] = None,
     ) -> GatewayResponse:
         """
         Executes an audio transcription request using Gemini 3.5 Transcribe
@@ -382,10 +383,11 @@ class GeminiGateway:
         from google.genai import types
 
         part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
+        contents = [part, prompt] if prompt else [part]
         return await self.generate(
             operation="audio_transcription",
             model=model,
-            contents=[part],
+            contents=contents,
         )
 
 
