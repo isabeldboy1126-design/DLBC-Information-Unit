@@ -23,7 +23,8 @@ export function VerificationWorkflow({
   const [activeItemIndex, setActiveItemIndex] = useState(0)
   const [editedText, setEditedText] = useState('')
   const [showBulkConfirmModal, setShowBulkConfirmModal] = useState(false)
-  const [showAiNotice, setShowAiNotice] = useState(false)
+  const [isAiVerifying, setIsAiVerifying] = useState(false)
+  const [aiFeedback, setAiFeedback] = useState(null)
   const [isBulkConfirming, setIsBulkConfirming] = useState(false)
   const [isFinalising, setIsFinalising] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -239,6 +240,57 @@ export function VerificationWorkflow({
     setIsFinalising(false)
   }
 
+  const handleTriggerAiVerification = async () => {
+    if (!sessionId || isAiVerifying) return
+    setIsAiVerifying(true)
+    setAiFeedback({ type: 'info', message: 'Analyzing audio windows and checking KJV scriptures...' })
+    try {
+      const res = await fetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/verify-ai`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auto_resolve: true, background: false }),
+      })
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}))
+        throw new Error(errJson.detail || 'AI verification failed')
+      }
+      const data = await res.json()
+      if (onLoadVerificationState) {
+        await onLoadVerificationState(sessionId)
+      }
+      const sum = data.summary || {}
+      if (data.status === 'completed_verified' || sum.unresolved_count === 0) {
+        setAiFeedback({
+          type: 'success',
+          message: `✓ AI successfully verified all segments! Zero items remaining.`,
+        })
+      } else if (data.status === 'completed_needs_review') {
+        setAiFeedback({
+          type: 'info',
+          message: `✦ AI resolved ${sum.verified_count || 0} verified and ${sum.corrected_count || 0} corrected. ${sum.unresolved_count} segment${sum.unresolved_count !== 1 ? 's' : ''} require human review.`,
+        })
+      } else if (data.status === 'ai_unavailable') {
+        setAiFeedback({
+          type: 'warning',
+          message: 'AI verification service is unconfigured or unreachable. Manual review is available.',
+        })
+      } else {
+        setAiFeedback({
+          type: 'info',
+          message: 'AI verification complete.',
+        })
+      }
+    } catch (err) {
+      console.error('Error triggering AI verification:', err)
+      setAiFeedback({
+        type: 'error',
+        message: err.message || 'Failed to complete AI verification.',
+      })
+    } finally {
+      setIsAiVerifying(false)
+    }
+  }
+
   return (
     <div className="verification-workspace-container">
       {/* Hidden Native Audio Element */}
@@ -345,27 +397,26 @@ export function VerificationWorkflow({
 
               <button
                 type="button"
-                className="btn-ai-verify-action"
-                onClick={() => setShowAiNotice(!showAiNotice)}
+                className={`btn-ai-verify-action ${isAiVerifying ? 'btn-ai-verify-action--loading' : ''}`}
+                onClick={handleTriggerAiVerification}
+                disabled={isAiVerifying || pendingCount === 0}
                 title="Use AI to verify transcript against biblical context"
               >
-                <span className="action-btn-icon">✦</span>
-                <span>Use AI to Verify</span>
+                <span className="action-btn-icon">{isAiVerifying ? '⏳' : '✦'}</span>
+                <span>{isAiVerifying ? 'Verifying with AI...' : 'Use AI to Verify'}</span>
               </button>
             </div>
 
-            {/* Subtle informational notice (zero API calls, safe UI feedback) */}
-            {showAiNotice && (
-              <div className="ai-verify-notice-banner">
+            {/* Live AI Verification Status Banner */}
+            {aiFeedback && (
+              <div className={`ai-verify-notice-banner ai-verify-notice-banner--${aiFeedback.type}`}>
                 <span className="notice-spark">✦</span>
-                <span className="notice-text">
-                  AI verification integration is scheduled for the next backend phase. No external API calls are made in this UI pass.
-                </span>
+                <span className="notice-text">{aiFeedback.message}</span>
                 <button
                   type="button"
                   className="btn-close-notice"
-                  onClick={() => setShowAiNotice(false)}
-                  aria-label="Dismiss notice"
+                  onClick={() => setAiFeedback(null)}
+                  aria-label="Dismiss feedback"
                 >
                   ✕
                 </button>
@@ -524,10 +575,38 @@ export function VerificationWorkflow({
               </div>
 
               {/* Informational AI assistance banner matching reference screenshot */}
-              <div className="ai-hint-box">
-                <span className="sparkle-icon" aria-hidden="true">✦</span>
-                <span>AI assistance is available to suggest improvements.</span>
-              </div>
+              {activeItem?.ai_decision ? (
+                <div className={`ai-hint-box ai-hint-box--${activeItem.ai_decision.toLowerCase()}`}>
+                  <span className="sparkle-icon" aria-hidden="true">✦</span>
+                  <div className="ai-hint-details">
+                    <div className="ai-hint-title-row">
+                      <strong className="ai-hint-title">AI Recommendation ({activeItem.ai_decision})</strong>
+                      {activeItem.ai_confidence && (
+                        <span className="ai-hint-confidence">
+                          {Math.round(activeItem.ai_confidence * 100)}% confidence
+                        </span>
+                      )}
+                    </div>
+                    {activeItem.ai_explanation && (
+                      <p className="ai-hint-explanation">{activeItem.ai_explanation}</p>
+                    )}
+                    {activeItem.ai_verified_text && activeItem.ai_verified_text !== editedText && (
+                      <button
+                        type="button"
+                        className="btn-apply-ai-suggestion"
+                        onClick={() => setEditedText(activeItem.ai_verified_text)}
+                      >
+                        Apply AI Wording: &ldquo;{activeItem.ai_verified_text}&rdquo;
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="ai-hint-box">
+                  <span className="sparkle-icon" aria-hidden="true">✦</span>
+                  <span>AI assistance is available to suggest improvements. Click &ldquo;Use AI to Verify&rdquo; above.</span>
+                </div>
+              )}
 
               {/* Actions Row at Bottom */}
               <div className="active-segment-bottom-actions">

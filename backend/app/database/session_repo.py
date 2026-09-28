@@ -494,9 +494,17 @@ class SessionRepository:
             except Exception:
                 meta = {}
 
+        event_id = current.get("event_id")
         if programme is not None:
-            meta["programme"] = programme.strip()
-            meta["eventType"] = programme.strip()
+            clean_prog = programme.strip()
+            if clean_prog in ("", "__none__", "None / Standalone", "[ None / Standalone ]", "Standalone"):
+                meta["programme"] = ""
+                meta["eventType"] = ""
+                meta["event_id"] = None
+                event_id = None
+            else:
+                meta["programme"] = clean_prog
+                meta["eventType"] = clean_prog
         if session_name is not None:
             meta["programmeSession"] = session_name.strip()
             meta["session_name"] = session_name.strip()
@@ -513,8 +521,8 @@ class SessionRepository:
 
         async with get_db_connection() as conn:
             await conn.execute(
-                "UPDATE sessions SET title = ?, metadata_json = ? WHERE session_id = ?",
-                (new_title, json.dumps(meta), session_id),
+                "UPDATE sessions SET title = ?, metadata_json = ?, event_id = ? WHERE session_id = ?",
+                (new_title, json.dumps(meta), event_id, session_id),
             )
             await conn.commit()
 

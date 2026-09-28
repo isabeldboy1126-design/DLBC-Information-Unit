@@ -869,6 +869,9 @@ function EditSessionDetailsModal({ isOpen, session, onClose, onSave }) {
 
   const handleProgrammeChange = (val) => {
     setSelectedProgramme(val)
+    if (val === '__none__') {
+      return
+    }
     if (val === '__custom__') {
       setSelectedSession('__custom__')
       return
@@ -886,7 +889,9 @@ function EditSessionDetailsModal({ isOpen, session, onClose, onSave }) {
     e.preventDefault()
     setErrorMsg(null)
 
-    const finalProgramme = selectedProgramme === '__custom__'
+    const finalProgramme = selectedProgramme === '__none__'
+      ? ''
+      : selectedProgramme === '__custom__'
       ? customProgramme.trim()
       : selectedProgramme.trim()
     const finalSession = selectedSession === '__custom__'
@@ -894,7 +899,7 @@ function EditSessionDetailsModal({ isOpen, session, onClose, onSave }) {
       : selectedSession.trim()
     const finalMinister = minister.trim()
 
-    if (!finalProgramme) {
+    if (selectedProgramme !== '__none__' && !finalProgramme) {
       setErrorMsg('Please select or specify an Event / Programme.')
       return
     }
@@ -942,34 +947,36 @@ function EditSessionDetailsModal({ isOpen, session, onClose, onSave }) {
             </div>
           )}
 
-          {/* 1. Event / Programme */}
+          {/* 1. Event / Programme (Optional / Standalone) */}
           <div className="form-group">
             <label className="form-label" htmlFor="edit-event-select">
-              Event / Programme <span className="form-required">*</span>
+              Event / Programme <span style={{ fontWeight: 'normal', color: 'var(--text-muted)', fontSize: '0.85em' }}>(Optional)</span>
             </label>
             <select
               id="edit-event-select"
               className="form-control"
               value={
-                programmes.some((p) => p.name === selectedProgramme)
+                selectedProgramme === '__none__' || !selectedProgramme
+                  ? '__none__'
+                  : programmes.some((p) => p.name === selectedProgramme)
                   ? selectedProgramme
                   : selectedProgramme === '__custom__'
                   ? '__custom__'
                   : selectedProgramme
-                  ? selectedProgramme
-                  : ''
               }
               onChange={(e) => handleProgrammeChange(e.target.value)}
-              required
             >
-              <option value="" disabled>Select an Event / Programme...</option>
+              <option value="__none__">[ None / Standalone ]</option>
               {programmes.map((p) => (
                 <option key={p.id} value={p.name}>
                   {p.name}
                 </option>
               ))}
-              {selectedProgramme && !programmes.some((p) => p.name === selectedProgramme) && selectedProgramme !== '__custom__' && (
-                <option value={selectedProgramme}>{selectedProgramme} (Current)</option>
+              {selectedProgramme &&
+                selectedProgramme !== '__none__' &&
+                selectedProgramme !== '__custom__' &&
+                !programmes.some((p) => p.name === selectedProgramme) && (
+                  <option value={selectedProgramme}>{selectedProgramme} (Current)</option>
               )}
               <option value="__custom__">+ Custom Event / Programme...</option>
             </select>
