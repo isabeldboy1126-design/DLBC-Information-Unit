@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { getApiUrl } from '../../config'
 import { getCleanSessionName } from '../sessions/SessionDetailView'
-import { setActiveProcess, clearActiveProcess } from '../common/activeProcessManager'
+import { setActiveProcess, clearActiveProcess, minimizeActiveProcess } from '../common/activeProcessManager'
 
 function DocumentIconLarge() {
   return (
@@ -84,7 +84,6 @@ export function ReportProcessingModal({
   onViewReport,
   onProcessingComplete,
 }) {
-  const [isMinimized, setIsMinimized] = useState(false)
   const [currentStage, setCurrentStage] = useState('preparing_transcript')
   const [runId, setRunId] = useState(null)
   const [runData, setRunData] = useState(null)
@@ -343,62 +342,6 @@ export function ReportProcessingModal({
   const activeStep = getActiveStepNumber()
 
   // -------------------------------------------------------------
-  // MINIMIZED FLOATING PANEL (Reusing Floating Recorder Standard Dimensions)
-  // -------------------------------------------------------------
-  if (isMinimized) {
-    const sessionTitle = getCleanSessionName(session)
-    return (
-      <aside
-        className="floating-recorder-card floating-process-panel"
-        onClick={() => setIsMinimized(false)}
-        role="region"
-        aria-label="Report Processing in progress"
-        title="Click to expand Report Processing"
-      >
-        <div className="floating-recorder-header">
-          <div className="floating-header-left">
-            <div className="floating-process-badge">
-              {currentStage === 'completed' ? (
-                <span className="floating-check-icon">✓</span>
-              ) : (
-                <span className="floating-process-spinner" />
-              )}
-              <span className="floating-process-type">Report Processing</span>
-            </div>
-          </div>
-
-          <div className="floating-header-right">
-            <button
-              type="button"
-              className="btn btn--outline btn--small floating-btn-maximize"
-              onClick={(e) => {
-                e.stopPropagation()
-                setIsMinimized(false)
-              }}
-              title="Expand Report Processing"
-            >
-              <span className="btn-icon">🗖</span>
-              <span>Expand</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="floating-process-body">
-          <div className="floating-process-session-title">{sessionTitle}</div>
-          <div className="floating-process-stage-row">
-            <span className="floating-process-stage-name">
-              {currentStage === 'completed'
-                ? 'Report ready'
-                : STEPS.find((s) => s.id === activeStep)?.label || 'AI Processing'}
-            </span>
-            {currentStage !== 'completed' && <span className="floating-pulse-dot" />}
-          </div>
-        </div>
-      </aside>
-    )
-  }
-
-  // -------------------------------------------------------------
   // FULL FLOATING MODAL MATCHING APPROVED REFERENCE IMAGE
   // -------------------------------------------------------------
   return (
@@ -414,7 +357,10 @@ export function ReportProcessingModal({
           <button
             type="button"
             className="modal-minimize-btn"
-            onClick={() => setIsMinimized(true)}
+            onClick={() => {
+              minimizeActiveProcess()
+              if (onClose) onClose()
+            }}
             title="Minimize to background"
             aria-label="Minimize"
           >

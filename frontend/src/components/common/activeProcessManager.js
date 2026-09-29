@@ -17,19 +17,39 @@ export function getActiveProcess() {
 export function setActiveProcess(job) {
   if (!job || !job.sessionId) return
   try {
+    const current = getActiveProcess()
+    const isMinimized = typeof job.isMinimized === 'boolean'
+      ? job.isMinimized
+      : (current && current.sessionId === job.sessionId ? !!current.isMinimized : false)
+
     const payload = {
-      jobType: job.jobType || 'report_processing',
+      jobType: job.jobType || current?.jobType || 'report_processing',
       sessionId: job.sessionId,
-      sessionTitle: job.sessionTitle || 'Session',
+      sessionTitle: job.sessionTitle || current?.sessionTitle || 'Session',
       stageLabel: job.stageLabel || (job.jobType === 'verification' ? 'Verification in progress' : 'AI Processing'),
       isCompleted: !!job.isCompleted,
-      runId: job.runId || null,
+      isMinimized,
+      runId: job.runId || current?.runId || null,
       updatedAt: Date.now(),
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
     window.dispatchEvent(new CustomEvent('dlbc-process-update', { detail: payload }))
   } catch (e) {
     console.error('Failed to set active process:', e)
+  }
+}
+
+export function minimizeActiveProcess() {
+  const current = getActiveProcess()
+  if (current) {
+    setActiveProcess({ ...current, isMinimized: true })
+  }
+}
+
+export function expandActiveProcess() {
+  const current = getActiveProcess()
+  if (current) {
+    setActiveProcess({ ...current, isMinimized: false })
   }
 }
 

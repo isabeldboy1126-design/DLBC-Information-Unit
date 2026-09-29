@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { getApiUrl } from '../../config'
+import { minimizeActiveProcess } from '../common/activeProcessManager'
 
 /**
  * SessionCompletionView — Contained floating processing panel matching
@@ -138,7 +139,31 @@ export function SessionCompletionView({
           {formatDateMeta(dateCreated)} · {formatDurationMeta(durationSec)}
         </p>
 
-        <div className="completion-floating-card">
+        <div className="completion-floating-card" style={{ position: 'relative' }}>
+          {/* Top Controls: Minimize Button */}
+          {(isCompiling || isVerifying) && (
+            <div className="modal-card-top-controls" style={{ position: 'absolute', top: '18px', right: '18px' }}>
+              <button
+                type="button"
+                className="modal-minimize-btn"
+                onClick={() => {
+                  minimizeActiveProcess()
+                  if (onFinishForNow) {
+                    onFinishForNow()
+                  } else if (onViewSessionDetails) {
+                    onViewSessionDetails()
+                  }
+                }}
+                title="Minimize to background"
+                aria-label="Minimize"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
+            </div>
+          )}
+
           {/* 1. Compiling or Verifying State (media_1790599569372.png) */}
           {(isCompiling || isVerifying) && (
             <div className="completion-state-processing">

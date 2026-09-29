@@ -11,7 +11,7 @@ import { LiveRecordingView } from './components/recording/LiveRecordingView'
 import { FloatingRecordingController } from './components/recording/FloatingRecordingController'
 import { FloatingProcessController } from './components/common/FloatingProcessController'
 import { GlobalLoadingOverlay } from './components/common/GlobalLoadingOverlay'
-import { useActiveProcess } from './components/common/activeProcessManager'
+import { useActiveProcess, expandActiveProcess } from './components/common/activeProcessManager'
 import { SessionCompletionView } from './components/sessions/SessionCompletionView'
 import { SessionHistoryList } from './components/sessions/SessionHistoryList'
 import { SessionDetailView, getCleanSessionName } from './components/sessions/SessionDetailView'
@@ -711,15 +711,16 @@ function App() {
       </ErrorBoundary>
 
       {/* ------------------------------------------------------------- */}
-      {/* FLOATING PROCESS CONTROLLER: Persistent across all app views  */}
+      {/* FLOATING PROCESS CONTROLLER: Only visible when explicitly minimized */}
       {/* ------------------------------------------------------------- */}
-      {activeProcess && (
+      {activeProcess && activeProcess.isMinimized && (
         <FloatingProcessController
           jobType={activeProcess.jobType}
           sessionTitle={activeProcess.sessionTitle}
           stageLabel={activeProcess.stageLabel}
           isCompleted={activeProcess.isCompleted}
           onExpand={() => {
+            expandActiveProcess()
             if (activeProcess.jobType === 'report_processing') {
               if (activeProcess.isCompleted) {
                 navigateTo(`session/${activeProcess.sessionId}/final_report`)
