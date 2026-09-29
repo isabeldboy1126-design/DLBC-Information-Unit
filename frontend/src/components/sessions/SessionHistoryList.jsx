@@ -554,13 +554,13 @@ export function SessionHistoryList({
             } else if (isReportsReady) {
               statusLabel = 'Reports Ready'
               statusPillClass = 'session-card-pill--neutral'
-              actionText = 'Continue to Editing →'
-              targetWorkflowStage = 'editing'
+              actionText = 'Process with AI →'
+              targetWorkflowStage = 'report_processing'
             } else if (isVerified) {
               statusLabel = 'Verified'
               statusPillClass = 'session-card-pill--neutral'
-              actionText = 'Continue to Reporting →'
-              targetWorkflowStage = 'reporting'
+              actionText = 'Process with AI →'
+              targetWorkflowStage = 'report_processing'
             } else if (needsVerification) {
               statusLabel = 'Needs Verification'
               statusPillClass = 'session-card-pill--warning'

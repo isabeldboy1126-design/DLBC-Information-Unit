@@ -216,6 +216,9 @@ export function SessionDetailView({
       if (hash === 'verification_workspace') return 'verification'
     }
 
+    if (initialStage === 'report_processing') {
+      return 'overview'
+    }
     if (initialStage) {
       return initialStage
     }
@@ -238,7 +241,9 @@ export function SessionDetailView({
 
   const [activeView, setActiveView] = useState(getDefaultView)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [showReportProcessingModal, setShowReportProcessingModal] = useState(false)
+  const [showReportProcessingModal, setShowReportProcessingModal] = useState(() => {
+    return initialStage === 'report_processing' || (typeof window !== 'undefined' && window.location.hash.includes('/report_processing'))
+  })
   const mediaElementRef = useRef(null)
 
   const handleDownloadDocx = async () => {
@@ -273,8 +278,14 @@ export function SessionDetailView({
   // Synchronize activeView when opening a new session or changing initialStage or hash route
   useEffect(() => {
     setActiveView(getDefaultView())
+    if (initialStage === 'report_processing' || (typeof window !== 'undefined' && window.location.hash.includes('/report_processing'))) {
+      setShowReportProcessingModal(true)
+    }
     const handleHash = () => {
       setActiveView(getDefaultView())
+      if (window.location.hash.includes('/report_processing')) {
+        setShowReportProcessingModal(true)
+      }
     }
     window.addEventListener('hashchange', handleHash)
     window.addEventListener('popstate', handleHash)
@@ -302,7 +313,17 @@ export function SessionDetailView({
     onSubViewChange({ title, onBack: backFn })
   }, [activeView, onBack, onSubViewChange])
 
-  if (!session) return null
+  if (!session) {
+    return (
+      <div className="session-workspace-loading-state" role="status" aria-live="polite">
+        <div className="session-loading-spinner" />
+        <p className="session-loading-text">Loading session workspace…</p>
+        <button type="button" className="btn btn--outline btn--small" onClick={onBack}>
+          ← Back to Sessions
+        </button>
+      </div>
+    )
+  }
 
   // ---------------------------------------------------------------------------
   // CHILD STAGE ROUTING
@@ -403,14 +424,15 @@ export function SessionDetailView({
 
   // Lifecycle stage statuses
   const vStatus = session?.verification_status || 'not_started'
-  const isVerified = vStatus === 'completed' || !!session?.verified_at || !!session?.verified_text
+  const isVerified = vStatus === 'completed' || vStatus === 'complete' || !!session?.verified_at || !!session?.verified_text
   const rStatus = session?.reporting_status || 'not_started'
   const eStatus = session?.editing_status || 'not_started'
   const pStatus = session?.proofreading_status || 'not_started'
   const fStatus = session?.final_report_status || 'not_started'
   const hasAudio = !!(session?.audio_filename || session?.recording_id)
   const hasTranscript = !!(session?.transcript_id || (session?.segment_count && session.segment_count > 0))
-  const flagCount = session?.flag_count || 0
+  const flagCount = session?.flag_count || session?.verification_items_total || 0
+  const resolvedCount = session?.verification_items_resolved ?? verificationState?.resolved_count ?? 0
 
   // ---------------------------------------------------------------------------
   // VIEW: RAW TRANSCRIPT STANDALONE
@@ -455,7 +477,10 @@ export function SessionDetailView({
             changeStage('overview')
           }}
           onPlaySegment={handleJumpToTime}
-          onNavigateToReporting={() => changeStage('reporting')}
+          onNavigateToReporting={() => {
+            changeStage('overview')
+            setShowReportProcessingModal(true)
+          }}
           onFinishForNow={() => changeStage('overview')}
           isProcessingProp={verificationProcessing}
           onTriggerProcessing={onTriggerVerificationProcessing}
@@ -483,8 +508,8 @@ export function SessionDetailView({
               <button type="button" className="btn btn--outline" onClick={() => changeStage('overview')}>
                 Finish for Now
               </button>
-              <button type="button" className="btn btn--primary" onClick={() => changeStage('reporting')}>
-                Continue to Reporting →
+              <button type="button" className="btn btn--primary" onClick={() => setShowReportProcessingModal(true)}>
+                Process with AI →
               </button>
             </div>
           </div>
@@ -492,7 +517,7 @@ export function SessionDetailView({
           <div className="verified-complete-banner">
             <span className="banner-check-icon">✓</span>
             <div>
-              <strong>Verification Complete</strong>
+              <strong>Transcript verified</strong>
               <p>This transcript is now the approved factual source for Information Unit Reporting and Editing.</p>
             </div>
           </div>
@@ -574,12 +599,11 @@ export function SessionDetailView({
 
       {/* 2. Verification Action Strip (floating white card matching reference design) */}
       {(() => {
-        const isVerified = (session.verification_status === 'complete') || (flagCount === 0) || (resolvedCount >= flagCount && flagCount > 0)
+        const isSessionVerified = isVerified || (flagCount === 0) || (resolvedCount >= flagCount && flagCount > 0)
         const hasFinalDoc = (fStatus === 'complete') || session?.final_report_id || session?.docx_file_path || session?.report_processing_status === 'completed'
-        const hasLegacyReporting = rStatus === 'reports_ready' || eStatus === 'complete' || pStatus === 'complete'
 
-        if (!isVerified && flagCount > 0) {
-          const remaining = flagCount - resolvedCount
+        if (!isSessionVerified && flagCount > 0) {
+          const remaining = Math.max(0, flagCount - resolvedCount)
           return (
             <div className="verification-action-strip">
               <div className="verification-strip-left">
@@ -605,7 +629,7 @@ export function SessionDetailView({
           )
         }
 
-        if (isVerified) {
+        if (isSessionVerified) {
           if (hasFinalDoc) {
             return (
               <div className="verification-action-strip">
@@ -645,7 +669,7 @@ export function SessionDetailView({
                 onClick={() => setShowReportProcessingModal(true)}
                 id="btn-workspace-process-ai"
               >
-                {hasLegacyReporting ? 'Continue with AI →' : 'Process with AI →'}
+                Process with AI →
               </button>
             </div>
           )

@@ -625,19 +625,166 @@ class SessionRepository:
             return [dict(r) for r in rows]
 
     async def delete_session(self, session_id: str) -> bool:
-        """Explicit user-confirmed session deletion."""
+        """
+        Authoritative hard deletion:
+        1. Query session details to obtain recording_id, transcript_id, audio_filename, docx_file_path.
+        2. Insert session_id and recording_id into deleted_session_tombstones.
+        3. Cascading delete from child tables:
+           - session_segments
+           - verification_items
+           - report_human_diffs
+           - report_processing_runs
+           - final_reports
+           - proofread_reports
+           - edited_reports
+           - reports
+           - sessions
+        4. Clean up disk files (.wav, .pcm, .json, .docx).
+        5. Remove matching entries from recordings_manifest.json and transcripts_manifest.json.
+        """
+        sess_dict = None
+        deleted_rows = 0
+
         async with get_db_connection() as conn:
             cursor = await conn.execute(
-                "DELETE FROM sessions WHERE session_id = ?", (session_id,)
+                "SELECT session_id, recording_id, transcript_id, audio_filename FROM sessions WHERE session_id = ?",
+                (session_id,),
             )
+            row = await cursor.fetchone()
+            if row:
+                sess_dict = dict(row)
+
+            try:
+                cur_doc = await conn.execute(
+                    "SELECT docx_file_path FROM final_reports WHERE session_id = ?",
+                    (session_id,),
+                )
+                doc_row = await cur_doc.fetchone()
+                if doc_row and doc_row[0] and sess_dict:
+                    sess_dict["docx_file_path"] = doc_row[0]
+            except Exception:
+                pass
+
+            rec_id = sess_dict.get("recording_id") if sess_dict else None
+            now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+            # 2. Insert tombstone
+            try:
+                await conn.execute(
+                    "INSERT OR IGNORE INTO deleted_session_tombstones (session_id, deleted_at) VALUES (?, ?)",
+                    (session_id, now_iso),
+                )
+                if rec_id:
+                    await conn.execute(
+                        "INSERT OR IGNORE INTO deleted_session_tombstones (session_id, deleted_at) VALUES (?, ?)",
+                        (f"session_{rec_id}", now_iso),
+                    )
+                    await conn.execute(
+                        "INSERT OR IGNORE INTO deleted_session_tombstones (session_id, deleted_at) VALUES (?, ?)",
+                        (rec_id, now_iso),
+                    )
+            except Exception as e:
+                print(f"Tombstone insertion notice: {e}")
+
+            # 3. Cascading hard delete
+            child_tables = [
+                "session_segments",
+                "verification_items",
+                "report_human_diffs",
+                "report_processing_runs",
+                "final_reports",
+                "proofread_reports",
+                "edited_reports",
+                "reports",
+                "sessions",
+            ]
+            for tbl in child_tables:
+                try:
+                    c = await conn.execute(f"DELETE FROM {tbl} WHERE session_id = ?", (session_id,))
+                    if tbl == "sessions":
+                        deleted_rows = c.rowcount
+                except Exception:
+                    pass
             await conn.commit()
-            return cursor.rowcount > 0
+
+        # 4. Remove physical files
+        try:
+            if sess_dict:
+                audio_fn = sess_dict.get("audio_filename")
+                if audio_fn:
+                    p = os.path.join(STORAGE_AUDIO_DIR, audio_fn)
+                    if os.path.exists(p):
+                        try:
+                            os.remove(p)
+                        except Exception:
+                            pass
+                if rec_id:
+                    for ext in [".wav", ".pcm", ".json"]:
+                        p = os.path.join(STORAGE_AUDIO_DIR, f"{rec_id}{ext}")
+                        if os.path.exists(p):
+                            try:
+                                os.remove(p)
+                            except Exception:
+                                pass
+                docx_path = sess_dict.get("docx_file_path")
+                if docx_path and os.path.exists(docx_path):
+                    try:
+                        os.remove(docx_path)
+                    except Exception:
+                        pass
+                tr_id = sess_dict.get("transcript_id")
+                if tr_id:
+                    p = os.path.join(STORAGE_TRANSCRIPTS_DIR, f"{tr_id}.json")
+                    if os.path.exists(p):
+                        try:
+                            os.remove(p)
+                        except Exception:
+                            pass
+        except Exception as e:
+            print(f"File cleanup notice for {session_id}: {e}")
+
+        # 5. Remove from manifests
+        try:
+            audio_manifest_path = os.path.join(STORAGE_AUDIO_DIR, "recordings_manifest.json")
+            if os.path.exists(audio_manifest_path):
+                with open(audio_manifest_path, "r", encoding="utf-8") as f:
+                    manifest = json.load(f)
+                if isinstance(manifest, list):
+                    filtered = [
+                        r for r in manifest
+                        if r.get("recording_id") != rec_id
+                        and r.get("session_id") != session_id
+                        and f"session_{r.get('recording_id')}" != session_id
+                    ]
+                    if len(filtered) != len(manifest):
+                        with open(audio_manifest_path, "w", encoding="utf-8") as f:
+                            json.dump(filtered, f, indent=2)
+
+            transcripts_manifest_path = os.path.join(STORAGE_TRANSCRIPTS_DIR, "transcripts_manifest.json")
+            if os.path.exists(transcripts_manifest_path):
+                with open(transcripts_manifest_path, "r", encoding="utf-8") as f:
+                    manifest = json.load(f)
+                if isinstance(manifest, list):
+                    filtered = [
+                        t for t in manifest
+                        if t.get("transcript_id") != (sess_dict.get("transcript_id") if sess_dict else None)
+                        and t.get("recording_id") != rec_id
+                        and t.get("session_id") != session_id
+                    ]
+                    if len(filtered) != len(manifest):
+                        with open(transcripts_manifest_path, "w", encoding="utf-8") as f:
+                            json.dump(filtered, f, indent=2)
+        except Exception as e:
+            print(f"Manifest cleanup notice for {session_id}: {e}")
+
+        return deleted_rows > 0 or sess_dict is not None
 
     async def index_existing_storage_files(self):
         """
         Non-destructively imports pre-existing audio recordings and transcripts from storage/
         into SQLite sessions without modifying, moving, or deleting any original files.
         Only creates a recording<->transcript link when unambiguous metadata exists.
+        Guarantees that tombstoned deleted sessions are never resurrected.
         """
         await self.init_db()
 
@@ -661,6 +808,15 @@ class SessionRepository:
                 pass
 
         async with get_db_connection() as conn:
+            # Query tombstones to prevent resurrecting deleted sessions
+            tombstones = set()
+            try:
+                cursor = await conn.execute("SELECT session_id FROM deleted_session_tombstones")
+                rows = await cursor.fetchall()
+                tombstones = {r[0] for r in rows}
+            except Exception:
+                pass
+
             # 1. Index audio recordings
             for rec in audio_recordings:
                 rec_id = rec.get("recording_id")
@@ -668,6 +824,8 @@ class SessionRepository:
                     continue
 
                 session_id = f"session_{rec_id}"
+                if session_id in tombstones or rec_id in tombstones:
+                    continue
 
                 # Check if session already exists
                 cursor = await conn.execute(

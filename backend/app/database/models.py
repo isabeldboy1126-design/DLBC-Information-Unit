@@ -334,6 +334,13 @@ CREATE TABLE IF NOT EXISTS report_processing_settings (
     value TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- Permanent Deletion Tombstones (solely prevents resurrection from old files or background recovery)
+CREATE TABLE IF NOT EXISTS deleted_session_tombstones (
+    session_id TEXT PRIMARY KEY,
+    deleted_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tombstones_deleted ON deleted_session_tombstones(deleted_at DESC);
 """
 
 # Phase 5 migration: add verification columns to sessions table.

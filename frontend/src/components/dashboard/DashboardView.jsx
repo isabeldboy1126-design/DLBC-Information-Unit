@@ -90,14 +90,13 @@ function ClockHeaderIcon() {
 export function isActionableAttentionSession(s) {
   if (!s) return false
   if (s.is_interrupted) return true
-  if (s.final_report_status === 'complete') return false
+  if (s.final_report_status === 'complete' || s.report_processing_status === 'completed') return false
 
   const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
   const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress')
-  const readyEditing = isVerified && s.reporting_status === 'reports_ready' && s.editing_status !== 'complete'
-  const readyProofreading = s.editing_status === 'complete' && s.proofreading_status !== 'complete'
+  const needsProcessing = isVerified && s.final_report_status !== 'complete' && s.report_processing_status !== 'completed'
 
-  return needsVerification || readyEditing || readyProofreading
+  return needsVerification || needsProcessing
 }
 
 /**
@@ -271,17 +270,8 @@ export function DashboardView({
           </div>
         </div>
 
-        {/* Bottom Row: Upload Recording (Compact horizontal floating surface) */}
-        <div
-          className="creation-card creation-card--upload"
-          onClick={() => fileInputRef.current?.click()}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          role="button"
-          tabIndex={0}
-          id="hero-card-upload"
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
-        >
+        {/* Bottom Row: Simple Upload Recording Text Link */}
+        <div className="dashboard-upload-link-row">
           <input
             type="file"
             ref={fileInputRef}
@@ -293,22 +283,16 @@ export function DashboardView({
               }
             }}
           />
-
-          <div className="upload-card-left">
-            <div className="creation-card-icon-box creation-card-icon-box--ice-sm">
-              <UploadTrayIcon />
-            </div>
-
-            <div className="upload-card-content">
-              <h3 className="upload-card-title">Upload Recording</h3>
-            </div>
-          </div>
-
-          <div className="creation-card-action-slot">
-            <div className="action-circle-btn action-circle-btn--ice" aria-hidden="true">
-              <ArrowRightIcon />
-            </div>
-          </div>
+          <button
+            type="button"
+            className="dashboard-upload-text-link"
+            onClick={() => fileInputRef.current?.click()}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            id="hero-link-upload"
+          >
+            Upload recording →
+          </button>
         </div>
       </section>
 
@@ -339,8 +323,7 @@ export function DashboardView({
               const isInterrupted = !!sess.is_interrupted
               const isVerified = sess.verification_status === 'completed' || !!sess.verified_text || !!sess.verified_at
               const needsVerify = !isVerified && (sess.flag_count > 0 || sess.verification_status === 'in_progress')
-              const readyEditing = isVerified && sess.reporting_status === 'reports_ready' && sess.editing_status !== 'complete'
-              const readyProofreading = sess.editing_status === 'complete' && sess.proofreading_status !== 'complete'
+              const needsProcessing = isVerified && sess.final_report_status !== 'complete' && sess.report_processing_status !== 'completed'
 
               let stageLabel = `Verification · ${sess.flag_count || 1}`
               let stagePillClass = 'stage-pill--verification'
@@ -352,16 +335,11 @@ export function DashboardView({
                 stagePillClass = 'stage-pill--interrupted'
                 actionBtnText = 'Review'
                 targetStage = 'overview'
-              } else if (readyProofreading) {
-                stageLabel = 'Proofreading'
-                stagePillClass = 'stage-pill--proofreading'
-                actionBtnText = 'Continue'
-                targetStage = 'proofreading'
-              } else if (readyEditing) {
-                stageLabel = 'Editing'
-                stagePillClass = 'stage-pill--editing'
-                actionBtnText = 'Continue'
-                targetStage = 'editing'
+              } else if (needsProcessing) {
+                stageLabel = 'Ready for Processing'
+                stagePillClass = 'stage-pill--verified'
+                actionBtnText = 'Process with AI →'
+                targetStage = 'report_processing'
               }
 
               const { sessionTitle } = getSessionHierarchy(sess)
@@ -472,10 +450,7 @@ export function DashboardView({
               ) : (
                   recentSessions.map((sess) => {
                   const isInterrupted = !!sess.is_interrupted
-                  const isFinalComplete = sess.final_report_status === 'complete'
-                  const isProofreadComplete = sess.proofreading_status === 'complete'
-                  const isEditingComplete = sess.editing_status === 'complete'
-                  const isReportsReady = sess.reporting_status === 'reports_ready'
+                  const isFinalComplete = sess.final_report_status === 'complete' || sess.report_processing_status === 'completed'
                   const isVerified = sess.verification_status === 'completed' || !!sess.verified_text || !!sess.verified_at
                   const needsVerification = !isVerified && (sess.flag_count > 0 || sess.verification_status === 'in_progress')
 
@@ -490,15 +465,6 @@ export function DashboardView({
                   } else if (isFinalComplete) {
                     statusText = 'COMPLETED'
                     statusClass = 'status-pill--completed'
-                  } else if (isProofreadComplete) {
-                    statusText = 'PROOFREAD'
-                    statusClass = 'status-pill--completed'
-                  } else if (isEditingComplete) {
-                    statusText = 'EDITED'
-                    statusClass = 'status-pill--completed'
-                  } else if (isReportsReady) {
-                    statusText = 'REPORTS READY'
-                    statusClass = 'status-pill--verified'
                   } else if (isVerified) {
                     statusText = 'VERIFIED'
                     statusClass = 'status-pill--verified'
@@ -516,18 +482,12 @@ export function DashboardView({
                   } else if (needsVerification) {
                     actionBtnText = 'Review →'
                     targetStage = 'verification'
-                  } else if (isReportsReady) {
-                    actionBtnText = 'Reports →'
-                    targetStage = 'reporting'
-                  } else if (isEditingComplete || sess.editing_status === 'draft_ready') {
-                    actionBtnText = 'Continue →'
-                    targetStage = 'editing'
-                  } else if (isProofreadComplete || sess.proofreading_status === 'ready_for_review') {
-                    actionBtnText = 'Continue →'
-                    targetStage = 'proofreading'
                   } else if (isFinalComplete) {
                     actionBtnText = 'View Report →'
                     targetStage = 'final_report'
+                  } else if (isVerified) {
+                    actionBtnText = 'Process with AI →'
+                    targetStage = 'report_processing'
                   }
 
                   return (

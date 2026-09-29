@@ -636,7 +636,7 @@ export function VerificationWorkflow({
             <div className="verification-finalize-ready-box">
               <div className="finalize-ready-text">
                 <strong>✓ All Verification Items Resolved!</strong>
-                <p>Ready to compile the final Verified Transcript and proceed to Reporting.</p>
+                <p>Ready to compile the final Verified Transcript and proceed to AI Report Processing.</p>
               </div>
 
               <button
@@ -692,7 +692,7 @@ export function VerificationWorkflow({
         isOpen={showFinaliseModal}
         title="Finalise Verification?"
         message={`All ${itemsTotal} verification items are resolved. Would you like to create the final Verified Transcript now?`}
-        supportingText="This will combine all segments with your human corrections as the approved factual source for Reporting."
+        supportingText="This will combine all segments with your human corrections as the approved factual source for AI Report Processing."
         confirmLabel="Create Verified Transcript"
         cancelLabel="Cancel"
         variant="primary"

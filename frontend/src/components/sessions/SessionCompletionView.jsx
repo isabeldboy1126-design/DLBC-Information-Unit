@@ -277,7 +277,7 @@ export function SessionCompletionView({
               >
                 {remainingToReview > 0
                   ? `Review ${remainingToReview} Section${remainingToReview !== 1 ? 's' : ''} →`
-                  : 'Continue →'}
+                  : 'Process with AI →'}
               </button>
             </div>
           )}

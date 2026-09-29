@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useAudioCapture } from './hooks/useAudioCapture'
 import { useRecordedTranscription } from './hooks/useRecordedTranscription'
 import { useSessions } from './hooks/useSessions'
@@ -15,6 +15,7 @@ import { SessionDetailView, getCleanSessionName } from './components/sessions/Se
 import { SettingsView } from './components/settings/SettingsView'
 import { YouTubeSessionView } from './components/youtube/YouTubeSessionView'
 import { CompletedReportsView } from './components/reporting/CompletedReportsView'
+import { ErrorBoundary } from './components/common/ErrorBoundary'
 
 // File Transcription Components
 import { RecordedFileUploader } from './components/transcription/RecordedFileUploader'
@@ -93,6 +94,7 @@ function App() {
     onBack: null,
   })
   const [sessionsStatusFilter, setSessionsStatusFilter] = useState('all')
+  const scrollPositions = useRef({})
 
   // Phase 1 & 3: Audio Capture & Live Transcription Hook
   const liveAudio = useAudioCapture()
@@ -103,8 +105,21 @@ function App() {
   // Phase 4: Persistent Church Sessions Hook
   const sessionsHook = useSessions()
 
-  const applyRoute = (rawHash) => {
+  const applyRoute = (rawHash, isPop = false) => {
     const route = parseRoute(rawHash)
+
+    // Restore or reset scroll for .app-content-body
+    const cleanTarget = (rawHash || '').replace(/^#\/?/, '').trim() || 'dashboard'
+    requestAnimationFrame(() => {
+      const scrollEl = document.querySelector('.app-content-body')
+      if (scrollEl) {
+        if (isPop) {
+          scrollEl.scrollTop = scrollPositions.current[cleanTarget] || 0
+        } else {
+          scrollEl.scrollTop = 0
+        }
+      }
+    })
 
     if (route.view === 'completion') {
       setShowCompletionModal(true)
@@ -154,6 +169,12 @@ function App() {
     const cleanTarget = targetHash.replace(/^#\/?/, '')
     const currentClean = window.location.hash.replace(/^#\/?/, '')
 
+    // Record scroll position of current screen before navigating away
+    const scrollEl = document.querySelector('.app-content-body')
+    if (scrollEl) {
+      scrollPositions.current[currentClean || 'dashboard'] = scrollEl.scrollTop
+    }
+
     const currentDepth = (window.history.state && typeof window.history.state.depth === 'number')
       ? window.history.state.depth
       : 0
@@ -162,7 +183,7 @@ function App() {
     if (currentClean !== cleanTarget) {
       window.history.pushState({ ...state, depth: nextDepth }, '', '#' + cleanTarget)
     }
-    applyRoute('#' + cleanTarget)
+    applyRoute('#' + cleanTarget, false)
   }
 
   const handleInAppBack = () => {
@@ -200,13 +221,17 @@ function App() {
 
   // Handle browser popstate events (browser back, swipe gesture, mobile back)
   useEffect(() => {
+    if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual'
+    }
+
     if (!window.history.state || typeof window.history.state.depth !== 'number') {
       const initialHash = window.location.hash || '#dashboard'
       window.history.replaceState({ depth: 0 }, '', initialHash)
     }
 
     const onPopState = () => {
-      applyRoute(window.location.hash)
+      applyRoute(window.location.hash, true)
     }
 
     window.addEventListener('popstate', onPopState)
@@ -399,6 +424,7 @@ function App() {
         />
       )}
 
+      <ErrorBoundary onReset={() => navigateTo('dashboard')}>
       {/* ------------------------------------------------------------- */}
       {/* VIEW: LIVE RECORDING ACTIVE (Full Screen Mode)               */}
       {/* ------------------------------------------------------------- */}
@@ -442,7 +468,7 @@ function App() {
               if (targetSession.flag_count === 0 && !targetSession.verified_text) {
                 await sessionsHook.confirmRawAsVerified(targetSession.session_id)
               }
-              navigateTo(`session/${targetSession.session_id}/reporting`)
+              navigateTo(`session/${targetSession.session_id}/report_processing`)
             }
           }}
           onFinishForNow={() => {
@@ -673,6 +699,7 @@ function App() {
           initialFilter="all"
         />
       ) : null}
+      </ErrorBoundary>
 
       {/* ------------------------------------------------------------- */}
       {/* FLOATING CONTROLLER: Persistent across all app views when min */}

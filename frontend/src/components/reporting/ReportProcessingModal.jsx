@@ -288,39 +288,57 @@ export function ReportProcessingModal({
   const activeStep = getActiveStepNumber()
 
   // -------------------------------------------------------------
-  // MINIMIZED FLOATING PILL AT BOTTOM RIGHT
+  // MINIMIZED FLOATING PANEL (Reusing Floating Recorder Standard Dimensions)
   // -------------------------------------------------------------
   if (isMinimized) {
+    const sessionTitle = getCleanSessionName(session)
     return (
       <aside
-        className="report-processing-minimized-pill"
+        className="floating-recorder-card floating-process-panel"
         onClick={() => setIsMinimized(false)}
         role="region"
-        aria-label="Report processing in progress"
+        aria-label="Report Processing in progress"
         title="Click to expand Report Processing"
       >
-        {currentStage === 'completed' ? (
-          <span className="pill-icon pill-icon--completed"><CheckIcon /></span>
-        ) : (
-          <span className="pill-spinner" />
-        )}
-        <div className="pill-content">
-          <span className="pill-title">Report Processing</span>
-          <span className="pill-stage">
-            {currentStage === 'completed' ? 'Completed' : STEPS.find(s => s.id === activeStep)?.label}
-          </span>
+        <div className="floating-recorder-header">
+          <div className="floating-header-left">
+            <div className="floating-process-badge">
+              {currentStage === 'completed' ? (
+                <span className="floating-check-icon">✓</span>
+              ) : (
+                <span className="floating-process-spinner" />
+              )}
+              <span className="floating-process-type">Report Processing</span>
+            </div>
+          </div>
+
+          <div className="floating-header-right">
+            <button
+              type="button"
+              className="btn btn--outline btn--small floating-btn-maximize"
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsMinimized(false)
+              }}
+              title="Expand Report Processing"
+            >
+              <span className="btn-icon">🗖</span>
+              <span>Expand</span>
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          className="pill-expand-btn"
-          onClick={(e) => {
-            e.stopPropagation()
-            setIsMinimized(false)
-          }}
-          aria-label="Expand report processing modal"
-        >
-          <MaximizeIcon />
-        </button>
+
+        <div className="floating-process-body">
+          <div className="floating-process-session-title">{sessionTitle}</div>
+          <div className="floating-process-stage-row">
+            <span className="floating-process-stage-name">
+              {currentStage === 'completed'
+                ? 'Report ready'
+                : STEPS.find((s) => s.id === activeStep)?.label || 'AI Processing'}
+            </span>
+            {currentStage !== 'completed' && <span className="floating-pulse-dot" />}
+          </div>
+        </div>
       </aside>
     )
   }
@@ -419,17 +437,7 @@ export function ReportProcessingModal({
             <div className="completed-badge-icon">
               <CheckIcon />
             </div>
-            <h3 className="completed-title">Report Completed Successfully</h3>
-            <p className="completed-desc">
-              The Information Unit draft has been written, verified, and proofread. Microsoft Word document is ready.
-            </p>
-            {runData?.word_count && (
-              <div className="completed-stats-row">
-                <span className="stat-pill">{runData.word_count} words</span>
-                <span className="stat-pill">0 forbidden phrases</span>
-                <span className="stat-pill">Standards v1.0</span>
-              </div>
-            )}
+            <h3 className="completed-title">Report ready</h3>
             <div className="completed-actions-row">
               <button
                 type="button"
@@ -452,8 +460,28 @@ export function ReportProcessingModal({
               </button>
             </div>
           </div>
+        ) : currentStage === 'preparing_transcript' ? (
+          /* Stage 1: Preparing Transcript — EXACTLY ONE status line with one indicator */
+          <div className="report-processing-subtasks-card">
+            <div className="report-processing-task-row">
+              <span className="report-processing-blue-spinner" />
+              <span className="report-processing-task-label">
+                Preparing verified transcript and report instructions…
+              </span>
+            </div>
+          </div>
+        ) : currentStage === 'preparing_report' ? (
+          /* Stage 3: Preparing Report — EXACTLY ONE status line with one indicator */
+          <div className="report-processing-subtasks-card">
+            <div className="report-processing-task-row">
+              <span className="report-processing-blue-spinner" />
+              <span className="report-processing-task-label">
+                Preparing and saving your completed report…
+              </span>
+            </div>
+          </div>
         ) : (
-          /* Active Processing Stage Content — Matches Approved Reference Image media_1790666223818.png */
+          /* Stage 2: AI Processing — EXACTLY four simultaneous conceptual subtasks */
           <div className="report-processing-subtasks-card">
             <div className="report-processing-task-row">
               <span className="report-processing-blue-spinner" />
