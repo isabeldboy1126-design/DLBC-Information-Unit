@@ -405,6 +405,7 @@ You MUST output valid, parseable JSON conforming strictly to this format:
                     response_mime_type="application/json",
                 )
 
+                gateway_res = None
                 try:
                     gateway_res = await self.gateway.generate(
                         operation="report_processing_reasoning",
@@ -412,30 +413,43 @@ You MUST output valid, parseable JSON conforming strictly to this format:
                         contents=compiled_prompt,
                         config=config,
                     )
-                    model_name = gateway_res.model_name
-                    resp_text = gateway_res.response.text or "{}"
-                    clean_text = resp_text.strip()
-                    if clean_text.startswith("```json"):
-                        clean_text = clean_text[7:]
-                    if clean_text.startswith("```"):
-                        clean_text = clean_text[3:]
-                    if clean_text.endswith("```"):
-                        clean_text = clean_text[:-3]
-
-                    parsed_data = json.loads(clean_text.strip())
-
-                    usage = getattr(gateway_res.response, "usage_metadata", None)
-                    if usage and hasattr(usage, "total_token_count"):
-                        tokens_used = int(usage.total_token_count or 0)
                 except GeminiUnavailableError as e:
-                    logger.error(f"[{run_id}] Gemini gateway unavailable: {e}")
-                    await self.repo.update_run_status(
-                        run_id,
-                        status="failed",
-                        current_step="failed",
-                        error_message="Gemini AI service is temporarily unavailable. Please try again later.",
-                    )
-                    return
+                    if model_name != "gemini-2.5-flash":
+                        logger.warning(f"[{run_id}] {model_name} unavailable ({e}); attempting resilient fallback to gemini-2.5-flash")
+                        try:
+                            gateway_res = await self.gateway.generate(
+                                operation="report_processing_reasoning",
+                                model="gemini-2.5-flash",
+                                contents=compiled_prompt,
+                                config=config,
+                            )
+                        except GeminiUnavailableError as e2:
+                            logger.error(f"[{run_id}] Both primary and fallback models unavailable: {e2}")
+                            await self.repo.update_run_status(
+                                run_id,
+                                status="failed",
+                                current_step="failed",
+                                error_message="Gemini AI service is temporarily unavailable. Please try again later.",
+                            )
+                            return
+                        except Exception as e2:
+                            logger.error(f"[{run_id}] Fallback model failed: {e2}")
+                            await self.repo.update_run_status(
+                                run_id,
+                                status="failed",
+                                current_step="failed",
+                                error_message=f"AI processing failed: {str(e2)}",
+                            )
+                            return
+                    else:
+                        logger.error(f"[{run_id}] Gemini gateway unavailable: {e}")
+                        await self.repo.update_run_status(
+                            run_id,
+                            status="failed",
+                            current_step="failed",
+                            error_message="Gemini AI service is temporarily unavailable. Please try again later.",
+                        )
+                        return
                 except Exception as e:
                     logger.error(f"[{run_id}] Error in Gemini processing: {e}")
                     await self.repo.update_run_status(
@@ -445,6 +459,22 @@ You MUST output valid, parseable JSON conforming strictly to this format:
                         error_message=f"AI processing failed: {str(e)}",
                     )
                     return
+
+                model_name = gateway_res.model_name
+                resp_text = gateway_res.response.text or "{}"
+                clean_text = resp_text.strip()
+                if clean_text.startswith("```json"):
+                    clean_text = clean_text[7:]
+                if clean_text.startswith("```"):
+                    clean_text = clean_text[3:]
+                if clean_text.endswith("```"):
+                    clean_text = clean_text[:-3]
+
+                parsed_data = json.loads(clean_text.strip())
+
+                usage = getattr(gateway_res.response, "usage_metadata", None)
+                if usage and hasattr(usage, "total_token_count"):
+                    tokens_used = int(usage.total_token_count or 0)
 
             # Check cancellation after AI call
             curr_run = await self.repo.get_run(run_id)
