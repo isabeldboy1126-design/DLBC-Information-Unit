@@ -336,8 +336,8 @@ export function DashboardView({
                 actionBtnText = 'Review'
                 targetStage = 'overview'
               } else if (needsProcessing) {
-                stageLabel = 'Ready for Processing'
-                stagePillClass = 'stage-pill--verified'
+                stageLabel = null
+                stagePillClass = ''
                 actionBtnText = 'Process with AI →'
                 targetStage = 'report_processing'
               }
@@ -385,10 +385,12 @@ export function DashboardView({
                   </div>
 
                   <div className="attention-row-right">
-                    <span className={`attention-stage-pill ${stagePillClass}`}>
-                      <span className="pill-dot">●</span>
-                      <span className="pill-label">{stageLabel}</span>
-                    </span>
+                    {stageLabel && (
+                      <span className={`attention-stage-pill ${stagePillClass}`}>
+                        <span className="pill-dot">●</span>
+                        <span className="pill-label">{stageLabel}</span>
+                      </span>
+                    )}
 
                     <button
                       type="button"

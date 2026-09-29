@@ -144,21 +144,61 @@ export function FinalReportView({ session, onBack }) {
   const charCount = reportText ? reportText.length : 0
   const fileSizeKb = activeFinal?.docx_file_size ? (activeFinal.docx_file_size / 1024).toFixed(1) : null
 
+  const [isDownloadingDoc, setIsDownloadingDoc] = useState(false)
+
+  const handleDownloadDocument = async () => {
+    if (!sessionId) return
+    setIsDownloadingDoc(true)
+    setErrorBanner(null)
+    try {
+      // 1. Try dedicated report-processing download/generation route
+      const res = await fetch(getApiUrl(`/api/report-processing/download-docx/${sessionId}`))
+      if (res.ok) {
+        const blob = await res.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${reportTitle || session?.title || 'Report'}.docx`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        setSuccessBanner('✓ Document downloaded successfully!')
+        setTimeout(() => setSuccessBanner(null), 3000)
+        return
+      }
+
+      // 2. If not finalized, finalize to generate Word document
+      if (!isFinalized && canFinalize) {
+        await handleFinalizeReport()
+      }
+
+      // 3. Download via final-report download endpoint
+      window.location.href = getApiUrl(`/api/final-report/sessions/${sessionId}/download`)
+    } catch (e) {
+      setErrorBanner(`Failed to download document: ${e.message}`)
+    } finally {
+      setIsDownloadingDoc(false)
+    }
+  }
+
+  const hasReportContent = Boolean(reportText && reportText.trim())
+
   return (
     <div className="final-report-workspace">
-      {/* Top Navigation & Action Banner Matching final-report.png */}
+      {/* Top Navigation & Action Banner */}
       <div className="reporting-ready-floating-card" style={{ marginBottom: '1.5rem', background: '#ffffff' }}>
         <div className="ready-card-left">
           <div className="ready-check-icon-circle" style={{ background: '#ecfdf5', color: '#10b981' }}>✓</div>
           <div className="ready-card-text">
             <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#10b981', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              WORKFLOW COMPLETE
+              REPORT READY
             </span>
             <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f2947', margin: '0.15rem 0' }}>
-              Final Report Ready
+              {reportTitle || 'Message Report'}
             </h3>
             <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b' }}>
-              {session?.title || 'Sunday Morning Worship & Sermon'} • {reportTitle || 'Message Report'}
+              {session?.title || 'Sunday Morning Worship & Sermon'} • {wordCount} words
             </p>
           </div>
         </div>
@@ -173,18 +213,17 @@ export function FinalReportView({ session, onBack }) {
             {copied ? '✓ Copied!' : '📋 Copy Text'}
           </button>
 
-          {isFinalized && (
-            <button
-              type="button"
-              className="btn-continue-editing-primary"
-              onClick={handleDownloadDocx}
-              id="btn-download-final-docx-card"
-              title="Download Microsoft Word (.docx) document"
-            >
-              <span>Download .docx</span>
-              <span>⬇</span>
-            </button>
-          )}
+          <button
+            type="button"
+            className="btn-continue-editing-primary"
+            onClick={handleDownloadDocument}
+            disabled={isDownloadingDoc}
+            id="btn-download-final-docx-card"
+            title="Download Microsoft Word (.docx) document"
+          >
+            <span>{isDownloadingDoc ? 'Generating Document...' : 'Download Document'}</span>
+            <span>⬇</span>
+          </button>
         </div>
       </div>
 
@@ -207,35 +246,15 @@ export function FinalReportView({ session, onBack }) {
         </div>
       )}
 
-      {/* Main Content: Pre-Finalization or 2-Column Archival View */}
-      {!isFinalized ? (
+      {/* Main Content: 2-Column Archival View or Loading State */}
+      {!hasReportContent ? (
         <div className="card editor-empty-card" style={{ marginTop: '1.5rem', padding: '3.5rem 2rem', textAlign: 'center' }}>
           <div className="editor-empty-content" style={{ maxWidth: '560px', margin: '0 auto' }}>
-            <span style={{ fontSize: '2.5rem' }}>🏆</span>
-            <h3 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#0f2947', margin: '0.5rem 0' }}>Ready for Final Report Generation</h3>
+            <span style={{ fontSize: '2.5rem' }}>📄</span>
+            <h3 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#0f2947', margin: '0.5rem 0' }}>Preparing Final Report</h3>
             <p style={{ color: '#64748b', fontSize: '0.92rem', lineHeight: 1.5 }}>
-              The Proofread Report has been approved. Finalizing will generate an immutable Final Report record and create a beautifully formatted, editable Microsoft Word (.docx) document ready for distribution.
+              Loading report content and formatting archival document...
             </p>
-
-            <div className="final-report-metadata-preview" style={{ margin: '1.5rem auto' }}>
-              <div className="preview-item">
-                <strong>Message Title:</strong> {reportTitle}
-              </div>
-              <div className="preview-item">
-                <strong>Export Filename:</strong> <code>{finalReportData.suggested_docx_filename || 'Message Report.docx'}</code>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="btn-continue-editing-primary"
-              style={{ margin: '0 auto' }}
-              onClick={handleFinalizeReport}
-              disabled={!canFinalize || isFinalizing}
-              id="btn-finalize-report"
-            >
-              <span>{isFinalizing ? 'Generating Document...' : '🏆 Finalize & Generate Word Document'}</span>
-            </button>
           </div>
         </div>
       ) : (
@@ -248,13 +267,13 @@ export function FinalReportView({ session, onBack }) {
               <div className="meta-field-item">
                 <span className="meta-field-label">DATE</span>
                 <span className="meta-field-value">
-                  {activeFinal.service_date ? new Date(activeFinal.service_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {activeFinal?.service_date ? new Date(activeFinal.service_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                 </span>
               </div>
 
               <div className="meta-field-item">
                 <span className="meta-field-label">MINISTER</span>
-                <span className="meta-field-value">{activeFinal.minister || session?.minister_name || 'Pastor W.F. Kumuyi'}</span>
+                <span className="meta-field-value">{activeFinal?.minister || session?.minister_name || session?.minister || 'Pastor W.F. Kumuyi'}</span>
               </div>
 
               <div className="meta-field-item">
@@ -268,14 +287,14 @@ export function FinalReportView({ session, onBack }) {
               </div>
 
               <div className="meta-field-item">
-                <span className="meta-field-label">FINALIZED BY</span>
-                <span className="meta-field-value">Admin User</span>
+                <span className="meta-field-label">STATUS</span>
+                <span className="meta-field-value">{isFinalized ? 'Finalized Archival' : 'Ready for Distribution'}</span>
               </div>
             </div>
 
             <div className="post-final-box">
               <h5>Post-Finalization</h5>
-              <p>Need to make a correction after finalization? Create a new revision without overwriting this copy.</p>
+              <p>Need to make a correction? Edit and save a new revision without overwriting earlier versions.</p>
               {!isEditing ? (
                 <button
                   type="button"
@@ -297,14 +316,16 @@ export function FinalReportView({ session, onBack }) {
               )}
             </div>
 
-            <button
-              type="button"
-              className="btn btn--outline btn--small"
-              onClick={() => setShowRevisionsModal(true)}
-              style={{ width: '100%' }}
-            >
-              🕒 Revisions ({finalReportData.revisions_count || 1})
-            </button>
+            {finalReportData.revisions?.length > 1 && (
+              <button
+                type="button"
+                className="btn btn--outline btn--small"
+                onClick={() => setShowRevisionsModal(true)}
+                style={{ width: '100%' }}
+              >
+                🕒 Revisions ({finalReportData.revisions_count || finalReportData.revisions.length})
+              </button>
+            )}
           </div>
 
           {/* Right Column: Archival Paper Document Simulation */}
@@ -350,16 +371,16 @@ export function FinalReportView({ session, onBack }) {
                   FINAL TRANSCRIPT REPORT
                 </div>
                 <h1 className="archival-doc-main-title">
-                  {activeFinal.report_title}
+                  {reportTitle || activeFinal?.report_title || 'Message Report'}
                 </h1>
                 <div className="archival-doc-delivery">
-                  Delivered by {activeFinal.minister || 'Pastor W.F. Kumuyi'} on {activeFinal.service_date ? new Date(activeFinal.service_date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                  Delivered by {activeFinal?.minister || session?.minister || 'Pastor W.F. Kumuyi'} on {activeFinal?.service_date ? new Date(activeFinal.service_date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
                 </div>
                 <hr className="archival-doc-divider" />
 
                 <div className="archival-body-text">
                   <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '1rem', lineHeight: '1.8', color: '#1e293b', margin: 0 }}>
-                    {activeFinal.report_text}
+                    {reportText}
                   </pre>
                 </div>
 

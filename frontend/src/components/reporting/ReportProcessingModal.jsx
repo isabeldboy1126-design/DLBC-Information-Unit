@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { getApiUrl } from '../../config'
 import { getCleanSessionName } from '../sessions/SessionDetailView'
+import { setActiveProcess, clearActiveProcess } from '../common/activeProcessManager'
 
 function DocumentIconLarge() {
   return (
@@ -128,10 +129,35 @@ export function ReportProcessingModal({
       setRunData(data)
       if (data.run_id) setRunId(data.run_id)
 
+      const cleanTitle = getCleanSessionName(session)
+      const stageMap = {
+        preparing_transcript: 'Preparing Transcript',
+        ai_processing: 'AI Processing',
+        preparing_report: 'Preparing Report',
+        completed: 'Report ready',
+      }
+
       if (data.status === 'in_progress') {
-        setCurrentStage(data.current_stage || 'ai_processing')
+        const nextStage = data.current_stage || 'ai_processing'
+        setCurrentStage(nextStage)
+        setActiveProcess({
+          jobType: 'report_processing',
+          sessionId,
+          sessionTitle: cleanTitle,
+          stageLabel: stageMap[nextStage] || 'AI Processing',
+          isCompleted: false,
+          runId: data.run_id || runId,
+        })
       } else if (data.status === 'completed') {
         setCurrentStage('completed')
+        setActiveProcess({
+          jobType: 'report_processing',
+          sessionId,
+          sessionTitle: cleanTitle,
+          stageLabel: 'Report ready',
+          isCompleted: true,
+          runId: data.run_id || runId,
+        })
         if (pollTimerRef.current) {
           clearInterval(pollTimerRef.current)
           pollTimerRef.current = null
@@ -140,12 +166,14 @@ export function ReportProcessingModal({
       } else if (data.status === 'failed') {
         setCurrentStage('failed')
         setErrorMsg(data.error_message || 'Report processing failed')
+        clearActiveProcess()
         if (pollTimerRef.current) {
           clearInterval(pollTimerRef.current)
           pollTimerRef.current = null
         }
       } else if (data.status === 'cancelled') {
         setCurrentStage('cancelled')
+        clearActiveProcess()
         if (pollTimerRef.current) {
           clearInterval(pollTimerRef.current)
           pollTimerRef.current = null
@@ -154,7 +182,7 @@ export function ReportProcessingModal({
     } catch (e) {
       console.error('Error polling report processing status:', e)
     }
-  }, [sessionId])
+  }, [sessionId, session, runId])
 
   // Trigger or resume processing
   const startProcessing = useCallback(async () => {
@@ -162,6 +190,7 @@ export function ReportProcessingModal({
     setErrorMsg(null)
     setIsCancelling(false)
     setCurrentStage('preparing_transcript')
+    const cleanTitle = getCleanSessionName(session)
 
     try {
       const statusRes = await fetch(getApiUrl(`/api/report-processing/status/${sessionId}`))
@@ -171,12 +200,28 @@ export function ReportProcessingModal({
           setRunData(statusData)
           setRunId(statusData.run_id)
           setCurrentStage('completed')
+          setActiveProcess({
+            jobType: 'report_processing',
+            sessionId,
+            sessionTitle: cleanTitle,
+            stageLabel: 'Report ready',
+            isCompleted: true,
+            runId: statusData.run_id,
+          })
           return
         }
         if (statusData.status === 'in_progress') {
           setRunData(statusData)
           setRunId(statusData.run_id)
           setCurrentStage(statusData.current_stage || 'ai_processing')
+          setActiveProcess({
+            jobType: 'report_processing',
+            sessionId,
+            sessionTitle: cleanTitle,
+            stageLabel: 'AI Processing',
+            isCompleted: false,
+            runId: statusData.run_id,
+          })
           if (pollTimerRef.current) clearInterval(pollTimerRef.current)
           pollTimerRef.current = setInterval(pollStatus, 1200)
           return
@@ -193,6 +238,14 @@ export function ReportProcessingModal({
         const data = await res.json()
         setRunId(data.run_id)
         setCurrentStage(data.current_stage || 'preparing_transcript')
+        setActiveProcess({
+          jobType: 'report_processing',
+          sessionId,
+          sessionTitle: cleanTitle,
+          stageLabel: 'Preparing Transcript',
+          isCompleted: false,
+          runId: data.run_id,
+        })
 
         if (pollTimerRef.current) clearInterval(pollTimerRef.current)
         pollTimerRef.current = setInterval(pollStatus, 1200)
@@ -200,12 +253,14 @@ export function ReportProcessingModal({
         const err = await res.json()
         setErrorMsg(err.detail || 'Failed to start report processing')
         setCurrentStage('failed')
+        clearActiveProcess()
       }
     } catch (e) {
       setErrorMsg(`Failed to connect: ${e.message}`)
       setCurrentStage('failed')
+      clearActiveProcess()
     }
-  }, [sessionId, pollStatus])
+  }, [sessionId, session, pollStatus])
 
   useEffect(() => {
     if (isOpen && sessionId) {
@@ -447,16 +502,7 @@ export function ReportProcessingModal({
                   if (onViewReport) onViewReport(runData)
                 }}
               >
-                View Report
-              </button>
-              <button
-                type="button"
-                className="btn-process-download-doc"
-                onClick={handleDownloadDocx}
-                disabled={isDownloading}
-              >
-                <DownloadIcon />
-                <span>{isDownloading ? 'Downloading...' : 'Generate Document'}</span>
+                View Report →
               </button>
             </div>
           </div>

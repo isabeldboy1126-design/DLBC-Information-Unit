@@ -2,29 +2,22 @@ import React, { useState, useRef, useEffect } from 'react'
 import { getApiUrl } from '../../config'
 
 /**
- * RawTranscriptViewer — Immutable Raw Transcript View matching raw-transcript.png.
- * 
- * Features:
- * - Header: Title, RAW TRANSCRIPT tag, Date, Total duration, and Copy Full Transcript.
- * - Prominent "Verification Needed" alert banner with direct "Begin Verification" CTA.
- * - Master Audio playback scrubber with interactive waveform seek.
- * - View switcher: Timestamped Segments vs Continuous Text.
- * - Clickable segment timestamps seeking and playing master audio at exact offsets.
- * - Flagged / low confidence segments highlighted with confidence scores (e.g. CONF: 62%).
- * - Archival Immutability Policy footer at the bottom.
+ * RawTranscriptViewer — Simplified, restrained raw transcript page.
+ * Focused strictly on:
+ * 1. Recorded Audio (clean audio player with scrubber & speed control)
+ * 2. Transcript (Timestamped chronological view or Plain Text continuous view)
  */
 export function RawTranscriptViewer({
   transcript,
   mediaElementRef,
   onJumpToTime,
-  onBeginVerification,
-  flagCount = 0,
 }) {
-  const [viewMode, setViewMode] = useState('segments') // 'segments' | 'continuous'
+  const [viewMode, setViewMode] = useState('timestamped') // 'timestamped' | 'plain'
   const [copied, setCopied] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [mediaDuration, setMediaDuration] = useState(transcript?.duration_seconds || 0)
+  const [playbackSpeed, setPlaybackSpeed] = useState(1)
 
   const localPlayerRef = useRef(null)
   const playerRef = mediaElementRef || localPlayerRef
@@ -32,13 +25,16 @@ export function RawTranscriptViewer({
 
   if (!transcript) return null
 
-  const formatSeconds = (totalSeconds) => {
+  const formatTimestamp = (totalSeconds) => {
     if (!totalSeconds && totalSeconds !== 0) return '00:00:00'
     const hours = Math.floor(totalSeconds / 3600)
     const mins = Math.floor((totalSeconds % 3600) / 60)
     const secs = Math.floor(totalSeconds % 60)
     const pad = (n) => String(n).padStart(2, '0')
-    return `${pad(hours)}:${pad(mins)}:${pad(secs)}`
+    if (hours > 0) {
+      return `${pad(hours)}:${pad(mins)}:${pad(secs)}`
+    }
+    return `00:${pad(mins)}:${pad(secs)}`
   }
 
   const formatDate = (isoStr) => {
@@ -46,7 +42,7 @@ export function RawTranscriptViewer({
     try {
       const d = new Date(isoStr)
       return d.toLocaleDateString(undefined, {
-        month: 'long',
+        month: 'short',
         day: 'numeric',
         year: 'numeric',
       })
@@ -55,7 +51,7 @@ export function RawTranscriptViewer({
     }
   }
 
-  const handleCopyFullTranscript = () => {
+  const handleCopyTranscript = () => {
     const cleanText =
       transcript.raw_text?.trim() ||
       (transcript.segments ? transcript.segments.map((s) => s.text.trim()).filter(Boolean).join(' ') : '')
@@ -63,7 +59,7 @@ export function RawTranscriptViewer({
     if (cleanText) {
       navigator.clipboard.writeText(cleanText)
       setCopied(true)
-      setTimeout(() => setCopied(false), 2500)
+      setTimeout(() => setCopied(false), 2000)
     }
   }
 
@@ -76,7 +72,6 @@ export function RawTranscriptViewer({
 
   const mediaUrl = getApiUrl(`/api/transcription/media/${encodeURIComponent(mediaId)}`)
 
-  // Handle media timeupdate
   const handleTimeUpdate = (e) => {
     setCurrentTime(e.target.currentTime)
   }
@@ -107,7 +102,14 @@ export function RawTranscriptViewer({
     }
   }
 
-  // Jump to specific timestamp
+  const handleSpeedChange = (e) => {
+    const speed = parseFloat(e.target.value)
+    setPlaybackSpeed(speed)
+    if (playerRef.current) {
+      playerRef.current.playbackRate = speed
+    }
+  }
+
   const handleTimestampClick = (startTime) => {
     const el = playerRef.current
     if (el) {
@@ -126,9 +128,12 @@ export function RawTranscriptViewer({
   }
 
   const segments = transcript.segments || []
+  const fullText =
+    transcript.raw_text ||
+    (segments.length > 0 ? segments.map((s) => s.text).join(' ') : 'No transcript text available.')
 
   return (
-    <div className="card raw-transcript-view-card">
+    <div className="simplified-raw-transcript-view">
       {/* Hidden Native Audio Element */}
       <audio
         ref={playerRef}
@@ -142,170 +147,146 @@ export function RawTranscriptViewer({
         style={{ display: 'none' }}
       />
 
-      {/* 1. Header Bar */}
-      <div className="raw-transcript-header">
-        <div className="raw-transcript-header-left">
-          <div className="raw-transcript-title-row">
-            <h1 className="raw-transcript-title">
-              {transcript.original_filename?.replace(/\.[^/.]+$/, '') || 'Sunday Morning Worship Service'}
-            </h1>
-            <span className="raw-transcript-tag">RAW TRANSCRIPT</span>
-          </div>
-
-          <div className="raw-transcript-subline">
-            <span>📅 {formatDate(transcript.created_at)}</span>
-            <span>&bull;</span>
-            <span>⏱️ {formatSeconds(mediaDuration || transcript.duration_seconds)} TOTAL DURATION</span>
-          </div>
+      {/* 1. Restrained Metadata Header */}
+      <div className="raw-header-simple">
+        <div>
+          <h2 className="raw-header-title">
+            {transcript.original_filename?.replace(/\.[^/.]+$/, '') || 'Raw Transcript'}
+          </h2>
+          <p className="raw-header-meta">
+            {formatDate(transcript.created_at)} • {formatTimestamp(mediaDuration || transcript.duration_seconds)}
+          </p>
         </div>
 
         <button
           type="button"
-          className="btn btn--outline btn--small copy-transcript-btn"
-          onClick={handleCopyFullTranscript}
+          className="btn btn--outline btn--small"
+          onClick={handleCopyTranscript}
           id="btn-copy-raw-transcript"
         >
-          {copied ? '✓ Copied!' : '📋 Copy Full Transcript'}
+          {copied ? '✓ Copied' : 'Copy Transcript'}
         </button>
       </div>
 
-      {/* 2. Verification Needed Banner (if flags present) */}
-      {flagCount > 0 && onBeginVerification && (
-        <div className="raw-transcript-flag-banner">
-          <div className="flag-banner-left">
-            <span className="flag-banner-icon">⚠️</span>
-            <div className="flag-banner-text">
-              <strong>{flagCount} sections require human verification</strong>
-              <p>Low confidence flags detected in technical or localized phrasing.</p>
-            </div>
-          </div>
+      {/* 2. Recorded Audio Section */}
+      <section className="raw-audio-section" aria-label="Recorded Audio">
+        <h3 className="raw-section-label">Recorded Audio</h3>
 
+        <div className="audio-player-simple">
           <button
             type="button"
-            className="btn btn--danger btn--small btn--begin-verification"
-            onClick={onBeginVerification}
-            id="btn-raw-begin-verification"
+            className="btn-audio-play-simple"
+            onClick={togglePlayPause}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
           >
-            <span>Begin Verification</span>
-            <span>→</span>
+            {isPlaying ? '⏸' : '▶'}
           </button>
-        </div>
-      )}
 
-      {/* 3. Audio Scrubber Bar */}
-      <div className="raw-audio-scrubber-bar">
-        <button
-          type="button"
-          className="btn-audio-play-circle"
-          onClick={togglePlayPause}
-          title={isPlaying ? 'Pause master audio' : 'Play master audio'}
-        >
-          {isPlaying ? '⏸' : '▶'}
-        </button>
+          <span className="audio-time-stamp">{formatTimestamp(currentTime)}</span>
 
-        <span className="audio-time-label">{formatSeconds(currentTime)}</span>
-
-        <div
-          className="audio-waveform-track"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect()
-            const clickPos = (e.clientX - rect.left) / rect.width
-            const seekTo = clickPos * (mediaDuration || 1)
-            handleTimestampClick(seekTo)
-          }}
-        >
-          <div
-            className="audio-waveform-progress"
-            style={{ width: `${mediaDuration ? (currentTime / mediaDuration) * 100 : 0}%` }}
+          <input
+            type="range"
+            className="audio-scrub-slider"
+            min={0}
+            max={mediaDuration || 1}
+            step={0.1}
+            value={currentTime}
+            onChange={(e) => {
+              const seekTime = parseFloat(e.target.value)
+              setCurrentTime(seekTime)
+              if (playerRef.current) {
+                playerRef.current.currentTime = seekTime
+              }
+            }}
+            aria-label="Audio scrubber"
           />
-        </div>
 
-        <span className="audio-time-label">{formatSeconds(mediaDuration)}</span>
-      </div>
+          <span className="audio-time-stamp audio-time-stamp--total">
+            {formatTimestamp(mediaDuration)}
+          </span>
 
-      {/* 4. Toolbar: Segments vs Continuous Tabs */}
-      <div className="raw-transcript-toolbar">
-        <div className="view-mode-tabs-clean">
-          <button
-            type="button"
-            className={`tab-btn-clean ${viewMode === 'segments' ? 'tab-btn-clean--active' : ''}`}
-            onClick={() => setViewMode('segments')}
+          <select
+            className="audio-speed-select"
+            value={playbackSpeed}
+            onChange={handleSpeedChange}
+            aria-label="Playback speed"
           >
-            Timestamped Segments
-          </button>
-          <button
-            type="button"
-            className={`tab-btn-clean ${viewMode === 'continuous' ? 'tab-btn-clean--active' : ''}`}
-            onClick={() => setViewMode('continuous')}
-          >
-            Continuous Text
-          </button>
+            <option value="1">1.0x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2.0x</option>
+          </select>
         </div>
-      </div>
+      </section>
 
-      {/* 5. Transcript Content Body */}
-      <div className="raw-transcript-body">
-        {viewMode === 'continuous' ? (
-          <div className="raw-continuous-prose">
-            <p>
-              {transcript.raw_text ||
-                (segments.length > 0 ? segments.map((s) => s.text).join(' ') : 'No transcript text available.')}
-            </p>
+      {/* 3. Transcript Section */}
+      <section className="raw-transcript-section" aria-label="Transcript">
+        <div className="raw-transcript-subhead-row">
+          <h3 className="raw-section-label">Transcript</h3>
+
+          <div className="transcript-mode-pill-toggle" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'timestamped'}
+              className={`pill-tab ${viewMode === 'timestamped' ? 'pill-tab--active' : ''}`}
+              onClick={() => setViewMode('timestamped')}
+            >
+              Timestamped
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'plain'}
+              className={`pill-tab ${viewMode === 'plain' ? 'pill-tab--active' : ''}`}
+              onClick={() => setViewMode('plain')}
+            >
+              Plain Text
+            </button>
           </div>
-        ) : (
-          <div className="raw-segments-list">
+        </div>
+
+        {/* View Mode: Timestamped */}
+        {viewMode === 'timestamped' ? (
+          <div className="transcript-timestamped-list">
             {segments.length === 0 ? (
-              <p className="empty-segments-p">No segments available in this transcript.</p>
+              <p className="transcript-empty-notice">No transcript segments available.</p>
             ) : (
               segments.map((seg, idx) => {
-                const isFlagged = seg.is_low_confidence || (seg.flags && seg.flags.length > 0)
-                const confScore = seg.confidence ? Math.round(seg.confidence * 100) : isFlagged ? 62 : 95
                 const startTime = seg.start_time || seg.offset || 0
-
                 return (
                   <div
                     key={idx}
-                    className={`raw-segment-row ${isFlagged ? 'raw-segment-row--flagged' : ''}`}
+                    className="transcript-timestamped-row"
+                    onClick={() => handleTimestampClick(startTime)}
+                    role="button"
+                    tabIndex={0}
+                    title="Jump audio to this timestamp"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        handleTimestampClick(startTime)
+                      }
+                    }}
                   >
-                    <button
-                      type="button"
-                      className="btn-segment-timestamp"
-                      onClick={() => handleTimestampClick(startTime)}
-                      title="Click to jump audio playback to this moment"
-                    >
-                      <span className="play-icon-mini">▶</span>
-                      <span>[{formatSeconds(startTime)}]</span>
-                    </button>
-
-                    <div className="segment-content-col">
-                      {isFlagged && (
-                        <div className="segment-flag-badge-row">
-                          <span className="flag-label">FLAG: VERIFICATION NEEDED</span>
-                          <span className="conf-label">CONF: {confScore}%</span>
-                        </div>
-                      )}
-                      <p className={`segment-prose ${isFlagged ? 'segment-prose--highlight' : ''}`}>
-                        {seg.text}
-                      </p>
-                    </div>
+                    <span className="transcript-time-badge">
+                      {formatTimestamp(startTime)}
+                    </span>
+                    <p className="transcript-segment-text">
+                      {seg.text}
+                    </p>
                   </div>
                 )
               })
             )}
           </div>
+        ) : (
+          /* View Mode: Plain Text */
+          <div className="transcript-plain-container">
+            <p className="transcript-plain-prose">{fullText}</p>
+          </div>
         )}
-      </div>
-
-      {/* 6. Archival Immutability Footer */}
-      <div className="raw-immutability-footer">
-        <div className="policy-icon">🔒</div>
-        <div className="policy-text">
-          <strong>IMMUTABLE RECORD</strong>
-          <p>
-            This transcript represents the original machine-generated output. It is preserved exactly as produced for archival integrity and cannot be directly edited here.
-          </p>
-        </div>
-      </div>
+      </section>
     </div>
   )
 }
+

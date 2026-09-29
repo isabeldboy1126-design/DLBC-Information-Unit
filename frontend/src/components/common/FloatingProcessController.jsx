@@ -6,6 +6,7 @@ export function FloatingProcessController({
   stageLabel = 'AI Processing',
   isCompleted = false,
   onExpand,
+  onDismiss,
 }) {
   const typeLabel = jobType === 'verification' ? 'Verification' : 'Report Processing'
   const displayStage = isCompleted
@@ -18,7 +19,7 @@ export function FloatingProcessController({
       onClick={onExpand}
       role="region"
       aria-label={`${typeLabel} in progress`}
-      title={`Click to expand ${typeLabel}`}
+      title={`Click to open ${typeLabel}`}
     >
       <div className="floating-recorder-header">
         <div className="floating-header-left">
@@ -32,7 +33,7 @@ export function FloatingProcessController({
           </div>
         </div>
 
-        <div className="floating-header-right">
+        <div className="floating-header-right" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <button
             type="button"
             className="btn btn--outline btn--small floating-btn-maximize"
@@ -40,11 +41,26 @@ export function FloatingProcessController({
               e.stopPropagation()
               if (onExpand) onExpand()
             }}
-            title={`Expand ${typeLabel}`}
+            title={isCompleted ? `Open ${typeLabel}` : `Expand ${typeLabel}`}
           >
-            <span className="btn-icon">🗖</span>
-            <span>Expand</span>
+            <span className="btn-icon">{isCompleted ? '→' : '🗖'}</span>
+            <span>{isCompleted ? 'Open' : 'Expand'}</span>
           </button>
+          {onDismiss && (
+            <button
+              type="button"
+              className="btn btn--ghost btn--small"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDismiss()
+              }}
+              title="Dismiss"
+              aria-label="Dismiss"
+              style={{ padding: '2px 6px', fontSize: '13px', lineHeight: 1 }}
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
 

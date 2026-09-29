@@ -13189,3 +13189,266 @@ textarea.form-control {
   gap: 12px;
   color: #64748b;
 }
+
+/* ==========================================================================
+   GLOBAL LOADING STATE (3 Animated Blue Dots)
+   ========================================================================== */
+.global-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeInGlobalOverlay 0.15s ease-out;
+  pointer-events: all;
+}
+
+@keyframes fadeInGlobalOverlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.loading-dots-blue {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 18px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
+  box-shadow: 0 4px 16px -2px rgba(15, 41, 71, 0.08);
+}
+
+.loading-dots-blue span {
+  width: 9px;
+  height: 9px;
+  background-color: #1d68f2;
+  border-radius: 50%;
+  display: inline-block;
+  animation: dotPulse 1.2s infinite ease-in-out both;
+}
+
+.loading-dots-blue span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loading-dots-blue span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+.loading-dots-blue span:nth-child(3) {
+  animation-delay: 0s;
+}
+
+@keyframes dotPulse {
+  0%, 80%, 100% {
+    transform: scale(0.65);
+    opacity: 0.35;
+  }
+  40% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+/* Button Busy State */
+.btn-is-busy {
+  opacity: 0.75;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  position: relative;
+}
+
+/* ==========================================================================
+   SIMPLIFIED RAW TRANSCRIPT VIEW (Audio + Timestamped / Plain Text)
+   ========================================================================== */
+.simplified-raw-transcript-view {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem 1.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.raw-header-simple {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.raw-header-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #0f2947;
+  margin: 0;
+}
+
+.raw-header-meta {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: 0.25rem 0 0 0;
+}
+
+.raw-section-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin: 0 0 0.75rem 0;
+}
+
+.audio-player-simple {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.btn-audio-play-simple {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #1d68f2;
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.btn-audio-play-simple:hover {
+  background: #1652be;
+}
+
+.audio-time-stamp {
+  font-family: 'Inter', monospace;
+  font-size: 0.85rem;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.audio-scrub-slider {
+  flex: 1;
+  accent-color: #1d68f2;
+  cursor: pointer;
+  height: 6px;
+}
+
+.audio-speed-select {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.82rem;
+  color: #0f172a;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.raw-transcript-subhead-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.transcript-mode-pill-toggle {
+  display: flex;
+  background: #f1f5f9;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.pill-tab {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #64748b;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pill-tab--active {
+  background: #ffffff;
+  color: #0f2947;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.transcript-timestamped-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.transcript-timestamped-row {
+  display: flex;
+  gap: 1.25rem;
+  align-items: baseline;
+  padding: 0.65rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  border-bottom: 1px solid #f8fafc;
+}
+
+.transcript-timestamped-row:hover {
+  background: #f8fafc;
+}
+
+.transcript-time-badge {
+  font-family: 'Inter', monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1d68f2;
+  min-width: 75px;
+  flex-shrink: 0;
+}
+
+.transcript-segment-text {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #1e293b;
+}
+
+.transcript-plain-container {
+  padding: 1.25rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #f1f5f9;
+}
+
+.transcript-plain-prose {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.8;
+  color: #1e293b;
+  white-space: pre-wrap;
+}

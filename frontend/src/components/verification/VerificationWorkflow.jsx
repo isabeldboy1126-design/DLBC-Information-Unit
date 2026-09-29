@@ -3,6 +3,7 @@ import { getApiUrl } from '../../config'
 import { getSessionHierarchy } from '../sessions/SessionDetailView'
 import { ConfirmationModal } from '../common/ConfirmationModal'
 import { SessionCompletionView } from '../sessions/SessionCompletionView'
+import { setActiveProcess } from '../common/activeProcessManager'
 
 /**
  * VerificationWorkflow — Human verification workspace matching verification-workspace.png.
@@ -243,6 +244,13 @@ export function VerificationWorkflow({
     if (!sessionId) return
     setIsAiVerifying(true)
     setAiFeedback(null)
+    setActiveProcess({
+      jobType: 'verification',
+      sessionId,
+      sessionTitle: sessionDisplay || session?.title || 'Sunday Worship Service',
+      stageLabel: 'Verifying transcript',
+      isCompleted: false,
+    })
     if (onTriggerProcessing) {
       onTriggerProcessing()
     } else {

@@ -2,9 +2,6 @@ import React, { useState, useRef, useEffect } from 'react'
 import { getApiUrl } from '../../config'
 import { RawTranscriptViewer } from '../transcription/RawTranscriptViewer'
 import { VerificationWorkflow } from '../verification/VerificationWorkflow'
-import { ReportingView } from '../reporting/ReportingView'
-import { EditingView } from '../editing/EditingView'
-import { ProofreadingView } from '../proofreading/ProofreadingView'
 import { FinalReportView } from '../final_report/FinalReportView'
 import { ReportProcessingModal } from '../reporting/ReportProcessingModal'
 
@@ -224,17 +221,9 @@ export function SessionDetailView({
     }
 
     const fStatus = session?.final_report_status || 'not_started'
-    const pStatus = session?.proofreading_status || 'not_started'
-    const eStatus = session?.editing_status || 'not_started'
-    const rStatus = session?.reporting_status || 'not_started'
     const vStatus = session?.verification_status || 'not_started'
 
     if (fStatus === 'complete') return 'overview'
-    if (pStatus === 'complete') return 'overview'
-    if (pStatus === 'ready_for_review' || pStatus === 'generating') return 'proofreading'
-    if (eStatus === 'complete') return 'overview'
-    if (eStatus === 'draft_ready' || eStatus === 'in_review' || eStatus === 'generating') return 'editing'
-    if (rStatus === 'reports_ready') return 'overview'
     if (vStatus === 'in_progress') return 'verification'
     return 'overview'
   }
@@ -303,9 +292,6 @@ export function SessionDetailView({
       raw_transcript: 'Raw Transcript',
       verification: 'Verification',
       verified_transcript: 'Verified Transcript',
-      reporting: 'Reporting',
-      editing: 'Editing',
-      proofreading: 'Proofreading',
       final_report: 'Final Report',
     }
     const title = titles[activeView] || 'Session Workspace'
@@ -328,36 +314,6 @@ export function SessionDetailView({
   // ---------------------------------------------------------------------------
   // CHILD STAGE ROUTING
   // ---------------------------------------------------------------------------
-  if (activeView === 'reporting') {
-    return (
-      <ReportingView
-        session={session}
-        onBack={() => changeStage('overview')}
-        onNavigateToEditing={() => changeStage('editing')}
-      />
-    )
-  }
-
-  if (activeView === 'editing') {
-    return (
-      <EditingView
-        session={session}
-        onBack={() => changeStage('overview')}
-        onNavigateToProofreading={() => changeStage('proofreading')}
-      />
-    )
-  }
-
-  if (activeView === 'proofreading') {
-    return (
-      <ProofreadingView
-        session={session}
-        onBack={() => changeStage('overview')}
-        onNavigateToFinalReport={() => changeStage('final_report')}
-      />
-    )
-  }
-
   if (activeView === 'final_report') {
     return (
       <FinalReportView
@@ -769,7 +725,7 @@ export function SessionDetailView({
               <div className="artifact-tile-icon-box">
                 <DocumentIcon />
               </div>
-              {rStatus === 'reports_ready' ? (
+              {rStatus === 'reports_ready' || fStatus === 'complete' ? (
                 <span className="badge badge--success-pill">✓ Ready</span>
               ) : (
                 <span className="badge badge--locked-pill">
@@ -780,16 +736,16 @@ export function SessionDetailView({
             <div className="artifact-tile-body">
               <h3 className="artifact-tile-title">Reporter Drafts</h3>
               <p className="artifact-tile-desc">
-                {rStatus === 'reports_ready' ? 'Reporter A & B Complete' : 'Not yet available'}
+                {rStatus === 'reports_ready' || fStatus === 'complete' ? 'Reporter A & B Complete' : 'Not yet available'}
               </p>
             </div>
-            {rStatus === 'reports_ready' ? (
+            {rStatus === 'reports_ready' || fStatus === 'complete' ? (
               <button
                 type="button"
                 className="btn-tile-action btn-tile-action--active"
-                onClick={() => changeStage('reporting')}
+                onClick={() => changeStage('final_report')}
               >
-                View Reports
+                View in Report
               </button>
             ) : (
               <button
@@ -798,7 +754,7 @@ export function SessionDetailView({
                 disabled
               >
                 <LockIcon />
-                <span>Will be available in this stage</span>
+                <span>Will be available after processing</span>
               </button>
             )}
           </div>
@@ -809,7 +765,7 @@ export function SessionDetailView({
               <div className="artifact-tile-icon-box">
                 <DocumentIcon />
               </div>
-              {eStatus === 'complete' ? (
+              {eStatus === 'complete' || fStatus === 'complete' ? (
                 <span className="badge badge--success-pill">✓ Complete</span>
               ) : (
                 <span className="badge badge--locked-pill">
@@ -820,16 +776,16 @@ export function SessionDetailView({
             <div className="artifact-tile-body">
               <h3 className="artifact-tile-title">Edited Report</h3>
               <p className="artifact-tile-desc">
-                {eStatus === 'complete' ? 'Theological Review' : 'Not yet available'}
+                {eStatus === 'complete' || fStatus === 'complete' ? 'Theological Review' : 'Not yet available'}
               </p>
             </div>
-            {eStatus === 'complete' ? (
+            {eStatus === 'complete' || fStatus === 'complete' ? (
               <button
                 type="button"
                 className="btn-tile-action btn-tile-action--active"
-                onClick={() => changeStage('editing')}
+                onClick={() => changeStage('final_report')}
               >
-                Open Editing
+                View in Report
               </button>
             ) : (
               <button
@@ -838,7 +794,7 @@ export function SessionDetailView({
                 disabled
               >
                 <LockIcon />
-                <span>Will be available in this stage</span>
+                <span>Will be available after processing</span>
               </button>
             )}
           </div>

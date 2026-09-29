@@ -9,6 +9,9 @@ import { DashboardView } from './components/dashboard/DashboardView'
 import { NewLiveSessionView } from './components/sessions/NewLiveSessionView'
 import { LiveRecordingView } from './components/recording/LiveRecordingView'
 import { FloatingRecordingController } from './components/recording/FloatingRecordingController'
+import { FloatingProcessController } from './components/common/FloatingProcessController'
+import { GlobalLoadingOverlay } from './components/common/GlobalLoadingOverlay'
+import { useActiveProcess } from './components/common/activeProcessManager'
 import { SessionCompletionView } from './components/sessions/SessionCompletionView'
 import { SessionHistoryList } from './components/sessions/SessionHistoryList'
 import { SessionDetailView, getCleanSessionName } from './components/sessions/SessionDetailView'
@@ -104,6 +107,9 @@ function App() {
 
   // Phase 4: Persistent Church Sessions Hook
   const sessionsHook = useSessions()
+
+  // Global background processing job tracker (Verification & Report Processing)
+  const { activeProcess, clearActiveProcess } = useActiveProcess()
 
   const applyRoute = (rawHash, isPop = false) => {
     const route = parseRoute(rawHash)
@@ -425,6 +431,9 @@ function App() {
       )}
 
       <ErrorBoundary onReset={() => navigateTo('dashboard')}>
+      {/* Reusable 3-blue-dots loading treatment with ~180ms threshold */}
+      <GlobalLoadingOverlay isVisible={sessionsHook.loading && !sessionsHook.activeSession} delayMs={180} />
+
       {/* ------------------------------------------------------------- */}
       {/* VIEW: LIVE RECORDING ACTIVE (Full Screen Mode)               */}
       {/* ------------------------------------------------------------- */}
@@ -700,6 +709,34 @@ function App() {
         />
       ) : null}
       </ErrorBoundary>
+
+      {/* ------------------------------------------------------------- */}
+      {/* FLOATING PROCESS CONTROLLER: Persistent across all app views  */}
+      {/* ------------------------------------------------------------- */}
+      {activeProcess && (
+        <FloatingProcessController
+          jobType={activeProcess.jobType}
+          sessionTitle={activeProcess.sessionTitle}
+          stageLabel={activeProcess.stageLabel}
+          isCompleted={activeProcess.isCompleted}
+          onExpand={() => {
+            if (activeProcess.jobType === 'report_processing') {
+              if (activeProcess.isCompleted) {
+                navigateTo(`session/${activeProcess.sessionId}/final_report`)
+              } else {
+                navigateTo(`session/${activeProcess.sessionId}/report_processing`)
+              }
+            } else if (activeProcess.jobType === 'verification') {
+              if (activeProcess.isCompleted) {
+                navigateTo(`session/${activeProcess.sessionId}/verified_transcript`)
+              } else {
+                navigateTo(`session/${activeProcess.sessionId}/verification/processing`)
+              }
+            }
+          }}
+          onDismiss={() => clearActiveProcess()}
+        />
+      )}
 
       {/* ------------------------------------------------------------- */}
       {/* FLOATING CONTROLLER: Persistent across all app views when min */}
