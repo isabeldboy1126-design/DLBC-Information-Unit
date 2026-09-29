@@ -784,6 +784,15 @@ CREATE TABLE report_processing_settings (
     [value] NVARCHAR(MAX) NOT NULL,
     updated_at VARCHAR(255) NOT NULL
 );
+
+IF OBJECT_ID(N'deleted_session_tombstones', N'U') IS NULL
+CREATE TABLE deleted_session_tombstones (
+    session_id VARCHAR(255) PRIMARY KEY,
+    deleted_at VARCHAR(255) NOT NULL
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_tombstones_deleted')
+CREATE INDEX idx_tombstones_deleted ON deleted_session_tombstones(deleted_at DESC);
 """
 
 PHASE5_MIGRATION_COLUMNS_MSSQL = [

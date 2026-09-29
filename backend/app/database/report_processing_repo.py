@@ -229,18 +229,32 @@ class ReportProcessingRepository:
 
     async def init_db(self):
         """Initializes the database schema and ensures seed standards and examples exist."""
+        if self._initialized:
+            return
         from app.database.models import (
             INIT_SCHEMA_SQL,
+            INIT_SCHEMA_MSSQL,
             STAGE7_REPORT_PROCESSING_COLUMNS,
+            STAGE7_REPORT_PROCESSING_COLUMNS_MSSQL,
         )
 
+        is_mssql = bool(os.environ.get("DATABASE_URL") and not os.environ.get("DATABASE_URL").startswith("sqlite"))
+
         async with get_db_connection() as conn:
-            await conn.executescript(INIT_SCHEMA_SQL)
-            for alter_sql in STAGE7_REPORT_PROCESSING_COLUMNS:
-                try:
-                    await conn.execute(alter_sql)
-                except Exception:
-                    pass
+            if is_mssql:
+                await conn.executescript(INIT_SCHEMA_MSSQL)
+                for alter_sql in STAGE7_REPORT_PROCESSING_COLUMNS_MSSQL:
+                    try:
+                        await conn.execute(alter_sql)
+                    except Exception:
+                        pass
+            else:
+                await conn.executescript(INIT_SCHEMA_SQL)
+                for alter_sql in STAGE7_REPORT_PROCESSING_COLUMNS:
+                    try:
+                        await conn.execute(alter_sql)
+                    except Exception:
+                        pass
             await conn.commit()
 
         await self._ensure_seed_data()
@@ -252,13 +266,18 @@ class ReportProcessingRepository:
 
         async with get_db_connection() as conn:
             # 1. Default Settings
-            await conn.execute(
-                """
-                INSERT OR IGNORE INTO report_processing_settings (key, value, updated_at)
-                VALUES (?, ?, ?)
-                """,
-                ('auto_process_after_verification', 'false', now_iso),
+            cur = await conn.execute(
+                "SELECT [key] FROM report_processing_settings WHERE [key] = ?",
+                ('auto_process_after_verification',),
             )
+            if not await cur.fetchone():
+                await conn.execute(
+                    """
+                    INSERT INTO report_processing_settings ([key], [value], updated_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    ('auto_process_after_verification', 'false', now_iso),
+                )
 
             # 2. Version 1 Standards
             cur = await conn.execute(
@@ -812,7 +831,7 @@ class ReportProcessingRepository:
         await self.init_db()
         async with get_db_connection() as conn:
             cur = await conn.execute(
-                "SELECT value FROM report_processing_settings WHERE key = ?",
+                "SELECT [value] FROM report_processing_settings WHERE [key] = ?",
                 (key,),
             )
             row = await cur.fetchone()
@@ -824,20 +843,33 @@ class ReportProcessingRepository:
         await self.init_db()
         now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         async with get_db_connection() as conn:
-            await conn.execute(
-                """
-                INSERT INTO report_processing_settings (key, value, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-                """,
-                (key, str(value), now_iso),
+            cur = await conn.execute(
+                "SELECT [key] FROM report_processing_settings WHERE [key] = ?",
+                (key,),
             )
+            if await cur.fetchone():
+                await conn.execute(
+                    """
+                    UPDATE report_processing_settings
+                    SET [value] = ?, updated_at = ?
+                    WHERE [key] = ?
+                    """,
+                    (str(value), now_iso, key),
+                )
+            else:
+                await conn.execute(
+                    """
+                    INSERT INTO report_processing_settings ([key], [value], updated_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (key, str(value), now_iso),
+                )
             await conn.commit()
 
     async def get_all_settings(self) -> Dict[str, str]:
         await self.init_db()
         async with get_db_connection() as conn:
-            cur = await conn.execute("SELECT key, value FROM report_processing_settings")
+            cur = await conn.execute("SELECT [key], [value] FROM report_processing_settings")
             rows = await cur.fetchall()
             return {r["key"]: r["value"] for r in rows}
 
@@ -912,8 +944,13 @@ class ReportProcessingRepository:
                 query += " AND (COALESCE(fr.service_date, fr.created_at) <= ?)"
                 params.append(date_to.strip())
 
-            query += " ORDER BY fr.created_at DESC LIMIT ? OFFSET ?"
-            params.extend([limit, offset])
+            is_mssql = bool(os.environ.get("DATABASE_URL") and not os.environ.get("DATABASE_URL").startswith("sqlite"))
+            if is_mssql:
+                query += " ORDER BY fr.created_at DESC OFFSET ? ROWS FETCH NEXT ? ROWS ONLY"
+                params.extend([offset, limit])
+            else:
+                query += " ORDER BY fr.created_at DESC LIMIT ? OFFSET ?"
+                params.extend([limit, offset])
 
             cur = await conn.execute(query, params)
             rows = await cur.fetchall()

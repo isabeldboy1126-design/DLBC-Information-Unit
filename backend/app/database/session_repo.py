@@ -670,19 +670,19 @@ class SessionRepository:
 
             # 2. Insert tombstone
             try:
-                await conn.execute(
-                    "INSERT OR IGNORE INTO deleted_session_tombstones (session_id, deleted_at) VALUES (?, ?)",
-                    (session_id, now_iso),
-                )
+                ids_to_tombstone = [session_id]
                 if rec_id:
-                    await conn.execute(
-                        "INSERT OR IGNORE INTO deleted_session_tombstones (session_id, deleted_at) VALUES (?, ?)",
-                        (f"session_{rec_id}", now_iso),
+                    ids_to_tombstone.extend([f"session_{rec_id}", rec_id])
+                for tid in ids_to_tombstone:
+                    cur = await conn.execute(
+                        "SELECT session_id FROM deleted_session_tombstones WHERE session_id = ?",
+                        (tid,),
                     )
-                    await conn.execute(
-                        "INSERT OR IGNORE INTO deleted_session_tombstones (session_id, deleted_at) VALUES (?, ?)",
-                        (rec_id, now_iso),
-                    )
+                    if not await cur.fetchone():
+                        await conn.execute(
+                            "INSERT INTO deleted_session_tombstones (session_id, deleted_at) VALUES (?, ?)",
+                            (tid, now_iso),
+                        )
             except Exception as e:
                 print(f"Tombstone insertion notice: {e}")
 
