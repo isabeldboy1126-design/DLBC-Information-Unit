@@ -259,11 +259,12 @@ async def test_session_batch_budget_exactly_two_calls(flag_count):
     result = await engine.verify_session(session_id=session_id, auto_resolve=True)
 
     # CRITICAL BUDGET ASSERTION:
-    # 1 flag -> exactly 1 transcribe + 1 reasoning = 2 calls
-    # 59 flags -> exactly 1 transcribe + 1 reasoning = 2 calls
-    # 100 flags -> exactly 1 transcribe + 1 reasoning = 2 calls
+    # 1 flag -> exactly 1 transcribe + 1 reasoning call (CHUNK_SIZE=20)
+    # 59 flags -> exactly 1 transcribe + 3 reasoning calls (CHUNK_SIZE=20: 20, 20, 19)
+    # 100 flags -> exactly 1 transcribe + 5 reasoning calls (CHUNK_SIZE=20: 20, 20, 20, 20, 20)
+    expected_reasoning_calls = (flag_count + 19) // 20
     assert transcribe_call_count == 1, f"Expected exactly 1 transcribe call for {flag_count} items, got {transcribe_call_count}"
-    assert generate_call_count == 1, f"Expected exactly 1 reasoning call for {flag_count} items, got {generate_call_count}"
+    assert generate_call_count == expected_reasoning_calls, f"Expected exactly {expected_reasoning_calls} reasoning calls for {flag_count} items, got {generate_call_count}"
 
     assert result["status"] == "completed_verified"
     assert result["summary"]["verified_count"] == flag_count

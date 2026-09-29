@@ -112,8 +112,9 @@ export function NewLiveSessionView({
     })
   }
 
-  // Calculate meter bar width % from audioLevel (0.0 to 1.0)
-  const meterWidth = Math.min(100, Math.max(0, (liveAudio.audioLevel || 0) * 100))
+  // Calculate meter bar width % from audioLevel (handles both 0-100 percentage and 0.0-1.0 float scales)
+  const rawLevel = liveAudio.audioLevel || 0
+  const meterWidth = Math.min(100, Math.max(0, rawLevel > 1 ? rawLevel : rawLevel * 100))
 
   return (
     <div className="new-session-view-container">

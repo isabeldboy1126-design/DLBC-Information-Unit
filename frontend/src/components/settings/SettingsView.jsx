@@ -425,12 +425,12 @@ export function SettingsView({ onBack }) {
                 )}
 
                 {/* Auto-Process Workflow Toggle Card */}
-                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="settings-banner-box" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', color: '#0f172a' }}>
+                    <h4 className="settings-banner-title" style={{ margin: '0 0 0.25rem 0', fontSize: '1rem' }}>
                       Auto-Process After Verification
                     </h4>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                    <p className="settings-banner-desc" style={{ margin: 0, fontSize: '0.85rem' }}>
                       Automatically trigger unified Report Processing as soon as all verification items are resolved.
                     </p>
                   </div>

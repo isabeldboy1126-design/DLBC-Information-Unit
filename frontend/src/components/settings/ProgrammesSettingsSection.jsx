@@ -318,7 +318,7 @@ export function ProgrammesSettingsSection() {
             Loading programmes &amp; sessions...
           </div>
         ) : visibleProgrammes.length === 0 ? (
-          <div style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '8px' }}>
+          <div className="programmes-empty-placeholder">
             No programmes configured yet. Click <strong>+ Add Programme</strong> above to create your first programme.
           </div>
         ) : (
@@ -331,24 +331,21 @@ export function ProgrammesSettingsSection() {
               return (
                 <div
                   key={prog.id}
-                  className="programme-item-card"
+                  className={`programme-item-card ${prog.is_archived ? 'programme-item-card--archived' : ''}`}
                   style={{
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    background: prog.is_archived ? '#fbfbfc' : '#ffffff',
                     opacity: prog.is_archived ? 0.75 : 1,
                     overflow: 'hidden',
                   }}
                 >
                   {/* Programme Header Bar */}
                   <div
+                    className="programme-item-header"
                     style={{
                       padding: '0.85rem 1rem',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      background: '#f8fafc',
-                      borderBottom: isExpanded ? '1px solid #e2e8f0' : 'none',
+                      borderBottom: isExpanded ? '1px solid var(--border-default, #e2e8f0)' : 'none',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: 1 }}>
@@ -439,7 +436,7 @@ export function ProgrammesSettingsSection() {
 
                   {/* Expanded Sessions Management Body */}
                   {isExpanded && (
-                    <div style={{ padding: '1rem', background: '#ffffff' }}>
+                    <div className="programme-sessions-container" style={{ padding: '1rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                         <span style={{ fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.04em', color: '#64748b' }}>
                           CONFIGURED SESSIONS / SECTIONS UNDER &ldquo;{prog.name.toUpperCase()}&rdquo;
@@ -463,7 +460,7 @@ export function ProgrammesSettingsSection() {
 
                       {/* Add Session Inline Form */}
                       {addingSessionForProgId === prog.id && (
-                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.85rem', padding: '0.65rem', background: '#f8fafc', borderRadius: '6px', border: '1px dashed #cbd5e1' }}>
+                        <div className="programme-add-session-row" style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.85rem', padding: '0.65rem' }}>
                           <input
                             type="text"
                             className="form-control form-control--small"
@@ -498,7 +495,7 @@ export function ProgrammesSettingsSection() {
 
                       {/* Sessions List */}
                       {activeSessions.length === 0 && addingSessionForProgId !== prog.id ? (
-                        <div style={{ padding: '0.75rem', background: '#f8fafc', borderRadius: '6px', fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center' }}>
+                        <div className="programme-no-sessions" style={{ padding: '0.75rem', borderRadius: '6px', fontSize: '0.85rem', textAlign: 'center' }}>
                           No sessions configured for this programme yet. Click <strong>+ Add Session / Section</strong> to add sections (e.g. Faith Clinic, Morning Message).
                         </div>
                       ) : (
@@ -509,14 +506,13 @@ export function ProgrammesSettingsSection() {
                             return (
                               <div
                                 key={sess.id}
+                                className="programme-session-item-row"
                                 style={{
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
                                   padding: '0.45rem 0.75rem',
-                                  background: '#f8fafc',
                                   borderRadius: '6px',
-                                  border: '1px solid #e2e8f0',
                                 }}
                               >
                                 {/* Left: Reorder buttons & Name */}

@@ -15334,3 +15334,501 @@ textarea.form-control {
   background: #101c34 !important;
   border-color: #2563eb !important;
 }
+
+/* =========================================================================
+   DARK MODE COMPLETION PASS — Complete Active App Surfaces
+   ========================================================================= */
+
+/* 1. New Live Session View */
+[data-theme="dark"] .new-session-title,
+.dark .new-session-title {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .new-session-subtitle,
+.dark .new-session-subtitle {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .new-session-card,
+.dark .new-session-card {
+  background: #0b1528 !important;
+  border: 1px solid #1c2b48 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+[data-theme="dark"] .new-session-card-header,
+.dark .new-session-card-header {
+  background: #0f1d37 !important;
+  border-bottom: 1px solid #1c2b48 !important;
+}
+
+[data-theme="dark"] .card-header-icon-title h3,
+.dark .card-header-icon-title h3 {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .new-session-card .form-label,
+.dark .new-session-card .form-label {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .new-session-card .form-control,
+[data-theme="dark"] .new-session-card .form-select,
+.dark .new-session-card .form-control,
+.dark .new-session-card .form-select {
+  background: #091325 !important;
+  border: 1px solid #1c2b48 !important;
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .new-session-card .form-control:focus,
+[data-theme="dark"] .new-session-card .form-select:focus,
+.dark .new-session-card .form-control:focus,
+.dark .new-session-card .form-select:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25) !important;
+}
+
+[data-theme="dark"] .input-level-block,
+.dark .input-level-block {
+  background: #091325 !important;
+  border: 1px solid #1c2b48 !important;
+}
+
+[data-theme="dark"] .level-db-val,
+.dark .level-db-val {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .live-waveform-meter-track,
+.dark .live-waveform-meter-track {
+  background: #16243f !important;
+}
+
+[data-theme="dark"] .meter-scale-markers,
+.dark .meter-scale-markers {
+  color: #64748b !important;
+}
+
+[data-theme="dark"] .btn-link-small,
+.dark .btn-link-small {
+  color: #3b82f6 !important;
+}
+
+[data-theme="dark"] .btn-link-small:hover,
+.dark .btn-link-small:hover {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .start-recording-card,
+.dark .start-recording-card {
+  background: #0b1528 !important;
+  border: 1px solid #1c2b48 !important;
+}
+
+[data-theme="dark"] .start-recording-info,
+.dark .start-recording-info {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .new-session-alert,
+.dark .new-session-alert {
+  background: #1e131d !important;
+  border: 1px solid #5c1d2e !important;
+  color: #fca5a5 !important;
+}
+
+/* 2. Live Recording Active Monitor View */
+[data-theme="dark"] .live-top-recording-bar,
+.dark .live-top-recording-bar {
+  background: #0b1528 !important;
+  border: 1px solid #1c2b48 !important;
+}
+
+[data-theme="dark"] .live-bar-timer,
+.dark .live-bar-timer {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .live-bar-signal-group,
+.dark .live-bar-signal-group {
+  border-left-color: #1c2b48 !important;
+  border-right-color: #1c2b48 !important;
+}
+
+[data-theme="dark"] .waveform-bar,
+.dark .waveform-bar {
+  background: #38bdf8 !important;
+}
+
+[data-theme="dark"] .live-signal-badge,
+.dark .live-signal-badge {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .live-meta-text,
+.dark .live-meta-text {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .live-transcript-canvas-card,
+.dark .live-transcript-canvas-card {
+  background: #070e1d !important;
+  border: 1px solid #1c2b48 !important;
+}
+
+[data-theme="dark"] .segment-text,
+.dark .segment-text {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .segment-text--interim,
+.dark .segment-text--interim {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .segment-timestamp,
+.dark .segment-timestamp {
+  color: #64748b !important;
+}
+
+[data-theme="dark"] .transcript-stream-segment--flagged,
+.dark .transcript-stream-segment--flagged {
+  background: rgba(245, 158, 11, 0.12) !important;
+  border-left: 4px solid #f59e0b !important;
+}
+
+[data-theme="dark"] .transcript-stream-segment:hover,
+.dark .transcript-stream-segment:hover {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+[data-theme="dark"] .recording-status-subbar,
+.dark .recording-status-subbar {
+  background: #091325 !important;
+  border-top: 1px solid #1c2b48 !important;
+}
+
+[data-theme="dark"] .chip--optimal,
+.dark .chip--optimal {
+  background: #0f1d37 !important;
+  color: #38bdf8 !important;
+}
+
+[data-theme="dark"] .chip--ai,
+.dark .chip--ai {
+  background: #231d0b !important;
+  color: #fbbf24 !important;
+}
+
+[data-theme="dark"] .engine-model-text,
+.dark .engine-model-text {
+  color: #64748b !important;
+}
+
+[data-theme="dark"] .transcript-waiting-placeholder,
+.dark .transcript-waiting-placeholder {
+  color: #64748b !important;
+}
+
+[data-theme="dark"] .waiting-text,
+.dark .waiting-text {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .streaming-cursor-row,
+.dark .streaming-cursor-row {
+  color: #64748b !important;
+}
+
+/* 3. YouTube Session Additional Controls */
+[data-theme="dark"] .youtube-live-options-card,
+.dark .youtube-live-options-card {
+  background: #0b1528 !important;
+  border: 1px solid #1c2b48 !important;
+}
+
+[data-theme="dark"] .youtube-meta-title,
+.dark .youtube-meta-title {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .youtube-meta-channel,
+.dark .youtube-meta-channel {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .youtube-meta-stats,
+.dark .youtube-meta-stats {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .youtube-analyze-btn--disabled,
+.dark .youtube-analyze-btn--disabled {
+  background: #0e1a30 !important;
+  color: #475569 !important;
+  border: 1px solid #1c2b48 !important;
+}
+
+/* 4. Upload Recording Additional Surfaces */
+[data-theme="dark"] .upload-card,
+.dark .upload-card {
+  background: #0b1528 !important;
+  border: 1px solid #1c2b48 !important;
+}
+
+[data-theme="dark"] .recorded-upload-dropzone,
+.dark .recorded-upload-dropzone {
+  background: #091325 !important;
+  border: 2px dashed #1c2b48 !important;
+}
+
+[data-theme="dark"] .recorded-upload-dropzone:hover,
+.dark .recorded-upload-dropzone:hover {
+  background: #0f1d37 !important;
+  border-color: #2563eb !important;
+}
+
+[data-theme="dark"] .dropzone-title,
+.dark .dropzone-title {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .dropzone-hint,
+.dark .dropzone-hint {
+  color: #94a3b8 !important;
+}
+
+/* 5. Settings Programmes & Modals */
+[data-theme="dark"] .programmes-settings-card,
+.dark .programmes-settings-card {
+  background: #0b1528 !important;
+  border: 1px solid #1c2b48 !important;
+}
+
+[data-theme="dark"] .programme-row-container,
+[data-theme="dark"] .programme-row,
+.dark .programme-row-container,
+.dark .programme-row {
+  background: #091325 !important;
+  border: 1px solid #1c2b48 !important;
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .programme-session-tag,
+.dark .programme-session-tag {
+  background: #0f1d37 !important;
+  border: 1px solid #1c2b48 !important;
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .settings-form-row label,
+.dark .settings-form-row label {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .settings-form-row input,
+[data-theme="dark"] .settings-form-row select,
+.dark .settings-form-row input,
+.dark .settings-form-row select {
+  background: #091325 !important;
+  border: 1px solid #1c2b48 !important;
+  color: #f8fafc !important;
+}
+
+/* 6. Modals, Confirm Dialogs, & Popovers */
+[data-theme="dark"] .modal-dialog,
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .confirm-modal,
+.dark .modal-dialog,
+.dark .modal-content,
+.dark .confirm-modal {
+  background: #0b1528 !important;
+  border: 1px solid #1c2b48 !important;
+  color: #f8fafc !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6) !important;
+}
+
+[data-theme="dark"] .confirm-modal-title,
+.dark .confirm-modal-title {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .confirm-modal-desc,
+.dark .confirm-modal-desc {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .btn-confirm-cancel,
+.dark .btn-confirm-cancel {
+  background: #091325 !important;
+  border: 1px solid #1c2b48 !important;
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .btn-confirm-cancel:hover,
+.dark .btn-confirm-cancel:hover {
+  background: #101c34 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .sessions-filter-popover,
+.dark .sessions-filter-popover {
+  background: #0b1528 !important;
+  border: 1px solid #1c2b48 !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5) !important;
+}
+
+[data-theme="dark"] .filter-popover-title,
+.dark .filter-popover-title {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .filter-label,
+.dark .filter-label {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .filter-select,
+.dark .filter-select {
+  background: #091325 !important;
+  border: 1px solid #1c2b48 !important;
+  color: #f8fafc !important;
+}
+
+/* 7. Global Form Select Options */
+[data-theme="dark"] select option,
+.dark select option {
+  background-color: #0b1528 !important;
+  color: #f8fafc !important;
+}
+
+/* 8. Programmes Settings & Settings Banner Boxes */
+.programmes-empty-placeholder {
+  padding: 1.5rem;
+  text-align: center;
+  color: #94a3b8;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+[data-theme="dark"] .programmes-empty-placeholder,
+.dark .programmes-empty-placeholder {
+  background: #091325 !important;
+  color: #64748b !important;
+  border: 1px solid #1c2b48 !important;
+}
+
+.programme-item-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.programme-item-card--archived {
+  background: #fbfbfc;
+}
+
+[data-theme="dark"] .programme-item-card,
+.dark .programme-item-card {
+  background: #0b1528 !important;
+  border: 1px solid #1c2b48 !important;
+}
+
+[data-theme="dark"] .programme-item-card--archived,
+.dark .programme-item-card--archived {
+  background: #091122 !important;
+}
+
+.programme-item-header {
+  background: #f8fafc;
+}
+
+[data-theme="dark"] .programme-item-header,
+.dark .programme-item-header {
+  background: #0f1d37 !important;
+}
+
+.programme-sessions-container {
+  background: #ffffff;
+}
+
+[data-theme="dark"] .programme-sessions-container,
+.dark .programme-sessions-container {
+  background: #091325 !important;
+}
+
+.programme-add-session-row {
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px dashed #cbd5e1;
+}
+
+[data-theme="dark"] .programme-add-session-row,
+.dark .programme-add-session-row {
+  background: #0d1a33 !important;
+  border: 1px dashed #1c2b48 !important;
+}
+
+.programme-no-sessions {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .programme-no-sessions,
+.dark .programme-no-sessions {
+  background: #0d1a33 !important;
+  color: #64748b !important;
+}
+
+.programme-session-item-row {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme="dark"] .programme-session-item-row,
+.dark .programme-session-item-row {
+  background: #0b1528 !important;
+  border: 1px solid #1c2b48 !important;
+  color: #f8fafc !important;
+}
+
+.settings-banner-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.settings-banner-title {
+  color: #0f172a;
+}
+
+.settings-banner-desc {
+  color: #64748b;
+}
+
+[data-theme="dark"] .settings-banner-box,
+.dark .settings-banner-box {
+  background: #091325 !important;
+  border: 1px solid #1c2b48 !important;
+}
+
+[data-theme="dark"] .settings-banner-title,
+.dark .settings-banner-title {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .settings-banner-desc,
+.dark .settings-banner-desc {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .settings-alert,
+[data-theme="dark"] .settings-alert--error,
+.dark .settings-alert,
+.dark .settings-alert--error {
+  background: rgba(190, 18, 60, 0.15) !important;
+  border: 1px solid #881337 !important;
+  color: #fda4af !important;
+}

@@ -634,17 +634,105 @@ Return a JSON array of decision objects matching this schema:
         # Step 7: Check gateway availability
         gateway_configured = self.gateway.is_configured()
 
-        # Step 8: Resource Safeguard & Partitioning (split into at most 2 batches if >100 items)
-        # For standard sessions (10, 59, 100 items), this creates exactly 1 chunk -> 2 logical AI calls.
-        if len(ordered_items) > 100:
-            mid = len(ordered_items) // 2
-            item_chunks = [ordered_items[:mid], ordered_items[mid:]]
-        else:
-            item_chunks = [ordered_items]
+        # Step 8: Build ONE verification reel and execute Call 1 (Audio Listener) ONCE
+        all_flagged_meta = []
+        for it in ordered_items:
+            s_idx = it["segment_index"]
+            seg = seg_dict.get(s_idx, {})
+            all_flagged_meta.append({
+                "clean_id": it["clean_id"],
+                "segment_index": s_idx,
+                "start_time": it.get("start_time", seg.get("start_time", 0.0)),
+                "end_time": it.get("end_time", seg.get("end_time", 1.0)),
+            })
+
+        # Build in-memory verification reel for all flagged items
+        reel_bytes, manifest, total_duration_sec = build_verification_reel(
+            audio_file_path=audio_path,
+            flagged_items=all_flagged_meta,
+            buffer_seconds=2.5,
+            silence_gap_ms=600,
+        )
+        items_with_audio: Set[str] = {m["item_id"] for m in manifest} if reel_bytes else set()
 
         all_decisions: Dict[str, Dict[str, Any]] = {}
         all_eval_results: List[Dict[str, Any]] = []
-        all_items_with_audio: Set[str] = set()
+        verified_count = 0
+        corrected_count = 0
+        unresolved_count = 0
+
+        # Mark and persist any items without acoustic evidence as UNRESOLVED (AUDIO_UNAVAILABLE)
+        missing_audio_items = [it for it in ordered_items if it["clean_id"] not in items_with_audio]
+        for it in missing_audio_items:
+            cid = it["clean_id"]
+            s_idx = it["segment_index"]
+            seg = seg_dict.get(s_idx, {})
+            azure_text = str(it.get("original_text") or seg.get("text", "")).strip()
+            missing_decision = {
+                "item_id": cid,
+                "decision": "UNRESOLVED",
+                "corrected_text": azure_text,
+                "verified_text": azure_text,
+                "confidence": 0.50,
+                "reason_code": "AUDIO_UNAVAILABLE",
+                "explanation": "[AUDIO_UNAVAILABLE] Independent acoustic evidence is unavailable; preserved for human review.",
+                "scripture_references": [],
+                "is_high_risk": True,
+                "model_name": "system",
+                "gateway_unavailable": False,
+            }
+            all_decisions[cid] = missing_decision
+            all_eval_results.append(missing_decision)
+            unresolved_count += 1
+            await session_repo.save_ai_verification_item_result(
+                session_id=session_id,
+                segment_index=s_idx,
+                ai_decision="UNRESOLVED",
+                ai_verified_text=azure_text,
+                ai_confidence=0.50,
+                ai_explanation=missing_decision["explanation"],
+                ai_model_name="system",
+                ai_scriptures=[],
+                auto_resolve=False,
+            )
+
+        audio_items = [it for it in ordered_items if it["clean_id"] in items_with_audio]
+
+        # -------------------------------------------------------------
+        # LOGICAL AI CALL 1: Independent Audio Listener Batch (ONCE)
+        # -------------------------------------------------------------
+        independent_transcripts: Dict[str, Optional[str]] = {it["clean_id"]: None for it in audio_items}
+        if gateway_configured and audio_items and reel_bytes:
+            biblical_names = [n["canonical_name"] for n in getattr(self.bible_service, "_all_names", [])[:30]]
+            dlbc_terms = [t["term"] for t in getattr(self.bible_service, "_church_vocab", [])[:25]]
+
+            reel_prompt = self.build_batch_transcription_prompt(manifest, biblical_names, dlbc_terms)
+            try:
+                t_resp = await self.gateway.transcribe_audio(
+                    audio_bytes=reel_bytes,
+                    prompt=reel_prompt,
+                )
+                independent_transcripts = parse_independent_transcription(
+                    t_resp.text,
+                    expected_item_ids=[it["clean_id"] for it in audio_items],
+                )
+                logger.info(
+                    "[%s] Call 1: Batch audio transcription succeeded for %d items (duration=%.1fs)",
+                    session_id, len(audio_items), total_duration_sec
+                )
+            except Exception as trans_err:
+                logger.warning("[%s] Call 1: Batch audio transcription failed: %s", session_id, trans_err)
+        else:
+            logger.info("[%s] Gateway not configured or no audio; skipping audio transcription", session_id)
+
+        # -------------------------------------------------------------
+        # LOGICAL AI CALL 2: Session-Level Reasoning Batch (Chunk size: 20)
+        # -------------------------------------------------------------
+        REASONING_CHUNK_SIZE = 20
+        reasoning_chunks = [
+            audio_items[i:i + REASONING_CHUNK_SIZE]
+            for i in range(0, len(audio_items), REASONING_CHUNK_SIZE)
+        ]
 
         target_model = os.environ.get("GEMINI_VERIFICATION_MODEL", "gemini-3.8-flash")
         config = types.GenerateContentConfig(
@@ -652,99 +740,9 @@ Return a JSON array of decision objects matching this schema:
             temperature=0.1,
         )
 
-        for chunk_idx, chunk_items in enumerate(item_chunks):
-            chunk_flagged_meta = []
-            for it in chunk_items:
-                s_idx = it["segment_index"]
-                seg = seg_dict.get(s_idx, {})
-                chunk_flagged_meta.append({
-                    "clean_id": it["clean_id"],
-                    "segment_index": s_idx,
-                    "start_time": it.get("start_time", seg.get("start_time", 0.0)),
-                    "end_time": it.get("end_time", seg.get("end_time", 1.0)),
-                })
-
-            # Build in-memory verification reel for this chunk
-            reel_bytes, manifest, total_duration_sec = build_verification_reel(
-                audio_file_path=audio_path,
-                flagged_items=chunk_flagged_meta,
-                buffer_seconds=2.5,
-                silence_gap_ms=600,
-            )
-            items_with_audio: Set[str] = {m["item_id"] for m in manifest} if reel_bytes else set()
-            all_items_with_audio.update(items_with_audio)
-
-            # Mark any items without acoustic evidence as UNRESOLVED (AUDIO_UNAVAILABLE)
-            missing_audio_items = [it for it in chunk_items if it["clean_id"] not in items_with_audio]
-            for it in missing_audio_items:
-                cid = it["clean_id"]
-                s_idx = it["segment_index"]
-                seg = seg_dict.get(s_idx, {})
-                azure_text = str(it.get("original_text") or seg.get("text", "")).strip()
-                all_decisions[cid] = {
-                    "item_id": cid,
-                    "decision": "UNRESOLVED",
-                    "corrected_text": azure_text,
-                    "verified_text": azure_text,
-                    "confidence": 0.50,
-                    "reason_code": "AUDIO_UNAVAILABLE",
-                    "explanation": "[AUDIO_UNAVAILABLE] Independent acoustic evidence is unavailable; preserved for human review.",
-                    "scripture_references": [],
-                    "is_high_risk": True,
-                    "model_name": "system",
-                    "gateway_unavailable": False,
-                }
-
-            audio_items = [it for it in chunk_items if it["clean_id"] in items_with_audio]
-            if not audio_items or not reel_bytes:
-                logger.info(
-                    "Verification batch chunk %d/%d: %d items have no acoustic evidence; skipping AI calls",
-                    chunk_idx + 1,
-                    len(item_chunks),
-                    len(missing_audio_items),
-                )
-                continue
-
-            estimated_tokens = int(total_duration_sec * 32)
-            logger.info(
-                "Verification batch chunk %d/%d: %d audio items, reel_duration=%.2fs, est_audio_tokens=%d",
-                chunk_idx + 1,
-                len(item_chunks),
-                len(audio_items),
-                total_duration_sec,
-                estimated_tokens,
-            )
-
-            # -------------------------------------------------------------
-            # LOGICAL AI CALL 1: Independent Audio Listener Batch
-            # -------------------------------------------------------------
-            independent_transcripts: Dict[str, Optional[str]] = {it["clean_id"]: None for it in audio_items}
-            if gateway_configured:
-                # Gather canonical biblical names and church terms for audio vocabulary hints
-                biblical_names = [n["canonical_name"] for n in getattr(self.bible_service, "_all_names", [])[:30]]
-                dlbc_terms = [t["term"] for t in getattr(self.bible_service, "_church_vocab", [])[:25]]
-
-                reel_prompt = self.build_batch_transcription_prompt(manifest, biblical_names, dlbc_terms)
-                try:
-                    t_resp = await self.gateway.transcribe_audio(
-                        audio_bytes=reel_bytes,
-                        prompt=reel_prompt,
-                    )
-                    independent_transcripts = parse_independent_transcription(
-                        t_resp.text,
-                        expected_item_ids=[it["clean_id"] for it in audio_items],
-                    )
-                    logger.info("Batch audio transcription succeeded for chunk %d", chunk_idx + 1)
-                except Exception as trans_err:
-                    logger.warning("Batch audio transcription failed: %s", trans_err)
-            else:
-                logger.info("Gateway not configured; skipping audio transcription")
-
-            # -------------------------------------------------------------
-            # LOGICAL AI CALL 2: Session-Level Reasoning Batch
-            # -------------------------------------------------------------
+        for chunk_idx, chunk_items in enumerate(reasoning_chunks):
             chunk_packet: List[Dict[str, Any]] = []
-            for it in audio_items:
+            for it in chunk_items:
                 s_idx = it["segment_index"]
                 seg = seg_dict.get(s_idx, {})
                 azure_text = it.get("original_text") or seg.get("text", "")
@@ -797,7 +795,7 @@ Return a JSON array of decision objects matching this schema:
                 })
 
             raw_reasoning_text = None
-            resp_model_name = "gemini-3.8-flash"
+            resp_model_name = target_model
             gateway_unavailable = not gateway_configured
 
             if gateway_configured and chunk_packet:
@@ -811,12 +809,58 @@ Return a JSON array of decision objects matching this schema:
                     )
                     raw_reasoning_text = resp.text
                     resp_model_name = resp.model_name
+                except GeminiUnavailableError as e:
+                    if target_model != "gemini-2.5-flash":
+                        logger.warning(
+                            "[%s] %s unavailable (%s); attempting resilient fallback to gemini-2.5-flash for chunk %d/%d",
+                            session_id, target_model, e, chunk_idx + 1, len(reasoning_chunks)
+                        )
+                        try:
+                            resp = await self.gateway.generate(
+                                operation="ai_verification_reasoning",
+                                model="gemini-2.5-flash",
+                                contents=reasoning_prompt,
+                                config=config,
+                            )
+                            raw_reasoning_text = resp.text
+                            resp_model_name = resp.model_name
+                        except GeminiUnavailableError as e2:
+                            logger.error("[%s] Both primary and fallback models unavailable on chunk %d: %s", session_id, chunk_idx + 1, e2)
+                            gateway_unavailable = True
+                            raw_reasoning_text = None
+                        except Exception as e2:
+                            logger.error("[%s] Fallback model failed on chunk %d: %s", session_id, chunk_idx + 1, e2)
+                            is_unavail = "503" in str(e2) or "429" in str(e2) or "quota" in str(e2).lower()
+                            gateway_unavailable = is_unavail
+                            raw_reasoning_text = None
+                    else:
+                        logger.error("[%s] Gemini gateway unavailable on chunk %d: %s", session_id, chunk_idx + 1, e)
+                        gateway_unavailable = True
+                        raw_reasoning_text = None
                 except Exception as e:
-                    logger.error("AI batch reasoning error: %s", e)
-                    from app.services.gemini_gateway import GeminiUnavailableError
-                    is_unavail = isinstance(e, GeminiUnavailableError) or "503" in str(e) or "429" in str(e) or "quota" in str(e).lower()
-                    gateway_unavailable = is_unavail
-                    raw_reasoning_text = None
+                    logger.error("[%s] AI batch reasoning error on chunk %d: %s", session_id, chunk_idx + 1, e)
+                    is_unavail = "503" in str(e) or "429" in str(e) or "quota" in str(e).lower()
+                    if is_unavail and target_model != "gemini-2.5-flash":
+                        logger.warning(
+                            "[%s] Transient capacity failure (%s); attempting fallback to gemini-2.5-flash for chunk %d/%d",
+                            session_id, e, chunk_idx + 1, len(reasoning_chunks)
+                        )
+                        try:
+                            resp = await self.gateway.generate(
+                                operation="ai_verification_reasoning",
+                                model="gemini-2.5-flash",
+                                contents=reasoning_prompt,
+                                config=config,
+                            )
+                            raw_reasoning_text = resp.text
+                            resp_model_name = resp.model_name
+                        except Exception as e2:
+                            logger.error("[%s] Fallback model error on chunk %d: %s", session_id, chunk_idx + 1, e2)
+                            gateway_unavailable = True
+                            raw_reasoning_text = None
+                    else:
+                        gateway_unavailable = is_unavail
+                        raw_reasoning_text = None
 
             # Validate decisions adhering to the 7 validation rules
             chunk_decisions = validate_batch_decisions(raw_reasoning_text, chunk_packet)
@@ -826,77 +870,61 @@ Return a JSON array of decision objects matching this schema:
 
             all_decisions.update(chunk_decisions)
 
-        # Step 9: Persist validated decisions to SQLite
-        verified_count = 0
-        corrected_count = 0
-        unresolved_count = 0
+            # Step 9: Persist validated decisions immediately per chunk
+            for it in chunk_items:
+                cid = it["clean_id"]
+                s_idx = it["segment_index"]
+                decision_data = chunk_decisions.get(cid)
+                if not decision_data:
+                    azure_text = it.get("original_text") or ""
+                    decision_data = {
+                        "item_id": cid,
+                        "decision": "UNRESOLVED",
+                        "corrected_text": azure_text,
+                        "verified_text": azure_text,
+                        "confidence": 0.50,
+                        "reason_code": "NO_DECISION",
+                        "explanation": "No decision returned from reasoning",
+                        "scripture_references": [],
+                        "is_high_risk": True,
+                        "gateway_unavailable": gateway_unavailable,
+                        "model_name": resp_model_name,
+                    }
+                all_eval_results.append(decision_data)
 
-        for it in ordered_items:
-            clean_id = it["clean_id"]
-            s_idx = it["segment_index"]
-            seg = seg_dict.get(s_idx, {})
-            azure_text = it.get("original_text") or seg.get("text", "")
+                decision = decision_data["decision"]
+                confidence = decision_data["confidence"]
+                is_high_risk = decision_data.get("is_high_risk", False)
 
-            decision_data = all_decisions.get(clean_id)
-            if not decision_data:
-                decision_data = {
-                    "item_id": clean_id,
-                    "decision": "UNRESOLVED",
-                    "corrected_text": azure_text,
-                    "verified_text": azure_text,
-                    "confidence": 0.50,
-                    "reason_code": "AUDIO_UNAVAILABLE" if clean_id not in all_items_with_audio else "NO_DECISION",
-                    "explanation": "[AUDIO_UNAVAILABLE] Independent acoustic evidence is unavailable; preserved for human review." if clean_id not in all_items_with_audio else "No decision returned",
-                    "scripture_references": [],
-                    "is_high_risk": True,
-                    "gateway_unavailable": False if clean_id not in all_items_with_audio else not gateway_configured,
-                }
-
-            # HARD SAFETY GATE: Items without acoustic evidence must NEVER auto-verify or correct
-            if clean_id not in all_items_with_audio:
-                decision_data["decision"] = "UNRESOLVED"
-                decision_data["reason_code"] = "AUDIO_UNAVAILABLE"
-                decision_data["explanation"] = "[AUDIO_UNAVAILABLE] Independent acoustic evidence is unavailable; preserved for human review."
-                decision_data["verified_text"] = azure_text
-                decision_data["confidence"] = 0.50
-                decision_data["is_high_risk"] = True
-                decision_data["gateway_unavailable"] = False
-
-            all_eval_results.append(decision_data)
-
-            decision = decision_data["decision"]
-            confidence = decision_data["confidence"]
-            is_high_risk = decision_data.get("is_high_risk", False)
-
-            item_auto_resolve = False
-            if auto_resolve:
-                if decision == "VERIFIED":
-                    item_auto_resolve = True
-                    verified_count += 1
-                elif decision == "CORRECTED" and confidence >= 0.80 and not is_high_risk:
-                    item_auto_resolve = True
-                    corrected_count += 1
+                item_auto_resolve = False
+                if auto_resolve:
+                    if decision == "VERIFIED":
+                        item_auto_resolve = True
+                        verified_count += 1
+                    elif decision == "CORRECTED" and confidence >= 0.80 and not is_high_risk:
+                        item_auto_resolve = True
+                        corrected_count += 1
+                    else:
+                        unresolved_count += 1
                 else:
                     unresolved_count += 1
-            else:
-                unresolved_count += 1
 
-            explanation_to_store = decision_data["explanation"]
-            reason_code = decision_data.get("reason_code")
-            if reason_code and reason_code not in explanation_to_store:
-                explanation_to_store = f"[{reason_code}] {explanation_to_store}"
+                explanation_to_store = decision_data["explanation"]
+                reason_code = decision_data.get("reason_code")
+                if reason_code and reason_code not in explanation_to_store:
+                    explanation_to_store = f"[{reason_code}] {explanation_to_store}"
 
-            await session_repo.save_ai_verification_item_result(
-                session_id=session_id,
-                segment_index=s_idx,
-                ai_decision=decision,
-                ai_verified_text=decision_data["verified_text"],
-                ai_confidence=confidence,
-                ai_explanation=explanation_to_store,
-                ai_model_name=decision_data.get("model_name", "gemini-3.8-flash"),
-                ai_scriptures=decision_data.get("scripture_references", []),
-                auto_resolve=item_auto_resolve,
-            )
+                await session_repo.save_ai_verification_item_result(
+                    session_id=session_id,
+                    segment_index=s_idx,
+                    ai_decision=decision,
+                    ai_verified_text=decision_data["verified_text"],
+                    ai_confidence=confidence,
+                    ai_explanation=explanation_to_store,
+                    ai_model_name=decision_data.get("model_name", resp_model_name),
+                    ai_scriptures=decision_data.get("scripture_references", []),
+                    auto_resolve=item_auto_resolve,
+                )
 
         # Step 10: Determine final verification status
         final_state = await session_repo.get_verification_state(session_id)
@@ -909,7 +937,8 @@ Return a JSON array of decision objects matching this schema:
             "unresolved_count": remaining_pending,
         }
 
-        all_unavail = bool(all_eval_results) and all(r.get("gateway_unavailable") for r in all_eval_results)
+        # Only mark ai_unavailable if ALL items were gateway-unavailable AND 0 items were resolved
+        all_unavail = bool(all_eval_results) and all(r.get("gateway_unavailable") for r in all_eval_results) and (verified_count == 0 and corrected_count == 0)
         if all_unavail:
             final_status = "ai_unavailable"
         elif remaining_pending == 0:
