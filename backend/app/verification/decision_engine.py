@@ -145,6 +145,35 @@ def validate_batch_decisions(
         except Exception as e:
             logger.warning("Failed to parse batch reasoning response as JSON: %s", e)
 
+    # Rule 2 Pre-scan: Count occurrences of valid item IDs in AI response
+    id_counts: Dict[str, int] = {}
+    for entry in parsed_entries:
+        iid = str(entry.get("item_id") or entry.get("id") or "").strip().upper()
+        if iid in valid_ids:
+            id_counts[iid] = id_counts.get(iid, 0) + 1
+
+    duplicate_ids: Set[str] = {iid for iid, count in id_counts.items() if count > 1}
+    if duplicate_ids:
+        logger.warning(
+            "Duplicate item IDs detected in AI response: %s; discarding all decisions and marking UNRESOLVED (DUPLICATE_RESPONSE_ID)",
+            duplicate_ids,
+        )
+        for dup_id in duplicate_ids:
+            req_item = req_map[dup_id]
+            azure_text = str(req_item.get("azure_text") or req_item.get("original_text") or "").strip()
+            validated_decisions[dup_id] = {
+                "item_id": dup_id,
+                "decision": "UNRESOLVED",
+                "corrected_text": azure_text,
+                "verified_text": azure_text,
+                "confidence": 0.50,
+                "reason_code": "DUPLICATE_RESPONSE_ID",
+                "explanation": "Item ID appeared multiple times in AI response (ambiguous model output); preserved for human review.",
+                "scripture_references": [],
+                "is_high_risk": True,
+                "gateway_unavailable": False,
+            }
+
     # Process parsed entries adhering to Rules 1, 2, 3, 4, 5, 7
     for entry in parsed_entries:
         item_id = str(entry.get("item_id") or entry.get("id") or "").strip().upper()
@@ -153,11 +182,9 @@ def validate_batch_decisions(
         if not item_id or item_id not in valid_ids:
             continue
 
-        # Rule 2: No duplicate item IDs - keep first valid
-        if item_id in seen_ids:
-            logger.warning("Duplicate item ID %s in AI response; ignoring subsequent entry", item_id)
+        # Rule 2: If item_id is duplicated, discard all model decisions (already handled as UNRESOLVED)
+        if item_id in duplicate_ids:
             continue
-        seen_ids.add(item_id)
 
         req_item = req_map[item_id]
         azure_text = str(req_item.get("azure_text") or req_item.get("original_text") or "").strip()
@@ -459,6 +486,19 @@ Return a JSON array of decision objects matching this schema:
                 "gateway_unavailable": True,
             }
 
+        if not gemini_audio_text or not str(gemini_audio_text).strip():
+            logger.info("Independent acoustic evidence unavailable for segment; returning UNRESOLVED (AUDIO_UNAVAILABLE)")
+            return {
+                "decision": "UNRESOLVED",
+                "verified_text": azure_text,
+                "confidence": 0.50,
+                "reason_code": "AUDIO_UNAVAILABLE",
+                "explanation": "[AUDIO_UNAVAILABLE] Independent acoustic evidence is unavailable; preserved for human review.",
+                "scripture_references": [v.get("reference") for v in local_context.get("verses", []) if v.get("reference")],
+                "is_high_risk": materiality.level == MaterialityLevel.HIGH_RISK,
+                "gateway_unavailable": False,
+            }
+
         prompt = self.build_comparison_prompt(
             azure_text=azure_text,
             surrounding_context=surrounding_context,
@@ -532,6 +572,8 @@ Return a JSON array of decision objects matching this schema:
         2. ONE reasoning/decision batch request evaluating the complete packet.
 
         The number of AI calls does NOT scale with flag count (10, 59, 100 items -> 2 calls).
+        Independent acoustic evidence is mandatory: if master audio/reel is missing, items
+        must never auto-verify and are marked UNRESOLVED (AUDIO_UNAVAILABLE).
         """
         # Step 1: Set state to compiling
         await session_repo.set_ai_verification_status(session_id, "compiling")
@@ -602,6 +644,7 @@ Return a JSON array of decision objects matching this schema:
 
         all_decisions: Dict[str, Dict[str, Any]] = {}
         all_eval_results: List[Dict[str, Any]] = []
+        all_items_with_audio: Set[str] = set()
 
         target_model = os.environ.get("GEMINI_VERIFICATION_MODEL", "gemini-3.8-flash")
         config = types.GenerateContentConfig(
@@ -628,12 +671,46 @@ Return a JSON array of decision objects matching this schema:
                 buffer_seconds=2.5,
                 silence_gap_ms=600,
             )
+            items_with_audio: Set[str] = {m["item_id"] for m in manifest} if reel_bytes else set()
+            all_items_with_audio.update(items_with_audio)
+
+            # Mark any items without acoustic evidence as UNRESOLVED (AUDIO_UNAVAILABLE)
+            missing_audio_items = [it for it in chunk_items if it["clean_id"] not in items_with_audio]
+            for it in missing_audio_items:
+                cid = it["clean_id"]
+                s_idx = it["segment_index"]
+                seg = seg_dict.get(s_idx, {})
+                azure_text = str(it.get("original_text") or seg.get("text", "")).strip()
+                all_decisions[cid] = {
+                    "item_id": cid,
+                    "decision": "UNRESOLVED",
+                    "corrected_text": azure_text,
+                    "verified_text": azure_text,
+                    "confidence": 0.50,
+                    "reason_code": "AUDIO_UNAVAILABLE",
+                    "explanation": "[AUDIO_UNAVAILABLE] Independent acoustic evidence is unavailable; preserved for human review.",
+                    "scripture_references": [],
+                    "is_high_risk": True,
+                    "model_name": "system",
+                    "gateway_unavailable": False,
+                }
+
+            audio_items = [it for it in chunk_items if it["clean_id"] in items_with_audio]
+            if not audio_items or not reel_bytes:
+                logger.info(
+                    "Verification batch chunk %d/%d: %d items have no acoustic evidence; skipping AI calls",
+                    chunk_idx + 1,
+                    len(item_chunks),
+                    len(missing_audio_items),
+                )
+                continue
+
             estimated_tokens = int(total_duration_sec * 32)
             logger.info(
-                "Verification batch chunk %d/%d: %d items, reel_duration=%.2fs, est_audio_tokens=%d",
+                "Verification batch chunk %d/%d: %d audio items, reel_duration=%.2fs, est_audio_tokens=%d",
                 chunk_idx + 1,
                 len(item_chunks),
-                len(chunk_items),
+                len(audio_items),
                 total_duration_sec,
                 estimated_tokens,
             )
@@ -641,8 +718,8 @@ Return a JSON array of decision objects matching this schema:
             # -------------------------------------------------------------
             # LOGICAL AI CALL 1: Independent Audio Listener Batch
             # -------------------------------------------------------------
-            independent_transcripts: Dict[str, Optional[str]] = {it["clean_id"]: None for it in chunk_items}
-            if reel_bytes and gateway_configured:
+            independent_transcripts: Dict[str, Optional[str]] = {it["clean_id"]: None for it in audio_items}
+            if gateway_configured:
                 # Gather canonical biblical names and church terms for audio vocabulary hints
                 biblical_names = [n["canonical_name"] for n in getattr(self.bible_service, "_all_names", [])[:30]]
                 dlbc_terms = [t["term"] for t in getattr(self.bible_service, "_church_vocab", [])[:25]]
@@ -655,22 +732,19 @@ Return a JSON array of decision objects matching this schema:
                     )
                     independent_transcripts = parse_independent_transcription(
                         t_resp.text,
-                        expected_item_ids=[it["clean_id"] for it in chunk_items],
+                        expected_item_ids=[it["clean_id"] for it in audio_items],
                     )
                     logger.info("Batch audio transcription succeeded for chunk %d", chunk_idx + 1)
                 except Exception as trans_err:
-                    logger.warning("Batch audio transcription failed (will proceed with text reasoning): %s", trans_err)
+                    logger.warning("Batch audio transcription failed: %s", trans_err)
             else:
-                if not gateway_configured:
-                    logger.info("Gateway not configured; skipping audio transcription")
-                elif not reel_bytes:
-                    logger.info("No audio reel available; proceeding with canonical text reasoning")
+                logger.info("Gateway not configured; skipping audio transcription")
 
             # -------------------------------------------------------------
             # LOGICAL AI CALL 2: Session-Level Reasoning Batch
             # -------------------------------------------------------------
             chunk_packet: List[Dict[str, Any]] = []
-            for it in chunk_items:
+            for it in audio_items:
                 s_idx = it["segment_index"]
                 seg = seg_dict.get(s_idx, {})
                 azure_text = it.get("original_text") or seg.get("text", "")
@@ -726,7 +800,7 @@ Return a JSON array of decision objects matching this schema:
             resp_model_name = "gemini-3.8-flash"
             gateway_unavailable = not gateway_configured
 
-            if gateway_configured:
+            if gateway_configured and chunk_packet:
                 reasoning_prompt = self.build_batch_reasoning_prompt(chunk_packet)
                 try:
                     resp = await self.gateway.generate(
@@ -763,15 +837,31 @@ Return a JSON array of decision objects matching this schema:
             seg = seg_dict.get(s_idx, {})
             azure_text = it.get("original_text") or seg.get("text", "")
 
-            decision_data = all_decisions.get(clean_id) or {
-                "decision": "UNRESOLVED",
-                "verified_text": azure_text,
-                "confidence": 0.50,
-                "explanation": "No decision returned",
-                "scripture_references": [],
-                "is_high_risk": True,
-                "gateway_unavailable": not gateway_configured,
-            }
+            decision_data = all_decisions.get(clean_id)
+            if not decision_data:
+                decision_data = {
+                    "item_id": clean_id,
+                    "decision": "UNRESOLVED",
+                    "corrected_text": azure_text,
+                    "verified_text": azure_text,
+                    "confidence": 0.50,
+                    "reason_code": "AUDIO_UNAVAILABLE" if clean_id not in all_items_with_audio else "NO_DECISION",
+                    "explanation": "[AUDIO_UNAVAILABLE] Independent acoustic evidence is unavailable; preserved for human review." if clean_id not in all_items_with_audio else "No decision returned",
+                    "scripture_references": [],
+                    "is_high_risk": True,
+                    "gateway_unavailable": False if clean_id not in all_items_with_audio else not gateway_configured,
+                }
+
+            # HARD SAFETY GATE: Items without acoustic evidence must NEVER auto-verify or correct
+            if clean_id not in all_items_with_audio:
+                decision_data["decision"] = "UNRESOLVED"
+                decision_data["reason_code"] = "AUDIO_UNAVAILABLE"
+                decision_data["explanation"] = "[AUDIO_UNAVAILABLE] Independent acoustic evidence is unavailable; preserved for human review."
+                decision_data["verified_text"] = azure_text
+                decision_data["confidence"] = 0.50
+                decision_data["is_high_risk"] = True
+                decision_data["gateway_unavailable"] = False
+
             all_eval_results.append(decision_data)
 
             decision = decision_data["decision"]
@@ -791,13 +881,18 @@ Return a JSON array of decision objects matching this schema:
             else:
                 unresolved_count += 1
 
+            explanation_to_store = decision_data["explanation"]
+            reason_code = decision_data.get("reason_code")
+            if reason_code and reason_code not in explanation_to_store:
+                explanation_to_store = f"[{reason_code}] {explanation_to_store}"
+
             await session_repo.save_ai_verification_item_result(
                 session_id=session_id,
                 segment_index=s_idx,
                 ai_decision=decision,
                 ai_verified_text=decision_data["verified_text"],
                 ai_confidence=confidence,
-                ai_explanation=decision_data["explanation"],
+                ai_explanation=explanation_to_store,
                 ai_model_name=decision_data.get("model_name", "gemini-3.8-flash"),
                 ai_scriptures=decision_data.get("scripture_references", []),
                 auto_resolve=item_auto_resolve,

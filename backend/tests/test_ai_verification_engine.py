@@ -7,6 +7,10 @@ import uuid
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import os
+import tempfile
+import wave
+
 from app.database.connection import get_db_connection
 from app.database.session_repo import session_repo
 from app.services.gemini_gateway import GeminiGateway, GatewayResponse
@@ -14,7 +18,20 @@ from app.services.bible_context_service import BibleContextService
 from app.verification.decision_engine import VerificationDecisionEngine
 
 
-async def create_mock_session_with_flags():
+def create_dummy_wav_file(duration_sec: float = 30.0, framerate: int = 16000) -> str:
+    temp_dir = tempfile.gettempdir()
+    wav_path = os.path.join(temp_dir, f"test_engine_master_{uuid.uuid4().hex[:6]}.wav")
+    total_frames = int(duration_sec * framerate)
+    frames = b"\x00\x00" * total_frames
+    with wave.open(wav_path, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(framerate)
+        wf.writeframes(frames)
+    return wav_path
+
+
+async def create_mock_session_with_flags(audio_path: str = None):
     """Helper to create a test session with 2 flagged segments."""
     await session_repo.init_db()
     session_id = f"test_verify_{uuid.uuid4().hex[:8]}"
@@ -23,6 +40,13 @@ async def create_mock_session_with_flags():
         title="Test Message for AI Verification",
         status="completed",
     )
+    if audio_path:
+        async with get_db_connection() as conn:
+            await conn.execute(
+                "UPDATE sessions SET audio_file_path = ? WHERE session_id = ?",
+                (audio_path, session_id),
+            )
+            await conn.commit()
     async with get_db_connection() as conn:
         await conn.execute(
             """
@@ -173,7 +197,8 @@ async def test_evaluate_segment_gateway_unconfigured_fallback():
 
 @pytest.mark.asyncio
 async def test_verify_session_full_lifecycle():
-    session_id = await create_mock_session_with_flags()
+    wav_path = create_dummy_wav_file(duration_sec=30.0)
+    session_id = await create_mock_session_with_flags(audio_path=wav_path)
 
     # Create mock gateway resolving segment 0 as VERIFIED and segment 1 as CORRECTED
     mock_gw = MagicMock(spec=GeminiGateway)
@@ -231,9 +256,14 @@ async def test_verify_session_full_lifecycle():
         return resp
 
     mock_gw.generate = AsyncMock(side_effect=mock_generate)
-    mock_gw.transcribe_audio = AsyncMock(return_value=GatewayResponse(
+    trans_resp = GatewayResponse(
         response=MagicMock(), provider_slot="primary", model_name="gemini-3.5-transcribe", latency_ms=80.0, attempts=1
-    ))
+    )
+    trans_resp.response.text = json.dumps({
+        "V001": "For God so loved the world that he gave his only begotten Son",
+        "V002": "Saul was on the way to Damascus",
+    })
+    mock_gw.transcribe_audio = AsyncMock(return_value=trans_resp)
 
     engine = VerificationDecisionEngine(gateway=mock_gw)
     res = await engine.verify_session(session_id=session_id, auto_resolve=True)

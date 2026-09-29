@@ -156,9 +156,11 @@ def test_validate_batch_decisions_7_rules():
     assert validated["V003"]["decision"] == "VERIFIED"
     assert validated["V003"]["confidence"] == 0.99
 
-    # Rule 2: Duplicate rejected (first kept)
-    assert validated["V001"]["decision"] == "VERIFIED"
-    assert validated["V001"]["verified_text"] == "God so loved the world"
+    # Rule 2: Duplicate IDs treated as ambiguous -> discarded and marked UNRESOLVED (DUPLICATE_RESPONSE_ID)
+    assert validated["V001"]["decision"] == "UNRESOLVED"
+    assert validated["V001"]["reason_code"] == "DUPLICATE_RESPONSE_ID"
+    assert validated["V001"]["verified_text"] == "God so love the world"
+    assert "duplicate" in validated["V001"]["explanation"].lower() or "multiple" in validated["V001"]["explanation"].lower()
 
     # Rule 5: Malformed correction demoted to UNRESOLVED + original text
     assert validated["V002"]["decision"] == "UNRESOLVED"
@@ -322,42 +324,50 @@ async def test_batch_verification_immutability():
 
 @pytest.mark.asyncio
 async def test_graceful_degradation_when_audio_missing():
-    # Session without audio file path
+    # Session without audio file path (master audio / reel cannot be produced)
     session_id = await create_session_with_n_flags(2, audio_path=None)
 
     mock_gw = MagicMock(spec=GeminiGateway)
     mock_gw.is_configured.return_value = True
-
-    decisions = [
-        {"item_id": "V001", "decision": "VERIFIED", "corrected_text": "Azure segment 0", "confidence": 0.90},
-        {"item_id": "V002", "decision": "VERIFIED", "corrected_text": "Azure segment 1", "confidence": 0.90},
-    ]
-    mock_resp = GatewayResponse(
-        response=MagicMock(), provider_slot="primary", model_name="gemini-3.8-flash", latency_ms=80.0, attempts=1
-    )
-    mock_resp.response.text = json.dumps(decisions)
-    mock_gw.generate = AsyncMock(return_value=mock_resp)
     mock_gw.transcribe_audio = AsyncMock()
+    mock_gw.generate = AsyncMock()
 
     engine = VerificationDecisionEngine(gateway=mock_gw)
     result = await engine.verify_session(session_id=session_id, auto_resolve=True)
 
-    # When audio missing: transcribe_audio must NOT be called
+    # When audio missing: independent acoustic evidence cannot be produced
+    # 1. Neither transcribe nor generate should be called (cannot substitute text/context alone)
     mock_gw.transcribe_audio.assert_not_called()
-    # Exactly 1 reasoning call made
-    mock_gw.generate.assert_called_once()
-    assert result["status"] == "completed_verified"
+    mock_gw.generate.assert_not_called()
+
+    # 2. Run completes as completed_needs_review
+    assert result["status"] == "completed_needs_review"
+    assert result["summary"]["verified_count"] == 0
+    assert result["summary"]["unresolved_count"] == 2
+
+    # 3. Items remain pending for human review with AUDIO_UNAVAILABLE
+    v_state = await session_repo.get_verification_state(session_id)
+    for it in v_state["items"]:
+        assert it["action"] == "pending"
+        assert it["ai_decision"] == "UNRESOLVED"
+        assert "AUDIO_UNAVAILABLE" in (it.get("ai_explanation") or "")
 
 
 @pytest.mark.asyncio
 async def test_primary_429_failover_in_batch_verification():
     from google.genai.errors import ClientError
 
-    session_id = await create_session_with_n_flags(2, audio_path=None)
+    wav_path = create_dummy_wav_file(duration_sec=30.0)
+    session_id = await create_session_with_n_flags(2, audio_path=wav_path)
 
     gw = GeminiGateway()
     gw._get_primary_key = lambda: "fake-primary-key"
     gw._get_backup_key = lambda: "fake-backup-key"
+
+    gw.transcribe_audio = AsyncMock(return_value=GatewayResponse(
+        response=MagicMock(), provider_slot="primary", model_name="gemini-3.5-transcribe", latency_ms=40.0, attempts=1
+    ))
+    gw.transcribe_audio.return_value.response.text = json.dumps({"V001": "Audio 0", "V002": "Audio 1"})
 
     mock_primary = MagicMock()
     mock_backup = MagicMock()
