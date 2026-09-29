@@ -19,15 +19,36 @@ from app.services.gemini_gateway import GeminiGateway, GatewayResponse
 from app.verification.decision_engine import VerificationDecisionEngine
 
 
+import os
+import wave
+import tempfile
+
 async def seed_recorded_session(num_flags: int = 2) -> str:
     """Helper to seed a freshly finalized recorded session with flagged segments."""
     await session_repo.init_db()
     session_id = f"test_rec_{uuid.uuid4().hex[:8]}"
+    
+    # Create a small valid WAV file for acoustic verification reel
+    wav_path = os.path.join(tempfile.gettempdir(), f"test_rec_{session_id}.wav")
+    total_frames = int(30.0 * 16000)
+    with wave.open(wav_path, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(16000)
+        wf.writeframes(b"\x00\x00" * total_frames)
+
     await session_repo.create_session(
         session_id=session_id,
         title="Recorded Service Test",
         status="recording",
     )
+
+    async with get_db_connection() as conn:
+        await conn.execute(
+            "UPDATE sessions SET audio_file_path = ? WHERE session_id = ?",
+            (wav_path, session_id),
+        )
+        await conn.commit()
 
     async with get_db_connection() as conn:
         for idx in range(num_flags):
@@ -86,6 +107,16 @@ async def test_automatic_lifecycle_to_completed_verified():
     mock_gw = MagicMock(spec=GeminiGateway)
     mock_gw.is_configured.return_value = True
 
+    async def mock_transcribe(audio_bytes, prompt=None, **kwargs):
+        resp = GatewayResponse(
+            response=MagicMock(), provider_slot="primary", model_name="gemini-3.5-transcribe", latency_ms=80.0, attempts=1
+        )
+        resp.response.text = json.dumps({
+            "V001": "Segment text number 0 regarding the Scripture",
+            "V002": "Segment text number 1 regarding the Scripture",
+        })
+        return resp
+
     async def mock_generate(operation, model, contents, config=None):
         resp = GatewayResponse(
             response=MagicMock(),
@@ -95,19 +126,27 @@ async def test_automatic_lifecycle_to_completed_verified():
             attempts=1,
         )
         resp.response.text = json.dumps({
-            "decision": "VERIFIED",
-            "verified_text": "Segment text number verified",
-            "confidence": 0.95,
-            "explanation": "Doctrinally verified against KJV text",
-            "scripture_references": [],
-            "is_high_risk": False,
+            "items": [
+                {
+                    "item_id": "V001",
+                    "decision": "VERIFIED",
+                    "verified_text": "Segment text number 0 regarding the Scripture",
+                    "confidence": 0.95,
+                    "explanation": "Doctrinally verified against KJV text",
+                },
+                {
+                    "item_id": "V002",
+                    "decision": "VERIFIED",
+                    "verified_text": "Segment text number 1 regarding the Scripture",
+                    "confidence": 0.95,
+                    "explanation": "Doctrinally verified against KJV text",
+                },
+            ]
         })
         return resp
 
     mock_gw.generate = AsyncMock(side_effect=mock_generate)
-    mock_gw.transcribe_audio = AsyncMock(return_value=GatewayResponse(
-        response=MagicMock(), provider_slot="primary", model_name="gemini-3.5-transcribe", latency_ms=80.0, attempts=1
-    ))
+    mock_gw.transcribe_audio = AsyncMock(side_effect=mock_transcribe)
 
     engine = VerificationDecisionEngine(gateway=mock_gw)
     result = await engine.verify_session(session_id, auto_resolve=True)
@@ -136,6 +175,15 @@ async def test_automatic_lifecycle_to_completed_needs_review():
     mock_gw = MagicMock(spec=GeminiGateway)
     mock_gw.is_configured.return_value = True
 
+    async def mock_transcribe(audio_bytes, prompt=None, **kwargs):
+        resp = GatewayResponse(
+            response=MagicMock(), provider_slot="primary", model_name="gemini-3.5-transcribe", latency_ms=80.0, attempts=1
+        )
+        resp.response.text = json.dumps({
+            "V001": "Indistinct text",
+        })
+        return resp
+
     async def mock_generate(operation, model, contents, config=None):
         resp = GatewayResponse(
             response=MagicMock(),
@@ -145,19 +193,20 @@ async def test_automatic_lifecycle_to_completed_needs_review():
             attempts=1,
         )
         resp.response.text = json.dumps({
-            "decision": "UNRESOLVED",
-            "verified_text": "Original text with uncertainty",
-            "confidence": 0.40,
-            "explanation": "Preacher voice was indistinct; requires human confirmation",
-            "scripture_references": [],
-            "is_high_risk": True,
+            "items": [
+                {
+                    "item_id": "V001",
+                    "decision": "UNRESOLVED",
+                    "verified_text": "Original text with uncertainty",
+                    "confidence": 0.40,
+                    "explanation": "Preacher voice was indistinct; requires human confirmation",
+                }
+            ]
         })
         return resp
 
     mock_gw.generate = AsyncMock(side_effect=mock_generate)
-    mock_gw.transcribe_audio = AsyncMock(return_value=GatewayResponse(
-        response=MagicMock(), provider_slot="primary", model_name="gemini-3.5-transcribe", latency_ms=80.0, attempts=1
-    ))
+    mock_gw.transcribe_audio = AsyncMock(side_effect=mock_transcribe)
 
     engine = VerificationDecisionEngine(gateway=mock_gw)
     result = await engine.verify_session(session_id, auto_resolve=True)

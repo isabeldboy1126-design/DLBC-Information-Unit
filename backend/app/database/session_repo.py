@@ -27,6 +27,8 @@ from app.database.models import (
     PHASE9_MIGRATION_COLUMNS_MSSQL,
     STAGE6_AI_VERIFICATION_COLUMNS,
     STAGE6_AI_VERIFICATION_COLUMNS_MSSQL,
+    STAGE7_REPORT_PROCESSING_COLUMNS,
+    STAGE7_REPORT_PROCESSING_COLUMNS_MSSQL,
 )
 from app.config import (
     STORAGE_AUDIO_DIR,
@@ -53,6 +55,7 @@ class SessionRepository:
                     + PHASE8_MIGRATION_COLUMNS_MSSQL
                     + PHASE9_MIGRATION_COLUMNS_MSSQL
                     + STAGE6_AI_VERIFICATION_COLUMNS_MSSQL
+                    + STAGE7_REPORT_PROCESSING_COLUMNS_MSSQL
                 ):
                     try:
                         await conn.execute(alter_sql)
@@ -92,6 +95,12 @@ class SessionRepository:
                         pass  # Column already exists
                 # Stage 6 migration: add AI verification engine columns
                 for alter_sql in STAGE6_AI_VERIFICATION_COLUMNS:
+                    try:
+                        await conn.execute(alter_sql)
+                    except Exception:
+                        pass  # Column already exists
+                # Stage 7 migration: add unified report processing columns
+                for alter_sql in STAGE7_REPORT_PROCESSING_COLUMNS:
                     try:
                         await conn.execute(alter_sql)
                     except Exception:
@@ -1593,6 +1602,39 @@ class SessionRepository:
             "action": new_action,
             "verified_text": new_verified_text,
         }
+
+    async def set_report_processing_status(
+        self,
+        session_id: str,
+        status: str,
+        run_id: Optional[str] = None,
+    ):
+        """Updates report_processing_status on sessions table."""
+        await self.init_db()
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        async with get_db_connection() as conn:
+            if status == "completed":
+                await conn.execute(
+                    """
+                    UPDATE sessions
+                    SET report_processing_status = ?,
+                        report_processing_run_id = COALESCE(?, report_processing_run_id),
+                        report_processing_completed_at = ?
+                    WHERE session_id = ?
+                    """,
+                    (status, run_id, now_iso, session_id),
+                )
+            else:
+                await conn.execute(
+                    """
+                    UPDATE sessions
+                    SET report_processing_status = ?,
+                        report_processing_run_id = COALESCE(?, report_processing_run_id)
+                    WHERE session_id = ?
+                    """,
+                    (status, run_id, session_id),
+                )
+            await conn.commit()
 
 
 # Singleton instance

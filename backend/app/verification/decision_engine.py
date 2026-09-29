@@ -915,6 +915,17 @@ Return a JSON array of decision objects matching this schema:
         elif remaining_pending == 0:
             final_status = "completed_verified"
             await session_repo.finalise_verification(session_id)
+            # Stage 7: Auto-process after verification if enabled
+            try:
+                from app.database.report_processing_repo import report_processing_repo
+                is_auto = await report_processing_repo.get_setting("auto_process_after_verification", default="false")
+                if str(is_auto).strip().lower() in ("true", "1", "yes", "on"):
+                    from app.report_processing.engine import report_processing_engine
+                    import asyncio
+                    asyncio.create_task(report_processing_engine.start_processing(session_id))
+            except Exception as e:
+                import logging
+                logging.getLogger("app.verification.decision_engine").warning(f"Auto-process trigger error: {e}")
         else:
             final_status = "completed_needs_review"
 

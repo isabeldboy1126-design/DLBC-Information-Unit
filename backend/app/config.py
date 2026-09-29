@@ -22,6 +22,7 @@ STORAGE_AUDIO_DIR = os.path.join(DATA_ROOT, "audio")
 STORAGE_UPLOADS_DIR = os.path.join(DATA_ROOT, "uploads")
 STORAGE_TRANSCRIPTS_DIR = os.path.join(DATA_ROOT, "transcripts")
 STORAGE_VERIFIED_DIR = os.path.join(DATA_ROOT, "verified_transcripts")
+STORAGE_DOCUMENTS_DIR = os.path.join(DATA_ROOT, "documents")
 STORAGE_MODELS_DIR = os.path.join(DATA_ROOT, "models", "whisper")
 DEFAULT_DB_PATH = os.path.join(DATA_ROOT, "app.db")
 
@@ -32,6 +33,8 @@ for directory in [
     STORAGE_UPLOADS_DIR,
     STORAGE_TRANSCRIPTS_DIR,
     STORAGE_VERIFIED_DIR,
+    STORAGE_DOCUMENTS_DIR,
     STORAGE_MODELS_DIR,
 ]:
     os.makedirs(directory, exist_ok=True)
+

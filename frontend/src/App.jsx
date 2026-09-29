@@ -14,6 +14,7 @@ import { SessionHistoryList } from './components/sessions/SessionHistoryList'
 import { SessionDetailView, getCleanSessionName } from './components/sessions/SessionDetailView'
 import { SettingsView } from './components/settings/SettingsView'
 import { YouTubeSessionView } from './components/youtube/YouTubeSessionView'
+import { CompletedReportsView } from './components/reporting/CompletedReportsView'
 
 // File Transcription Components
 import { RecordedFileUploader } from './components/transcription/RecordedFileUploader'
@@ -57,7 +58,7 @@ function App() {
     if (clean === 'verification_workspace') {
       return { view: 'sessions', sessionId: null, stage: 'verification', subAction: null }
     }
-    if (['new_live', 'transcribe', 'youtube', 'settings', 'live_recording'].includes(clean)) {
+    if (['new_live', 'transcribe', 'youtube', 'settings', 'live_recording', 'reports', 'events'].includes(clean)) {
       return { view: clean, sessionId: null, stage: null, subAction: null }
     }
     return { view: 'dashboard', sessionId: null, stage: null, subAction: null }
@@ -320,6 +321,18 @@ function App() {
       return {
         title: 'Settings & Standards',
         onBack: handleInAppBack,
+      }
+    }
+    if (currentView === 'reports') {
+      return {
+        title: 'Reports',
+        onBack: null,
+      }
+    }
+    if (currentView === 'events') {
+      return {
+        title: 'Events',
+        onBack: null,
       }
     }
     if (currentView === 'sessions') {
@@ -639,6 +652,25 @@ function App() {
             }
             return success
           }}
+        />
+      ) : currentView === 'reports' ? (
+        /* ----------------------------------------------------------- */
+        /* VIEW 7: COMPLETED REPORTS ARCHIVE                           */
+        /* ----------------------------------------------------------- */
+        <CompletedReportsView
+          onNavigateSession={(sessionId, stage) => {
+            navigateTo(`session/${sessionId}/${stage || 'overview'}`)
+          }}
+        />
+      ) : currentView === 'events' ? (
+        /* ----------------------------------------------------------- */
+        /* VIEW 8: EVENTS / PROGRAMMES SESSIONS                        */
+        /* ----------------------------------------------------------- */
+        <SessionHistoryList
+          onOpenSession={(sessionId) => navigateTo(`session/${sessionId}`)}
+          onStartLiveSession={handleStartLiveRecording}
+          onOpenTranscribe={() => navigateTo('transcribe')}
+          initialFilter="all"
         />
       ) : null}
 

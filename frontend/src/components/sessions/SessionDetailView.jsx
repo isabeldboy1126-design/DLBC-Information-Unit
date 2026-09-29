@@ -6,7 +6,7 @@ import { ReportingView } from '../reporting/ReportingView'
 import { EditingView } from '../editing/EditingView'
 import { ProofreadingView } from '../proofreading/ProofreadingView'
 import { FinalReportView } from '../final_report/FinalReportView'
-import { LifecycleStepper } from '../common/LifecycleStepper'
+import { ReportProcessingModal } from '../reporting/ReportProcessingModal'
 
 function MicIcon() {
   return (
@@ -238,7 +238,30 @@ export function SessionDetailView({
 
   const [activeView, setActiveView] = useState(getDefaultView)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [showReportProcessingModal, setShowReportProcessingModal] = useState(false)
   const mediaElementRef = useRef(null)
+
+  const handleDownloadDocx = async () => {
+    if (!session?.session_id) return
+    try {
+      const res = await fetch(getApiUrl(`/api/report-processing/download-docx/${session.session_id}`))
+      if (res.ok) {
+        const blob = await res.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${session?.title || 'Report'}.docx`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } else {
+        alert('Document is still being prepared. You can generate or download it via Report Processing.')
+      }
+    } catch (e) {
+      alert(`Download error: ${e.message}`)
+    }
+  }
 
   const changeStage = (newStage) => {
     setActiveView(newStage)
@@ -549,121 +572,87 @@ export function SessionDetailView({
         </div>
       </div>
 
-      {/* 2. Authoritative 8-Stage Lifecycle Stepper */}
-      <LifecycleStepper
-        session={session}
-        activeStage={isVerified ? (rStatus === 'reports_ready' ? 'editing' : 'reporting') : 'verification'}
-        onSelectStage={(stageId) => {
-          if (stageId === 'raw_transcript') changeStage('raw_transcript')
-          else if (stageId === 'verification') changeStage('verification')
-          else if (stageId === 'verified_transcript') changeStage('verified_transcript')
-          else if (stageId === 'reporting') changeStage('reporting')
-          else if (stageId === 'editing') changeStage('editing')
-          else if (stageId === 'proofreading') changeStage('proofreading')
-          else if (stageId === 'final_report') changeStage('final_report')
-        }}
-      />
+      {/* 2. Verification Action Strip (floating white card matching reference design) */}
+      {(() => {
+        const isVerified = (session.verification_status === 'complete') || (flagCount === 0) || (resolvedCount >= flagCount && flagCount > 0)
+        const hasFinalDoc = (fStatus === 'complete') || session?.final_report_id || session?.docx_file_path || session?.report_processing_status === 'completed'
+        const hasLegacyReporting = rStatus === 'reports_ready' || eStatus === 'complete' || pStatus === 'complete'
 
-      {/* 3. Verification Action Strip (floating white card matching reference screenshot) */}
-      {!isVerified && flagCount > 0 ? (
-        <div className="verification-action-strip">
-          <div className="verification-strip-left">
-            <div className="verification-strip-icon-box" aria-hidden="true">
-              <DocumentIcon />
+        if (!isVerified && flagCount > 0) {
+          const remaining = flagCount - resolvedCount
+          return (
+            <div className="verification-action-strip">
+              <div className="verification-strip-left">
+                <div className="verification-strip-icon-box" aria-hidden="true">
+                  <DocumentIcon />
+                </div>
+                <span className="verification-strip-text">
+                  {remaining > 0 ? `${remaining} sections need verification` : `${flagCount} sections need verification`}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn-verify-cta"
+                onClick={() => {
+                  onStartVerification(session.session_id)
+                  changeStage('verification')
+                }}
+                id="btn-workspace-begin-verify"
+              >
+                Verify →
+              </button>
             </div>
-            <span className="verification-strip-text">
-              {flagCount} sections need verification
-            </span>
-          </div>
-          <button
-            type="button"
-            className="btn-verify-cta"
-            onClick={() => {
-              onStartVerification(session.session_id)
-              changeStage('verification')
-            }}
-            id="btn-workspace-begin-verify"
-          >
-            Verify →
-          </button>
-        </div>
-      ) : isVerified && rStatus !== 'reports_ready' ? (
-        <div className="verification-action-strip">
-          <div className="verification-strip-left">
-            <div className="verification-strip-icon-box" aria-hidden="true">
-              <DocumentIcon />
+          )
+        }
+
+        if (isVerified) {
+          if (hasFinalDoc) {
+            return (
+              <div className="verification-action-strip">
+                <div className="verification-strip-left">
+                  <div className="verification-strip-icon-box" aria-hidden="true">
+                    <DocumentIcon />
+                  </div>
+                  <span className="verification-strip-text">
+                    Document ready
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-verify-cta"
+                  onClick={handleDownloadDocx}
+                  id="btn-workspace-download-doc"
+                >
+                  Download
+                </button>
+              </div>
+            )
+          }
+
+          return (
+            <div className="verification-action-strip">
+              <div className="verification-strip-left">
+                <div className="verification-strip-icon-box" aria-hidden="true">
+                  <DocumentIcon />
+                </div>
+                <span className="verification-strip-text">
+                  Transcript verified
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn-verify-cta"
+                onClick={() => setShowReportProcessingModal(true)}
+                id="btn-workspace-process-ai"
+              >
+                {hasLegacyReporting ? 'Continue with AI →' : 'Process with AI →'}
+              </button>
             </div>
-            <span className="verification-strip-text">
-              Transcript verified · Ready for Reporting drafts
-            </span>
-          </div>
-          <button
-            type="button"
-            className="btn-verify-cta"
-            onClick={() => changeStage('reporting')}
-            id="btn-workspace-go-to-reporting"
-          >
-            Go to Reporting →
-          </button>
-        </div>
-      ) : rStatus === 'reports_ready' && eStatus !== 'complete' ? (
-        <div className="verification-action-strip">
-          <div className="verification-strip-left">
-            <div className="verification-strip-icon-box" aria-hidden="true">
-              <DocumentIcon />
-            </div>
-            <span className="verification-strip-text">
-              Reporting drafts ready for editorial synthesis
-            </span>
-          </div>
-          <button
-            type="button"
-            className="btn-verify-cta"
-            onClick={() => changeStage('editing')}
-            id="btn-workspace-open-editing"
-          >
-            Open Editing →
-          </button>
-        </div>
-      ) : eStatus === 'complete' && pStatus !== 'complete' ? (
-        <div className="verification-action-strip">
-          <div className="verification-strip-left">
-            <div className="verification-strip-icon-box" aria-hidden="true">
-              <DocumentIcon />
-            </div>
-            <span className="verification-strip-text">
-              Edited report ready for final proofreading
-            </span>
-          </div>
-          <button
-            type="button"
-            className="btn-verify-cta"
-            onClick={() => changeStage('proofreading')}
-            id="btn-workspace-open-proofreading"
-          >
-            Open Proofreading →
-          </button>
-        </div>
-      ) : fStatus === 'complete' ? (
-        <div className="verification-action-strip">
-          <div className="verification-strip-left">
-            <div className="verification-strip-icon-box" aria-hidden="true">
-              <DocumentIcon />
-            </div>
-            <span className="verification-strip-text">
-              Final publication report ready for distribution
-            </span>
-          </div>
-          <button
-            type="button"
-            className="btn-verify-cta"
-            onClick={() => changeStage('final_report')}
-            id="btn-workspace-open-final-report"
-          >
-            Download .docx →
-          </button>
-        </div>
-      ) : null}
+          )
+        }
+
+        return null
+      })()}
 
       {/* 4. Session Materials Section (6 Artifact Cards) */}
       <section className="session-materials-section" aria-label="Session Materials">
@@ -889,6 +878,17 @@ export function SessionDetailView({
         session={session}
         onClose={() => setIsEditModalOpen(false)}
         onSave={handleSaveDetails}
+      />
+
+      {/* 6. Stage 7 Unified Report Processing Modal */}
+      <ReportProcessingModal
+        isOpen={showReportProcessingModal}
+        session={session}
+        onClose={() => setShowReportProcessingModal(false)}
+        onViewReport={() => changeStage('final_report')}
+        onProcessingComplete={() => {
+          if (onFinaliseVerification) onFinaliseVerification()
+        }}
       />
     </div>
   )

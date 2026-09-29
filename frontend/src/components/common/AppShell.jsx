@@ -12,11 +12,9 @@ function HomeIcon() {
 function SessionsIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-      <polyline points="10 9 9 9 8 9" />
+      <ellipse cx="12" cy="5" rx="9" ry="3" />
+      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
     </svg>
   )
 }
@@ -39,6 +37,17 @@ function BellIcon() {
   )
 }
 
+function ReportsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="8" y1="17" x2="8" y2="13" />
+      <line x1="12" y1="17" x2="12" y2="9" />
+      <line x1="16" y1="17" x2="16" y2="11" />
+    </svg>
+  )
+}
+
 function SidebarToggleIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -52,7 +61,7 @@ function SidebarToggleIcon() {
  * AppShell — Persistent application shell matching the Lead Monitor reference design.
  */
 export function AppShell({
-  activeView, // 'dashboard' | 'sessions' | 'settings' | 'new_live' | 'transcribe' | 'live_recording'
+  activeView, // 'dashboard' | 'sessions' | 'reports' | 'settings' | 'new_live' | 'transcribe' | 'live_recording'
   isLiveRecordingActive = false,
   onNavigate,
   screenTitle = 'Dashboard',
@@ -63,52 +72,30 @@ export function AppShell({
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
+      const stored = localStorage.getItem('dlbc_sidebar_collapsed')
+      if (stored !== null) return stored === 'true'
       return typeof window !== 'undefined' && window.location.hash.includes('sidebar_collapsed')
     } catch {
       return false
     }
   })
-  const [isHoverExpanded, setIsHoverExpanded] = useState(false)
-  const hoverEnterTimerRef = useRef(null)
-  const hoverLeaveTimerRef = useRef(null)
 
   const openMobileNav = () => setMobileNavOpen(true)
   const closeMobileNav = () => setMobileNavOpen(false)
 
-  // Handle pointer hover on collapsed rail to temporarily expand
-  const handleSidebarMouseEnter = () => {
-    if (!isCollapsed) return
-    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
-      return
-    }
-    if (hoverLeaveTimerRef.current) {
-      clearTimeout(hoverLeaveTimerRef.current)
-      hoverLeaveTimerRef.current = null
-    }
-    hoverEnterTimerRef.current = setTimeout(() => {
-      setIsHoverExpanded(true)
-    }, 110)
-  }
-
-  const handleSidebarMouseLeave = () => {
-    if (!isCollapsed) return
-    if (hoverEnterTimerRef.current) {
-      clearTimeout(hoverEnterTimerRef.current)
-      hoverEnterTimerRef.current = null
-    }
-    hoverLeaveTimerRef.current = setTimeout(() => {
-      setIsHoverExpanded(false)
-    }, 180)
-  }
-
   const handleToggleCollapse = () => {
-    if (hoverEnterTimerRef.current) clearTimeout(hoverEnterTimerRef.current)
-    if (hoverLeaveTimerRef.current) clearTimeout(hoverLeaveTimerRef.current)
-    setIsHoverExpanded(false)
-    setIsCollapsed(!isCollapsed)
+    setIsCollapsed(prev => {
+      const next = !prev
+      try {
+        localStorage.setItem('dlbc_sidebar_collapsed', String(next))
+      } catch (e) {
+        // ignore
+      }
+      return next
+    })
   }
 
-  const isEffectivelyExpanded = !isCollapsed || isHoverExpanded
+  const isEffectivelyExpanded = !isCollapsed
 
   useEffect(() => {
     if (!mobileNavOpen) return
@@ -132,9 +119,7 @@ export function AppShell({
       {/* LEFT SIDEBAR                                                  */}
       {/* ------------------------------------------------------------- */}
       <aside
-        className={`app-sidebar ${isCollapsed ? 'app-sidebar--collapsed' : ''} ${isCollapsed && isHoverExpanded ? 'app-sidebar--hover-expanded' : ''} ${mobileNavOpen ? 'app-sidebar--mobile-open' : ''}`}
-        onMouseEnter={handleSidebarMouseEnter}
-        onMouseLeave={handleSidebarMouseLeave}
+        className={`app-sidebar ${isCollapsed ? 'app-sidebar--collapsed' : ''} ${mobileNavOpen ? 'app-sidebar--mobile-open' : ''}`}
       >
         <div className="sidebar-top">
           {/* Brand Logo & Collapse Toggle */}
@@ -232,10 +217,45 @@ export function AppShell({
               <span className="nav-icon"><SessionsIcon /></span>
               {isEffectivelyExpanded && <span className="nav-label">Sessions</span>}
             </button>
+
+            <button
+              type="button"
+              className={`sidebar-nav-item ${activeView === 'events' ? 'sidebar-nav-item--active' : ''}`}
+              onClick={() => {
+                onNavigate('events')
+                closeMobileNav()
+              }}
+              id="nav-link-events"
+              title={!isEffectivelyExpanded ? 'Events' : undefined}
+            >
+              <span className="nav-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+              </span>
+              {isEffectivelyExpanded && <span className="nav-label">Events</span>}
+            </button>
+
+            <button
+              type="button"
+              className={`sidebar-nav-item ${activeView === 'reports' ? 'sidebar-nav-item--active' : ''}`}
+              onClick={() => {
+                onNavigate('reports')
+                closeMobileNav()
+              }}
+              id="nav-link-reports"
+              title={!isEffectivelyExpanded ? 'Reports' : undefined}
+            >
+              <span className="nav-icon"><ReportsIcon /></span>
+              {isEffectivelyExpanded && <span className="nav-label">Reports</span>}
+            </button>
           </nav>
         </div>
 
-        {/* Sidebar Footer: Settings alone at the bottom (System Ready removed) */}
+        {/* Sidebar Footer: Settings and collapse button at the bottom */}
         <div className="sidebar-footer">
           <button
             type="button"
@@ -249,6 +269,16 @@ export function AppShell({
           >
             <span className="nav-icon"><SettingsIcon /></span>
             {isEffectivelyExpanded && <span className="nav-label">Settings</span>}
+          </button>
+
+          <button
+            type="button"
+            className="sidebar-bottom-collapse-btn"
+            onClick={handleToggleCollapse}
+            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <span className="collapse-arrows">{isCollapsed ? '»' : '«'}</span>
           </button>
         </div>
       </aside>

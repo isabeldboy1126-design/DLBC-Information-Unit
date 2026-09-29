@@ -246,6 +246,94 @@ CREATE TABLE IF NOT EXISTS programme_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_programme_sessions_prog ON programme_sessions(programme_id, is_archived, sort_order ASC);
+
+-- Stage 7: Unified Report Processing Runs
+CREATE TABLE IF NOT EXISTS report_processing_runs (
+    run_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    status TEXT NOT NULL, -- 'preparing_transcript', 'ai_processing', 'preparing_report', 'completed', 'failed', 'cancelled'
+    current_step TEXT,
+    error_message TEXT,
+    model_name TEXT,
+    tokens_used INTEGER DEFAULT 0,
+    reused_existing_material INTEGER DEFAULT 0,
+    report_title TEXT,
+    report_text TEXT,
+    reporter_extraction_json TEXT,
+    editorial_selection_json TEXT,
+    writing_json TEXT,
+    proofreading_json TEXT,
+    validation_summary_json TEXT,
+    final_report_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    completed_at TEXT,
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_proc_runs_session ON report_processing_runs(session_id, status);
+CREATE INDEX IF NOT EXISTS idx_report_proc_runs_created ON report_processing_runs(created_at DESC);
+
+-- Stage 7: Versioned Report Processing Standards
+CREATE TABLE IF NOT EXISTS report_processing_standards (
+    id TEXT PRIMARY KEY,
+    version INTEGER NOT NULL UNIQUE,
+    version_label TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 0,
+    reporter_extraction_instructions TEXT NOT NULL,
+    editorial_selection_instructions TEXT NOT NULL,
+    writing_instructions TEXT NOT NULL,
+    proofreading_instructions TEXT NOT NULL,
+    anti_slop_rules TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_proc_std_version ON report_processing_standards(version DESC);
+CREATE INDEX IF NOT EXISTS idx_report_proc_std_active ON report_processing_standards(is_active);
+
+-- Stage 7: Approved Examples Library (Seed examples AM, AN, AO, AP + promoted diffs)
+CREATE TABLE IF NOT EXISTS report_approved_examples (
+    id TEXT PRIMARY KEY,
+    section_letter TEXT NOT NULL, -- 'AM', 'AN', 'AO', 'AP'
+    section_name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    theme TEXT,
+    scripture_reference TEXT,
+    minister TEXT,
+    service_date TEXT,
+    approved_content TEXT NOT NULL,
+    teaching_goal TEXT,
+    editorial_focus TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    source_diff_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_approved_examples_section ON report_approved_examples(section_letter, is_active);
+
+-- Stage 7: Human Edit Learning & Diffs
+CREATE TABLE IF NOT EXISTS report_human_diffs (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    run_id TEXT,
+    original_ai_text TEXT NOT NULL,
+    human_edited_text TEXT NOT NULL,
+    diff_summary_json TEXT,
+    is_promoted_to_example INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_human_diffs_session ON report_human_diffs(session_id);
+
+-- Stage 7: Report Processing Settings
+CREATE TABLE IF NOT EXISTS report_processing_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 # Phase 5 migration: add verification columns to sessions table.
@@ -299,6 +387,13 @@ STAGE6_AI_VERIFICATION_COLUMNS = [
     "ALTER TABLE verification_items ADD COLUMN ai_explanation TEXT",
     "ALTER TABLE verification_items ADD COLUMN ai_model_name TEXT",
     "ALTER TABLE verification_items ADD COLUMN ai_scriptures_json TEXT",
+]
+
+# Stage 7 migration: add unified report processing workflow columns to sessions table.
+STAGE7_REPORT_PROCESSING_COLUMNS = [
+    "ALTER TABLE sessions ADD COLUMN report_processing_status TEXT DEFAULT 'not_started'",
+    "ALTER TABLE sessions ADD COLUMN report_processing_run_id TEXT",
+    "ALTER TABLE sessions ADD COLUMN report_processing_completed_at TEXT",
 ]
 
 # ---------------------------------------------------------------------------
@@ -586,6 +681,102 @@ CREATE TABLE programme_sessions (
 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_programme_sessions_prog')
 CREATE INDEX idx_programme_sessions_prog ON programme_sessions(programme_id, is_archived, sort_order ASC);
+
+IF OBJECT_ID(N'report_processing_runs', N'U') IS NULL
+CREATE TABLE report_processing_runs (
+    run_id VARCHAR(255) PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    status VARCHAR(100) NOT NULL,
+    current_step VARCHAR(100),
+    error_message NVARCHAR(MAX),
+    model_name VARCHAR(255),
+    tokens_used INT DEFAULT 0,
+    reused_existing_material INT DEFAULT 0,
+    report_title NVARCHAR(MAX),
+    report_text NVARCHAR(MAX),
+    reporter_extraction_json NVARCHAR(MAX),
+    editorial_selection_json NVARCHAR(MAX),
+    writing_json NVARCHAR(MAX),
+    proofreading_json NVARCHAR(MAX),
+    validation_summary_json NVARCHAR(MAX),
+    final_report_id VARCHAR(255),
+    created_at VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(255) NOT NULL,
+    completed_at VARCHAR(255),
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_report_proc_runs_session')
+CREATE INDEX idx_report_proc_runs_session ON report_processing_runs(session_id, status);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_report_proc_runs_created')
+CREATE INDEX idx_report_proc_runs_created ON report_processing_runs(created_at DESC);
+
+IF OBJECT_ID(N'report_processing_standards', N'U') IS NULL
+CREATE TABLE report_processing_standards (
+    id VARCHAR(255) PRIMARY KEY,
+    version INT NOT NULL UNIQUE,
+    version_label VARCHAR(255) NOT NULL,
+    is_active INT NOT NULL DEFAULT 0,
+    reporter_extraction_instructions NVARCHAR(MAX) NOT NULL,
+    editorial_selection_instructions NVARCHAR(MAX) NOT NULL,
+    writing_instructions NVARCHAR(MAX) NOT NULL,
+    proofreading_instructions NVARCHAR(MAX) NOT NULL,
+    anti_slop_rules NVARCHAR(MAX) NOT NULL,
+    created_at VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(255) NOT NULL
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_report_proc_std_version')
+CREATE INDEX idx_report_proc_std_version ON report_processing_standards(version DESC);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_report_proc_std_active')
+CREATE INDEX idx_report_proc_std_active ON report_processing_standards(is_active);
+
+IF OBJECT_ID(N'report_approved_examples', N'U') IS NULL
+CREATE TABLE report_approved_examples (
+    id VARCHAR(255) PRIMARY KEY,
+    section_letter VARCHAR(10) NOT NULL,
+    section_name VARCHAR(255) NOT NULL,
+    title NVARCHAR(MAX) NOT NULL,
+    theme NVARCHAR(MAX),
+    scripture_reference NVARCHAR(MAX),
+    minister NVARCHAR(MAX),
+    service_date VARCHAR(255),
+    approved_content NVARCHAR(MAX) NOT NULL,
+    teaching_goal NVARCHAR(MAX),
+    editorial_focus NVARCHAR(MAX),
+    is_active INT NOT NULL DEFAULT 1,
+    source_diff_id VARCHAR(255),
+    created_at VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(255) NOT NULL
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_approved_examples_section')
+CREATE INDEX idx_approved_examples_section ON report_approved_examples(section_letter, is_active);
+
+IF OBJECT_ID(N'report_human_diffs', N'U') IS NULL
+CREATE TABLE report_human_diffs (
+    id VARCHAR(255) PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    run_id VARCHAR(255),
+    original_ai_text NVARCHAR(MAX) NOT NULL,
+    human_edited_text NVARCHAR(MAX) NOT NULL,
+    diff_summary_json NVARCHAR(MAX),
+    is_promoted_to_example INT NOT NULL DEFAULT 0,
+    created_at VARCHAR(255) NOT NULL,
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_human_diffs_session')
+CREATE INDEX idx_human_diffs_session ON report_human_diffs(session_id);
+
+IF OBJECT_ID(N'report_processing_settings', N'U') IS NULL
+CREATE TABLE report_processing_settings (
+    [key] VARCHAR(100) PRIMARY KEY,
+    [value] NVARCHAR(MAX) NOT NULL,
+    updated_at VARCHAR(255) NOT NULL
+);
 """
 
 PHASE5_MIGRATION_COLUMNS_MSSQL = [
@@ -634,6 +825,13 @@ STAGE6_AI_VERIFICATION_COLUMNS_MSSQL = [
     "IF COL_LENGTH('verification_items', 'ai_model_name') IS NULL ALTER TABLE verification_items ADD ai_model_name VARCHAR(100)",
     "IF COL_LENGTH('verification_items', 'ai_scriptures_json') IS NULL ALTER TABLE verification_items ADD ai_scriptures_json NVARCHAR(MAX)",
 ]
+
+STAGE7_REPORT_PROCESSING_COLUMNS_MSSQL = [
+    "IF COL_LENGTH('sessions', 'report_processing_status') IS NULL ALTER TABLE sessions ADD report_processing_status VARCHAR(100) DEFAULT 'not_started'",
+    "IF COL_LENGTH('sessions', 'report_processing_run_id') IS NULL ALTER TABLE sessions ADD report_processing_run_id VARCHAR(255)",
+    "IF COL_LENGTH('sessions', 'report_processing_completed_at') IS NULL ALTER TABLE sessions ADD report_processing_completed_at VARCHAR(255)",
+]
+
 
 
 

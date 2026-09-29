@@ -18,8 +18,22 @@ export function SettingsView({ onBack }) {
   const [activeModal, setActiveModal] = useState(null) // 'reporting' | 'editing' | 'proofreading' | null
 
   // Direct Inline Instructions State
-  const [activeStageTab, setActiveStageTab] = useState('reporting') // 'reporting' | 'editing' | 'proofreading'
+  const [activeStageTab, setActiveStageTab] = useState('report_processing') // 'report_processing' | 'reporting' | 'editing' | 'proofreading'
   
+  // 0. Unified Report Processing Editable Fields
+  const [rpStandards, setRpStandards] = useState(null)
+  const [rpInstructions, setRpInstructions] = useState('')
+  const [rpAntiSlop, setRpAntiSlop] = useState('')
+  const [rpTerminology, setRpTerminology] = useState('')
+  const [rpNotes, setRpNotes] = useState('')
+  const [rpSaving, setRpSaving] = useState(false)
+  const [rpFeedback, setRpFeedback] = useState(null)
+  const [rpExamples, setRpExamples] = useState([])
+  const [autoProcessAfterVerification, setAutoProcessAfterVerification] = useState(false)
+  const [promptPreview, setPromptPreview] = useState(null)
+  const [loadingPromptPreview, setLoadingPromptPreview] = useState(false)
+  const [activeExamplePreview, setActiveExamplePreview] = useState(null)
+
   // 1. Reporting Editable Fields
   const [repGeneral, setRepGeneral] = useState('')
   const [repReporterA, setRepReporterA] = useState('')
@@ -51,7 +65,7 @@ export function SettingsView({ onBack }) {
     setIsLoading(true)
     setError(null)
     try {
-      const [transRes, repRes, editRes, proofRes, repStdRes, editStdRes, proofStdRes] = await Promise.all([
+      const [transRes, repRes, editRes, proofRes, repStdRes, editStdRes, proofStdRes, rpStdRes, rpExRes, rpSetRes] = await Promise.all([
         fetch(getApiUrl('/api/transcription/config-status')).catch(() => null),
         fetch(getApiUrl('/api/reporting/status')).catch(() => null),
         fetch(getApiUrl('/api/editing/status')).catch(() => null),
@@ -59,6 +73,9 @@ export function SettingsView({ onBack }) {
         fetch(getApiUrl('/api/reporting/standards/active')).catch(() => null),
         fetch(getApiUrl('/api/editing/standards/active')).catch(() => null),
         fetch(getApiUrl('/api/proofreading/standards/active')).catch(() => null),
+        fetch(getApiUrl('/api/report-processing/standards/active')).catch(() => null),
+        fetch(getApiUrl('/api/report-processing/examples')).catch(() => null),
+        fetch(getApiUrl('/api/report-processing/settings')).catch(() => null),
       ])
 
       if (transRes && transRes.ok) {
@@ -99,6 +116,22 @@ export function SettingsView({ onBack }) {
         setProofTerminology(std.terminology || '')
         setProofFormatting(std.formatting_rules || '')
       }
+      if (rpStdRes && rpStdRes.ok) {
+        const rpData = await rpStdRes.json()
+        const std = rpData.standard || {}
+        setRpStandards(std)
+        setRpInstructions(std.instructions || '')
+        setRpAntiSlop(std.anti_slop_rules || '')
+        setRpTerminology(std.terminology || '')
+      }
+      if (rpExRes && rpExRes.ok) {
+        const exData = await rpExRes.json()
+        setRpExamples(exData.examples || [])
+      }
+      if (rpSetRes && rpSetRes.ok) {
+        const setData = await rpSetRes.json()
+        setAutoProcessAfterVerification(!!setData.auto_process_after_verification)
+      }
 
       setLastRefreshed(new Date().toLocaleTimeString())
     } catch (err) {
@@ -112,6 +145,57 @@ export function SettingsView({ onBack }) {
   useEffect(() => {
     fetchAllStatuses()
   }, [fetchAllStatuses])
+
+  // Save Report Processing Standards (Stage 7 Unified)
+  const handleSaveRpStandards = async () => {
+    if (!rpInstructions.trim()) {
+      alert('Unified instructions cannot be empty.')
+      return
+    }
+    setRpSaving(true)
+    setRpFeedback(null)
+    try {
+      const res = await fetch(getApiUrl('/api/report-processing/standards'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instructions: rpInstructions,
+          anti_slop_rules: rpAntiSlop,
+          terminology: rpTerminology,
+          notes: rpNotes.trim() || 'Updated instructions from Settings',
+          set_active: true,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setRpFeedback(`✓ Saved & Activated Report Processing Standard ${data.standard.version_label}! All subsequent unified runs will follow these rules.`)
+        setRpNotes('')
+        fetchAllStatuses()
+        setTimeout(() => setRpFeedback(null), 6000)
+      } else {
+        const err = await res.json()
+        alert(`Failed to save standards: ${err.detail || 'Unknown error'}`)
+      }
+    } catch (err) {
+      alert(`Error saving standards: ${err.message}`)
+    } finally {
+      setRpSaving(false)
+    }
+  }
+
+  const handleToggleAutoProcess = async () => {
+    const nextVal = !autoProcessAfterVerification
+    setAutoProcessAfterVerification(nextVal)
+    try {
+      await fetch(getApiUrl('/api/report-processing/settings'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auto_process_after_verification: nextVal }),
+      })
+    } catch (err) {
+      console.error('Failed to toggle auto_process_after_verification:', err)
+    }
+  }
 
   // Save Reporting Instructions
   const handleSaveReportingInstructions = async () => {
@@ -284,6 +368,18 @@ export function SettingsView({ onBack }) {
             <div className="settings-stage-tabs" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
               <button
                 type="button"
+                className={`btn btn--small ${activeStageTab === 'report_processing' ? 'btn--primary' : 'btn--outline'}`}
+                onClick={() => setActiveStageTab('report_processing')}
+                id="tab-select-report-processing-instructions"
+              >
+                <span>⚡ Unified Report Processing</span>
+                <span className="badge" style={{ marginLeft: '0.4rem', background: activeStageTab === 'report_processing' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: activeStageTab === 'report_processing' ? '#fff' : '#334155' }}>
+                  {rpStandards?.version_label || 'v1.0'}
+                </span>
+              </button>
+
+              <button
+                type="button"
                 className={`btn btn--small ${activeStageTab === 'reporting' ? 'btn--primary' : 'btn--outline'}`}
                 onClick={() => setActiveStageTab('reporting')}
                 id="tab-select-reporting-instructions"
@@ -318,6 +414,173 @@ export function SettingsView({ onBack }) {
                 </span>
               </button>
             </div>
+
+            {/* TAB 0: UNIFIED REPORT PROCESSING */}
+            {activeStageTab === 'report_processing' && (
+              <div className="stage-instructions-panel">
+                {rpFeedback && (
+                  <div className="settings-alert" style={{ background: '#dcfce7', border: '1px solid #86efac', color: '#14532d', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                    <strong>{rpFeedback}</strong>
+                  </div>
+                )}
+
+                {/* Auto-Process Workflow Toggle Card */}
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', color: '#0f172a' }}>
+                      Auto-Process After Verification
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                      Automatically trigger unified Report Processing as soon as all verification items are resolved.
+                    </p>
+                  </div>
+                  <label className="toggle-switch" style={{ position: 'relative', display: 'inline-block', width: '50px', height: '26px' }}>
+                    <input
+                      type="checkbox"
+                      checked={autoProcessAfterVerification}
+                      onChange={handleToggleAutoProcess}
+                      style={{ opacity: 0, width: 0, height: 0 }}
+                    />
+                    <span
+                      style={{
+                        position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: autoProcessAfterVerification ? '#2563eb' : '#cbd5e1',
+                        borderRadius: '26px', transition: '.3s',
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: 'absolute', content: '""', height: '20px', width: '20px', left: autoProcessAfterVerification ? '26px' : '3px', bottom: '3px',
+                          backgroundColor: 'white', borderRadius: '50%', transition: '.3s',
+                        }}
+                      />
+                    </span>
+                  </label>
+                </div>
+
+                {/* Unified Instructions & Anti-Slop Form */}
+                <div className="instructions-form-grid" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+                      <span>📄 Unified Instructions (Extraction, Editorial Selection &amp; Writing) *</span>
+                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Applies to the single-call AI reasoning pipeline</span>
+                    </label>
+                    <textarea
+                      className="form-control"
+                      style={{ minHeight: '160px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
+                      value={rpInstructions}
+                      onChange={(e) => setRpInstructions(e.target.value)}
+                      placeholder="Unified extraction, KEEP/COMPRESS/OMIT rules, paragraph conventions, and final report structuring..."
+                    />
+                  </div>
+
+                  <div className="form-row-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        🚫 Anti-AI-Slop &amp; Forbidden Cliches Rules
+                      </label>
+                      <textarea
+                        className="form-control"
+                        style={{ minHeight: '130px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
+                        value={rpAntiSlop}
+                        onChange={(e) => setRpAntiSlop(e.target.value)}
+                        placeholder="List of forbidden marketing cliches, buzzwords, and mandatory replacement phrasing..."
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        📖 Church Terminology &amp; Biblical Vocabulary
+                      </label>
+                      <textarea
+                        className="form-control"
+                        style={{ minHeight: '130px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
+                        value={rpTerminology}
+                        onChange={(e) => setRpTerminology(e.target.value)}
+                        placeholder="Ministerial titles, church departments, spelling standards, KJV reference formats..."
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                      Change note for this version:
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="e.g. Added forbidden cliches and updated ministerial titles..."
+                      value={rpNotes}
+                      onChange={(e) => setRpNotes(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Save Action Bar */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '0.75rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      style={{ padding: '0.65rem 1.4rem', fontSize: '0.95rem', fontWeight: 700 }}
+                      onClick={handleSaveRpStandards}
+                      disabled={rpSaving}
+                      id="btn-save-rp-standards"
+                    >
+                      {rpSaving ? 'Saving...' : '💾 Save & Apply Standards v1.0'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Approved Examples Library (Seeds AM, AN, AO, AP) */}
+                <div style={{ marginTop: '2rem', borderTop: '2px solid #e2e8f0', paddingTop: '1.25rem' }}>
+                  <h4 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#0f172a', marginBottom: '0.5rem' }}>
+                    Approved Exemplars Library (Pre-Seeded)
+                  </h4>
+                  <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem' }}>
+                    These exemplary reports serve as few-shot in-context learning references for the reasoning model.
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+                    {rpExamples.map((ex) => (
+                      <div
+                        key={ex.example_id}
+                        style={{
+                          background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                          <span style={{ background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 700 }}>
+                            {ex.example_code}
+                          </span>
+                          <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                            {ex.word_count} words
+                          </span>
+                        </div>
+                        <h5 style={{ margin: '0 0 0.35rem 0', fontSize: '0.95rem', color: '#1e293b' }}>
+                          {ex.title}
+                        </h5>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.75rem' }}>
+                          {ex.minister || 'Pastor (Dr) W.F. Kumuyi'}
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn--outline btn--small"
+                          onClick={() => setActiveExamplePreview(activeExamplePreview === ex.example_id ? null : ex.example_id)}
+                          style={{ width: '100%', fontSize: '0.8rem' }}
+                        >
+                          {activeExamplePreview === ex.example_id ? 'Hide Preview' : 'Preview Exemplar'}
+                        </button>
+                        {activeExamplePreview === ex.example_id && (
+                          <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#f8fafc', borderRadius: '8px', fontSize: '0.8rem', maxHeight: '200px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                            {ex.exemplar_text}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* TAB 1: REPORTING INSTRUCTIONS */}
             {activeStageTab === 'reporting' && (

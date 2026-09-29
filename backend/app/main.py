@@ -31,6 +31,8 @@ async def lifespan(app: FastAPI):
     try:
         await session_repo.init_db()
         await programmes_repo.init_db()
+        from app.database.report_processing_repo import report_processing_repo
+        await report_processing_repo.init_db()
         await session_repo.index_existing_storage_files()
         await recover_interrupted_sessions()
         print("SQLite Database and Session persistence initialized.")
@@ -83,6 +85,7 @@ from app.proofreading.router import router as proofreading_router
 from app.final_report.router import router as final_report_router
 from app.programmes.router import router as programmes_router
 from app.youtube.router import router as youtube_router
+from app.report_processing.router import router as report_processing_router
 
 app.include_router(audio_router)
 app.include_router(transcription_router)
@@ -94,6 +97,7 @@ app.include_router(proofreading_router)
 app.include_router(final_report_router)
 app.include_router(programmes_router)
 app.include_router(youtube_router)
+app.include_router(report_processing_router)
 
 
 
