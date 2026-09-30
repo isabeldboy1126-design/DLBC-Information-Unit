@@ -1,6 +1,6 @@
 import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 import { getCleanSessionName } from '../sessions/SessionDetailView'
 import { getActiveProcess, setActiveProcess, clearActiveProcess, minimizeActiveProcess } from '../common/activeProcessManager'
 
@@ -104,7 +104,7 @@ export function ReportProcessingModal({
     const isCurrent = () => isMountedRef.current && activeContextRef.current.isOpen && activeContextRef.current.sessionId === sessionId
     if (!sessionId || !isCurrent()) return
     try {
-      const res = await fetch(getApiUrl(`/api/report-processing/status/${sessionId}`))
+      const res = await authFetch(getApiUrl(`/api/report-processing/status/${sessionId}`))
       if (!res.ok) throw new Error(`Processing status unavailable (${res.status}). Reopen or retry to check the saved session.`)
       const data = await res.json()
       if (!isCurrent()) return
@@ -180,7 +180,7 @@ export function ReportProcessingModal({
     const cleanTitle = getCleanSessionName(session)
 
     try {
-      const statusRes = await fetch(getApiUrl(`/api/report-processing/status/${sessionId}`))
+      const statusRes = await authFetch(getApiUrl(`/api/report-processing/status/${sessionId}`))
       if (statusRes.ok) {
         const statusData = await statusRes.json()
         if (!isCurrent()) return
@@ -217,7 +217,7 @@ export function ReportProcessingModal({
       }
 
       if (!isCurrent()) return
-      const res = await fetch(getApiUrl('/api/report-processing/start'), {
+      const res = await authFetch(getApiUrl('/api/report-processing/start'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, force_new: forceNew === true }),
@@ -282,7 +282,7 @@ export function ReportProcessingModal({
     try {
       setIsCancelling(true)
       if (runId) {
-        const res = await fetch(getApiUrl(`/api/report-processing/cancel/${runId}`), { method: 'POST' })
+        const res = await authFetch(getApiUrl(`/api/report-processing/cancel/${runId}`), { method: 'POST' })
         if (!res.ok) throw new Error(`Cancellation could not be confirmed (${res.status}). Processing may still be running.`)
       }
       if (pollTimerRef.current) {

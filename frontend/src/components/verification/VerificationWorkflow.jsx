@@ -1,6 +1,6 @@
 import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useRef } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 import { getSessionHierarchy } from '../sessions/SessionDetailView'
 import { ConfirmationModal } from '../common/ConfirmationModal'
 import { SessionCompletionView } from '../sessions/SessionCompletionView'
@@ -258,7 +258,7 @@ export function VerificationWorkflow({
       setShowProcessingScreen(true)
     }
     try {
-      const res = await fetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/verify-ai`), {
+      const res = await authFetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/verify-ai`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, auto_resolve: true, background: true }),

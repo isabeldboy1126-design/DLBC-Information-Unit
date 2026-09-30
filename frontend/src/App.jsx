@@ -27,6 +27,12 @@ import { RawTranscriptViewer } from './components/transcription/RawTranscriptVie
 import { TranscriptsHistoryList } from './components/transcription/TranscriptsHistoryList'
 
 import { ErrorBanner } from './components/ErrorBanner'
+import { useAuth } from './context/AuthContext'
+import { LoginView } from './views/LoginView'
+import { CreateAccountView } from './views/CreateAccountView'
+import { ForgotPasswordView } from './views/ForgotPasswordView'
+import { ResetPasswordView } from './views/ResetPasswordView'
+import { OnboardingView } from './views/OnboardingView'
 import './App.css'
 import './styles/editorial.css'
 
@@ -100,6 +106,23 @@ function App() {
   const [sessionsStatusFilter, setSessionsStatusFilter] = useState('all')
   const scrollPositions = useRef({})
 
+  const { user, isOnboarded, loading: authLoading, demoMode } = useAuth()
+  const [authScreen, setAuthScreen] = useState('login')
+  const [replayOnboardingActive, setReplayOnboardingActive] = useState(false)
+  const [demoTestOnboardingActive, setDemoTestOnboardingActive] = useState(false)
+
+  useEffect(() => {
+    const handleHash = () => {
+      const h = typeof window !== 'undefined' ? window.location.hash || '' : ''
+      if (h.includes('reset-password')) {
+        setAuthScreen('reset')
+      }
+    }
+    handleHash()
+    window.addEventListener('hashchange', handleHash)
+    return () => window.removeEventListener('hashchange', handleHash)
+  }, [])
+
   // Phase 1 & 3: Audio Capture & Live Transcription Hook
   const liveAudio = useAudioCapture()
 
@@ -109,7 +132,7 @@ function App() {
   // Phase 4: Persistent Church Sessions Hook
   const sessionsHook = useSessions()
 
-  // Global background processing job tracker (Verification & Report Processing)
+// Global background processing job tracker (Verification & Report Processing)
   const { activeProcess, clearActiveProcess } = useActiveProcess()
 
   const applyRoute = (rawHash, isPop = false) => {
@@ -245,13 +268,14 @@ function App() {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
-  // Auto-load session if direct URL loaded
+  // Auto-load session only after account access is ready.
   useEffect(() => {
+    if (!user || !isOnboarded) return
     const route = parseRoute(window.location.hash)
     if (route.sessionId && (!sessionsHook.activeSession || sessionsHook.activeSession.session_id !== route.sessionId)) {
       sessionsHook.loadSession(route.sessionId)
     }
-  }, [sessionsHook.sessions])
+  }, [sessionsHook.sessions, user?.id, isOnboarded])
 
   // Synchronize modal and minimized state when recording starts/stops
   useEffect(() => {
@@ -392,6 +416,65 @@ function App() {
       title: 'Information Unit',
       onBack: null,
     }
+  }
+
+  // Boot / Loading guard — prevents any flashing of private content
+  if (authLoading) {
+    return (
+      <div className="auth-boot-screen">
+        <div className="auth-boot-content">
+          <div className="auth-logo-badge auth-logo-badge--large">DLBC</div>
+          <div className="auth-boot-spinner" />
+          <p className="auth-boot-text">Loading DLBC Information Unit...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Unauthenticated routing
+  if (!user) {
+    if (authScreen === 'create') {
+      return <CreateAccountView onSwitchToLogin={() => setAuthScreen('login')} />
+    }
+    if (authScreen === 'forgot') {
+      return <ForgotPasswordView onSwitchToLogin={() => setAuthScreen('login')} />
+    }
+    if (authScreen === 'reset') {
+      return <ResetPasswordView onComplete={() => setAuthScreen('login')} />
+    }
+    return (
+      <LoginView
+        onSwitchToCreate={() => setAuthScreen('create')}
+        onSwitchToForgot={() => setAuthScreen('forgot')}
+      />
+    )
+  }
+
+  // First-time onboarding guard
+  if (!isOnboarded) {
+    return <OnboardingView isReplay={false} />
+  }
+
+  // Demo Test Onboarding mode triggered from Settings in Demo mode
+  if (demoMode && demoTestOnboardingActive) {
+    return (
+      <OnboardingView
+        isDemoTest={true}
+        onDemoTestCancel={() => setDemoTestOnboardingActive(false)}
+        onDemoTestComplete={() => setDemoTestOnboardingActive(false)}
+      />
+    )
+  }
+
+  // Replay onboarding mode triggered from Settings
+  if (replayOnboardingActive) {
+    return (
+      <OnboardingView
+        isReplay={true}
+        onReplayCancel={() => setReplayOnboardingActive(false)}
+        onReplayComplete={() => setReplayOnboardingActive(false)}
+      />
+    )
   }
 
   const { title: currentScreenTitle, onBack: currentScreenBack } = getHeaderContext()
@@ -571,6 +654,7 @@ function App() {
             onDeleteSession={sessionsHook.deleteSession}
             onRestoreSession={sessionsHook.restoreSession}
             onRefresh={sessionsHook.fetchSessions}
+            onRetry={sessionsHook.fetchSessions}
             onStartNewSession={() => {
               if (liveAudio.isRecording) {
                 setIsRecorderMinimized(false)
@@ -675,7 +759,11 @@ function App() {
         /* ----------------------------------------------------------- */
         /* VIEW 5: SETTINGS & STANDARDS                                */
         /* ----------------------------------------------------------- */
-        <SettingsView onBack={handleInAppBack} />
+        <SettingsView
+          onBack={handleInAppBack}
+          onReplayOnboarding={() => setReplayOnboardingActive(true)}
+          onTestOnboarding={() => setDemoTestOnboardingActive(true)}
+        />
       ) : currentView === 'youtube' ? (
         /* ----------------------------------------------------------- */
         /* VIEW 6: YOUTUBE INGESTION PIPELINE                          */

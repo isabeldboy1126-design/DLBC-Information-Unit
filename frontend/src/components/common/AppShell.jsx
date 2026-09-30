@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { Icon } from './Icon'
+import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../hooks/useTheme'
 
 const sections = [{ view: 'dashboard', label: 'Workspace' }, { view: 'sessions', label: 'Sessions' }, { view: 'reports', label: 'Reports' }]
 
 export function AppShell({ activeView, isLiveRecordingActive = false, onNavigate, screenTitle = 'Workspace', onBack, onStartLiveSession, children }) {
   const { isDark, toggleTheme } = useTheme()
+  const { user, account, signOut, demoMode, exitDemoMode } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 760px)').matches)
   const drawerRef = useRef(null)
@@ -48,6 +50,7 @@ export function AppShell({ activeView, isLiveRecordingActive = false, onNavigate
   const utilities = <div className="desk-utilities">
     <button id="nav-link-settings" className="desk-utility" onClick={() => navigate('settings')} aria-current={activeView === 'settings' ? 'page' : undefined}><Icon name="settings" /><span>Settings</span></button>
     <button id="btn-sidebar-theme-toggle" className="desk-utility" onClick={toggleTheme} aria-label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}><Icon name={isDark ? 'sun' : 'moon'} /><span>{isDark ? 'Light mode' : 'Dark mode'}</span></button>
+    <button className="desk-utility desk-account-exit" onClick={() => { setMobileNavOpen(false); demoMode ? exitDemoMode() : signOut() }} aria-label={demoMode ? 'Exit demo' : 'Sign out'} title={account?.account_name || user?.email || 'Account'}><span>{demoMode ? 'Exit demo' : 'Sign out'}</span></button>
   </div>
 
   return <div className="app-shell-container desk-shell">

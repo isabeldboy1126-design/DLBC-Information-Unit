@@ -1,6 +1,6 @@
 import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 
 function SearchIcon() { return <Icon name="search" /> }
 
@@ -50,7 +50,7 @@ export function CompletedReportsView({ onNavigateSession }) {
       if (selectedProgramme !== 'all') params.append('programme', selectedProgramme)
       if (selectedMinister !== 'all') params.append('minister', selectedMinister)
 
-      const res = await fetch(getApiUrl(`/api/report-processing/archive?${params.toString()}`))
+      const res = await authFetch(getApiUrl(`/api/report-processing/archive?${params.toString()}`))
       if (!res.ok) throw new Error(`Report collection unavailable (${res.status})`)
       const data = await res.json()
       if (!Array.isArray(data.reports)) throw new Error('Invalid report collection response')
@@ -79,7 +79,7 @@ export function CompletedReportsView({ onNavigateSession }) {
     if (!sessionId || report.can_export !== true) return
     try {
       setDownloadingId(sessionId)
-      const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/download`))
+      const res = await authFetch(getApiUrl(`/api/final-report/sessions/${sessionId}/download`))
       if (res.ok) {
         const blob = await res.blob()
         const url = window.URL.createObjectURL(blob)

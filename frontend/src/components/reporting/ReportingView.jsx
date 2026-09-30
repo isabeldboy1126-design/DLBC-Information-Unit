@@ -1,6 +1,6 @@
 import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useCallback } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 import { ReportCard } from './ReportCard'
 import { ReportingStandardsModal } from './ReportingStandardsModal'
 
@@ -28,7 +28,7 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
   // Fetch AI status
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(getApiUrl('/api/reporting/status'))
+      const res = await authFetch(getApiUrl('/api/reporting/status'))
       if (res.ok) {
         const data = await res.json()
         setAiStatus(data)
@@ -43,7 +43,7 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
     if (!sessionId) return
     try {
       setLoading(true)
-      const res = await fetch(getApiUrl(`/api/reporting/sessions/${sessionId}/reports`))
+      const res = await authFetch(getApiUrl(`/api/reporting/sessions/${sessionId}/reports`))
       if (res.ok) {
         const data = await res.json()
         setReportsData(data)
@@ -74,7 +74,7 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
     try {
       setErrorBanner(null)
       setGeneratingRole(role)
-      const res = await fetch(getApiUrl(`/api/reporting/sessions/${sessionId}/generate`), {
+      const res = await authFetch(getApiUrl(`/api/reporting/sessions/${sessionId}/generate`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role }),

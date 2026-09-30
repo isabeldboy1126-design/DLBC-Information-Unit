@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { getApiUrl, API_BASE_URL } from '../../config'
+import { getApiUrl, API_BASE_URL, authFetch } from '../../config'
 
 export function ProgrammesSettingsSection() {
   const [programmes, setProgrammes] = useState([])
@@ -33,16 +33,16 @@ export function ProgrammesSettingsSection() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch(getApiUrl('/api/programmes?include_archived=true'))
+      const res = await authFetch(getApiUrl('/api/programmes?include_archived=true'))
       if (res.ok) {
         const data = await res.json()
         setProgrammes(data)
       } else {
-        setError('Failed to load programmes from server.')
+        setError('Programmes could not be loaded.')
       }
     } catch (err) {
       console.error('Error fetching programmes:', err)
-      setError(`Could not connect to backend server at ${API_BASE_URL}.`)
+      setError('Programmes could not be loaded. Please check your connection.')
     } finally {
       setIsLoading(false)
     }
@@ -71,7 +71,7 @@ export function ProgrammesSettingsSection() {
     if (!newProgName.trim()) return
     try {
       setError(null)
-      const res = await fetch(getApiUrl('/api/programmes'), {
+      const res = await authFetch(getApiUrl('/api/programmes'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newProgName.trim() }),
@@ -89,7 +89,8 @@ export function ProgrammesSettingsSection() {
         setError(errData.detail || 'Failed to create programme.')
       }
     } catch (err) {
-      setError(`Error: ${err.message}`)
+      console.error('Error creating programme:', err)
+      setError('Could not create programme. Please check your connection.')
     }
   }
 
@@ -98,7 +99,7 @@ export function ProgrammesSettingsSection() {
     if (!editingProgName.trim()) return
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${progId}`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${progId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editingProgName.trim() }),
@@ -108,11 +109,12 @@ export function ProgrammesSettingsSection() {
         showNotification('✓ Programme updated.')
         await fetchProgrammes()
       } else {
-        const errData = await res.json()
+        const errData = await res.json().catch(() => ({}))
         setError(errData.detail || 'Failed to update programme.')
       }
     } catch (err) {
-      setError(`Error: ${err.message}`)
+      console.error('Error updating programme:', err)
+      setError('Could not update programme. Please check your connection.')
     }
   }
 
@@ -121,7 +123,7 @@ export function ProgrammesSettingsSection() {
     const actionName = prog.is_archived ? 'unarchive' : 'archive'
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${prog.id}`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${prog.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_archived: !prog.is_archived }),
@@ -130,11 +132,12 @@ export function ProgrammesSettingsSection() {
         showNotification(`✓ Programme "${prog.name}" ${prog.is_archived ? 'restored' : 'archived'}.`)
         await fetchProgrammes()
       } else {
-        const errData = await res.json()
+        const errData = await res.json().catch(() => ({}))
         setError(errData.detail || `Failed to ${actionName} programme.`)
       }
     } catch (err) {
-      setError(`Error: ${err.message}`)
+      console.error(`Error toggling archive for programme:`, err)
+      setError('Could not update programme status. Please check your connection.')
     }
   }
 
@@ -143,7 +146,7 @@ export function ProgrammesSettingsSection() {
     if (!newSessionName.trim()) return
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${progId}/sessions`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${progId}/sessions`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newSessionName.trim() }),
@@ -154,11 +157,12 @@ export function ProgrammesSettingsSection() {
         showNotification('✓ Session / section added.')
         await fetchProgrammes()
       } else {
-        const errData = await res.json()
+        const errData = await res.json().catch(() => ({}))
         setError(errData.detail || 'Failed to add session.')
       }
     } catch (err) {
-      setError(`Error: ${err.message}`)
+      console.error('Error adding session:', err)
+      setError('Could not add session. Please check your connection.')
     }
   }
 
@@ -167,7 +171,7 @@ export function ProgrammesSettingsSection() {
     if (!editingSessionName.trim()) return
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editingSessionName.trim() }),
@@ -177,11 +181,12 @@ export function ProgrammesSettingsSection() {
         showNotification('✓ Session / section updated.')
         await fetchProgrammes()
       } else {
-        const errData = await res.json()
+        const errData = await res.json().catch(() => ({}))
         setError(errData.detail || 'Failed to update session.')
       }
     } catch (err) {
-      setError(`Error: ${err.message}`)
+      console.error('Error updating session:', err)
+      setError('Could not update session. Please check your connection.')
     }
   }
 
@@ -189,18 +194,19 @@ export function ProgrammesSettingsSection() {
   const handleArchiveSession = async (progId, sessionId) => {
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
         method: 'DELETE',
       })
       if (res.ok) {
         showNotification('✓ Session / section archived.')
         await fetchProgrammes()
       } else {
-        const errData = await res.json()
+        const errData = await res.json().catch(() => ({}))
         setError(errData.detail || 'Failed to archive session.')
       }
     } catch (err) {
-      setError(`Error: ${err.message}`)
+      console.error('Error archiving session:', err)
+      setError('Could not archive session. Please check your connection.')
     }
   }
 
@@ -217,7 +223,7 @@ export function ProgrammesSettingsSection() {
     const sessionIds = newOrder.map((s) => s.id)
 
     try {
-      const res = await fetch(getApiUrl(`/api/programmes/${prog.id}/sessions/reorder`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${prog.id}/sessions/reorder`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_ids: sessionIds }),
@@ -256,8 +262,18 @@ export function ProgrammesSettingsSection() {
 
       <div className="card-body">
         {error && (
-          <div className="settings-alert settings-alert--error" style={{ margin: '0.75rem 0' }}>
-            <span>⚠ {error}</span>
+          <div className="settings-alert settings-alert--error" style={{ margin: '0.75rem 0' }} role="alert">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '1rem' }}>
+              <span>{error}</span>
+              <button
+                type="button"
+                className="btn btn--small btn--outline btn-retry-load"
+                onClick={fetchProgrammes}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Retrying...' : 'Retry'}
+              </button>
+            </div>
           </div>
         )}
 

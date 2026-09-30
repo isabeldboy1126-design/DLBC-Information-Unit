@@ -1,7 +1,7 @@
 import { sessionWorkflow, isApproved, hasReviewableReport } from './sessionWorkflow'
 import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useRef } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 import { getSessionHierarchy } from './SessionDetailView'
 import { ConfirmationModal } from '../common/ConfirmationModal'
 import { SessionListStatus } from './SessionListStatus'
@@ -63,7 +63,7 @@ export function SessionHistoryList({
     let isMounted = true
     async function fetchProgrammes() {
       try {
-        const res = await fetch(getApiUrl('/api/programmes?include_archived=false'))
+        const res = await authFetch(getApiUrl('/api/programmes?include_archived=false'))
         if (res.ok && isMounted) {
           const data = await res.json()
           setConfiguredProgrammes(data)

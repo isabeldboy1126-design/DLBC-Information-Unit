@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 import { minimizeActiveProcess } from '../common/activeProcessManager'
 
 /**
@@ -48,7 +48,7 @@ export function SessionCompletionView({
 
     const checkStatus = async () => {
       try {
-        const res = await fetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/ai-status`))
+        const res = await authFetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/ai-status`))
         if (!res.ok) throw new Error(`Verification status unavailable (${res.status})`)
         const data = await res.json()
         if (isMounted && data) {

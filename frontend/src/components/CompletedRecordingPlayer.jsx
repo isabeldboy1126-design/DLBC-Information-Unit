@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getApiUrl } from '../config'
+import { getApiUrl, authFetch } from '../config'
 import { ConfirmationModal } from './common/ConfirmationModal'
 
 export function CompletedRecordingPlayer({ latestRecording }) {
@@ -10,7 +10,7 @@ export function CompletedRecordingPlayer({ latestRecording }) {
   const fetchRecordings = async () => {
     try {
       setLoading(true)
-      const res = await fetch(getApiUrl('/api/audio/recordings'))
+      const res = await authFetch(getApiUrl('/api/audio/recordings'))
       if (res.ok) {
         const data = await res.json()
         setAllRecordings(data.recordings || [])
@@ -43,7 +43,7 @@ export function CompletedRecordingPlayer({ latestRecording }) {
     if (!recordingToDelete) return
     setIsDeleting(true)
     try {
-      const res = await fetch(getApiUrl(`/api/audio/recordings/${recordingToDelete}`), {
+      const res = await authFetch(getApiUrl(`/api/audio/recordings/${recordingToDelete}`), {
         method: 'DELETE',
       })
       if (res.ok) {

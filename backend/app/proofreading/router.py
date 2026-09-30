@@ -1,3 +1,4 @@
+from app.auth.dependencies import require_session_access
 """
 Proofreading API Router (Phase 8)
 
@@ -14,13 +15,13 @@ import time
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from app.database.proofreading_repo import proofreading_repo
 from app.database.editing_repo import editing_repo
 from app.database.session_repo import session_repo
 from app.services.proofreading_provider import gemini_proofreading_provider
 
-router = APIRouter(prefix="/api/proofreading", tags=["AI Proofreading (Phase 8)"])
+router = APIRouter(dependencies=[Depends(require_session_access)], prefix="/api/proofreading", tags=["AI Proofreading (Phase 8)"])
 
 
 class ProofreadingStandardCreateRequest(BaseModel):

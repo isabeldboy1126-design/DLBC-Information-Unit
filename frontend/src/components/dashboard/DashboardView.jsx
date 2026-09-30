@@ -3,7 +3,7 @@ import { Icon } from '../common/Icon'
 import { SourceAudio } from '../common/SourceAudio'
 import { SessionListStatus } from '../sessions/SessionListStatus'
 import { sessionWorkflow, hasReviewableReport } from '../sessions/sessionWorkflow'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 
 export const isActionableAttentionSession = session => !session?.is_archived && sessionWorkflow(session).attention
 export const calculateTotalAttentionSessions = sessions => Array.isArray(sessions) ? sessions.filter(isActionableAttentionSession).length : 0
@@ -43,14 +43,14 @@ export function DashboardView({ sessions = [], isLoading, sessionsLoaded, sessio
     setPreviewError(null)
     const load = async () => {
       try {
-        const res = await fetch(getApiUrl(`/api/sessions/${encodeURIComponent(id)}`), { signal: controller.signal })
+        const res = await authFetch(getApiUrl(`/api/sessions/${encodeURIComponent(id)}`), { signal: controller.signal })
         if (!res.ok) throw new Error(`Session preview unavailable (${res.status}).`)
         const result = await res.json()
         if (!result.session || result.session.session_id !== id) throw new Error('Session preview response is invalid.')
         const source = result.session
         let artifact = { title: source.title || 'Untitled session', label: 'No transcript available', text: '', source }
         if (hasReviewableReport(source)) {
-          const reportRes = await fetch(getApiUrl(`/api/final-report/sessions/${encodeURIComponent(id)}`), { signal: controller.signal })
+          const reportRes = await authFetch(getApiUrl(`/api/final-report/sessions/${encodeURIComponent(id)}`), { signal: controller.signal })
           if (!reportRes.ok) throw new Error(`Saved report preview unavailable (${reportRes.status}).`)
           const reportData = await reportRes.json()
           const active = reportData.active_final_report

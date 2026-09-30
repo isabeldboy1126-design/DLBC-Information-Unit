@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 
 export function ReadinessSummary() {
   const [data, setData] = useState(null)
@@ -10,7 +10,7 @@ export function ReadinessSummary() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(getApiUrl('/api/readiness'))
+      const res = await authFetch(getApiUrl('/api/readiness'))
       if (!res.ok) throw new Error('Readiness unavailable')
       const next = await res.json()
       if (typeof next.backend_available !== 'boolean' || typeof next.database_available !== 'boolean' || typeof next.ai_provider?.configured !== 'boolean' || typeof next.kjv_context?.available !== 'boolean' || typeof next.kjv_context?.complete !== 'boolean') {

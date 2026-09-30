@@ -11,8 +11,10 @@ import json
 import os
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from app.auth.auth_context import AuthContext
+from app.auth.dependencies import require_account
 from app.audio.stream_manager import (
     MANIFEST_FILE,
     STORAGE_AUDIO_DIR,
@@ -337,7 +339,9 @@ async def download_recording(recording_id: str):
 
 
 @router.delete("/recordings/{recording_id}")
-async def delete_recording(recording_id: str):
+async def delete_recording(recording_id: str, auth: AuthContext = Depends(require_account)):
     """Original recordings are protected; archive their linked session instead."""
+    if auth.is_demo:
+        raise HTTPException(status_code=403, detail="Recording deletion is disabled in Demo mode.")
     raise HTTPException(status_code=409,
                         detail="Original recordings are preserved. Archive the linked session to remove it from active work.")

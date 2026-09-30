@@ -1,5 +1,7 @@
 # DLBC Information Unit — Current App UX Handoff
 
+**Current status:** parent-verified local upgrade; branch push and draft PR authorized. See final parent verification below and [review guide](docs/review/README.md). Historical permission/status notes are superseded where stated.
+
 > **Takeover baseline, 30 September 2026:** Read [Section 18](#18-takeover-audit-30-september-2026) before using the earlier audit as current implementation truth. Some earlier routing, dashboard, and workflow descriptions have been superseded. The new section distinguishes browser observations from source findings and proposals.
 
 > **Authoritative Technical & UX State Audit**  
@@ -2489,3 +2491,13 @@ The app already has a Gemini gateway. A key does not by itself validate a model 
 - **Optional guideline retrieval:** File Search can retrieve provider-hosted documents with citations. Consider it only if the approved local example/guideline library becomes difficult to select reliably. It would require an explicit data-upload decision; existing local few-shot examples may remain sufficient. [Official File Search documentation](https://ai.google.dev/gemini-api/docs/file-search).
 
 The concrete proposed sequence, deliverables, and acceptance gates are recorded in [PROJECT_PLAN.md](PROJECT_PLAN.md), Section 11. It does not mark any existing phase complete or approve new scope.
+
+## Final parent verification and publication authority — 1 October 2026
+
+The owner explicitly authorized the parent to fix final-audit findings directly, commit/push the single `codex/product-ux-audit` branch and create a PR for the brother's review. This supersedes earlier no-commit/no-push/no-PR instructions in historical dispatch notes; it does not authorize a default-branch merge or deployment.
+
+Both implementation chats are finished. The parent fixed late accepted-job tracking and unnamed revision controls, merged the newer upstream account/login work from `origin/master` `7a33f41`, preserved the chosen editorial desk, integrated authenticated API calls and account-scoped approval/archive/review/run boundaries, and rejected stale session responses after identity changes. Independent static recheck found no remaining introduced integration defects. Final integrated backend suite: **192 passed**, one Starlette/httpx deprecation warning, **zero outbound attempts**. All three synthetic browser suites passed; production build passed; lint exits 0 with **78 warnings**. Proper-name corpus coverage remains partial. Real devices/providers/cloud account flows remain unverified. Inherited capture/media/shared-settings authorization gaps prevent a production-readiness claim.
+
+T1–T4 and T9–T14 have local implementation evidence; T5 remains partial. T6/T7's first visual direction is superseded by the selected editorial desk. T8/T15 local review evidence is available, while brother's visual acceptance and production-boundary acceptance remain pending. Earlier checkboxes and handoff counts record dispatch snapshots, not the current final status.
+
+Current reviewer guide, independently sequenced prompt, comparison claims, screenshots and motion evidence are in [docs/review/README.md](docs/review/README.md). The explanatory [comparison](docs/review/COMPARISON.md) must be read **after** an independent comparison is recorded. Draft PR publication is for private local review only.

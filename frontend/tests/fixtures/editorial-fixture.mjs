@@ -10,7 +10,7 @@ const base = process.env.FRONTEND_TEST_URL || 'http://127.0.0.1:5173/'
 assert(['127.0.0.1','localhost'].includes(new URL(base).hostname))
 const directory = resolve(process.env.FRONTEND_TEST_SCREENSHOTS || 'ux-review-screenshots/frontend-journeys')
 await mkdir(directory, { recursive: true })
-const browser = await chromium.launch({ headless: true })
+const browser = await chromium.launch({ headless: process.env.FRONTEND_FIXTURE_VISIBLE !== '1' })
 const errors = []
 const calls = []
 const prose = Array.from({length: 14}, (_, i) => `${i + 1}. Synthetic review passage: a faithful record preserves the speaker's meaning and distinguishes a source quotation from editorial explanation. Matthew 5:7 is checked against the verified transcript; no new claim or minister is invented. This fixture exercises long prose, revision review and source context without real church material.`).join('\n\n')
@@ -22,6 +22,7 @@ const initialSession = { session_id: 'review-fixture', title, session_title: tit
 async function fixture(view='dashboard', viewport={width:1440,height:900}, reducedMotion='no-preference', options={}) {
  const context = await browser.newContext({ viewport, reducedMotion, ...options })
  await context.addInitScript(() => {
+    sessionStorage.setItem('dlbc_demo_mode', '1')
   window.__mic = 0
   navigator.mediaDevices.getUserMedia = async () => { window.__mic++; throw new Error('Forbidden microphone request') }
   navigator.mediaDevices.getDisplayMedia = async () => { throw new Error('Forbidden capture request') }
@@ -34,6 +35,7 @@ async function fixture(view='dashboard', viewport={width:1440,height:900}, reduc
   if (!['localhost','127.0.0.1'].includes(url.hostname) || url.port !== '8000') return route.abort('blockedbyclient')
   calls.push({path:url.pathname, method:req.method()})
   const json = (data, status=200) => route.fulfill({status, contentType:'application/json', body:JSON.stringify(data)})
+  if (url.pathname === '/api/auth/me') return json({user_id:'fixture-user',supabase_user_id:'fixture-sub',email:'fixture@example.test',account:{id:'legacy_default_account',account_name:'Synthetic review account',onboarding_completed_at:'2026-10-01'},is_onboarded:true,role:'owner'})
   const p=url.pathname
   if (p === '/api/sessions') return json({sessions:state.sessions || [{...state.session}]})
   if(p.startsWith('/api/sessions/') && p.split('/').length===4 && req.method()==='GET'){const id=decodeURIComponent(p.split('/').at(-1));const session=state.sessions?.find(s=>s.session_id===id)||state.session;if(state.previewDelay[id])await new Promise(resolve=>setTimeout(resolve,state.previewDelay[id]));return json({session:{...session}})}

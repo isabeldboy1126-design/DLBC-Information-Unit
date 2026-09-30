@@ -64,9 +64,11 @@ def isolated_test_database():
 
     # Initialise the full schema (all migrations) on the temp database
     async def _init_schema():
+        from app.database.account_repo import account_repo
         from app.database.session_repo import session_repo
         # Ensure init_db() runs even if another import already set _initialized
         session_repo._initialized = False
+        await account_repo.init_db()
         await session_repo.init_db()
 
     asyncio.run(_init_schema())
@@ -79,3 +81,24 @@ def isolated_test_database():
         os.unlink(tmp_path)
     except OSError:
         pass
+
+
+@pytest.fixture(autouse=True)
+def legacy_resource_auth_context(request):
+    if request.node.module.__name__.endswith(("test_auth_and_isolation", "test_upgrade_account_boundaries")):
+        yield
+        return
+    from app.main import app
+    from app.auth.auth_context import AuthContext
+    from app.auth.dependencies import get_auth_context
+    async def legacy_account():
+        return AuthContext(user_id="fixture-user", supabase_user_id="fixture-sub", email="fixture@example.test", account_id="legacy_default_account", account={}, is_onboarded=True, role="owner")
+    previous = app.dependency_overrides.get(get_auth_context)
+    app.dependency_overrides[get_auth_context] = legacy_account
+    try:
+        yield
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_auth_context, None)
+        else:
+            app.dependency_overrides[get_auth_context] = previous

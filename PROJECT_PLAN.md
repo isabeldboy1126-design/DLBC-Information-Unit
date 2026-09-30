@@ -1,5 +1,7 @@
 # PROJECT_PLAN.md — DLBC Information Unit App
 
+**Current status:** parent-verified local upgrade; branch push and draft PR authorized. See final parent verification below and [review guide](docs/review/README.md). Historical permission/status notes are superseded where stated.
+
 **Version:** 0.2
 **Last Updated:** 2026-08-16
 **Planning Approach:** Hybrid / Rolling-Wave
@@ -700,3 +702,13 @@ Use Source Sans 3 for the functional UI and Source Serif 4 sparingly for documen
 Motion must be visible in a working demonstration: a moving navigation baseline, restrained session-preview transition, source-panel reveal and response-triggered save feedback. Normal transitions last about 160–200 ms and resolve to the latest input; essential actions remain immediate. Reduced motion snaps/cancels movement and preserves feedback. Retain a coherent dark theme; the darker recording concept may inform live capture without turning the dashboard into an audio-production tool.
 
 Execution order: Backend repairs atomic finalization (T10); Frontend repairs final/source/title/seek issues (T11/T12), then builds shell/dashboard (T13) and continues through existing workspaces/motion (T14). Final acceptance (T15) waits for both lanes, browser captures and a motion demonstration. Existing implementation chats keep backend/frontend ownership; the parent owns root documents and independent result review. Both agents must inspect the selected image, not infer it from a verbal label.
+
+## Final parent verification and publication authority — 1 October 2026
+
+The owner explicitly authorized the parent to fix final-audit findings directly, commit/push the single `codex/product-ux-audit` branch and create a PR for the brother's review. This supersedes earlier no-commit/no-push/no-PR instructions in historical dispatch notes; it does not authorize a default-branch merge or deployment.
+
+Both implementation chats are finished. The parent fixed late accepted-job tracking and unnamed revision controls, merged the newer upstream account/login work from `origin/master` `7a33f41`, preserved the chosen editorial desk, integrated authenticated API calls and account-scoped approval/archive/review/run boundaries, and rejected stale session responses after identity changes. Independent static recheck found no remaining introduced integration defects. Final integrated backend suite: **192 passed**, one Starlette/httpx deprecation warning, **zero outbound attempts**. All three synthetic browser suites passed; production build passed; lint exits 0 with **78 warnings**. Proper-name corpus coverage remains partial. Real devices/providers/cloud account flows remain unverified. Inherited capture/media/shared-settings authorization gaps prevent a production-readiness claim.
+
+T1–T4 and T9–T14 have local implementation evidence; T5 remains partial. T6/T7's first visual direction is superseded by the selected editorial desk. T8/T15 local review evidence is available, while brother's visual acceptance and production-boundary acceptance remain pending. Earlier checkboxes and handoff counts record dispatch snapshots, not the current final status.
+
+Current reviewer guide, independently sequenced prompt, comparison claims, screenshots and motion evidence are in [docs/review/README.md](docs/review/README.md). The explanatory [comparison](docs/review/COMPARISON.md) must be read **after** an independent comparison is recorded. Draft PR publication is for private local review only.

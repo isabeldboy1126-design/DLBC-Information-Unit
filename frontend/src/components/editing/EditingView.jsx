@@ -1,6 +1,6 @@
 import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useCallback } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 import { EditorStandardsModal } from './EditorStandardsModal'
 import { SourceReferenceDrawer } from './SourceReferenceDrawer'
 import { ConfirmationModal } from '../common/ConfirmationModal'
@@ -49,7 +49,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(getApiUrl('/api/editing/status'))
+      const res = await authFetch(getApiUrl('/api/editing/status'))
       if (res.ok) {
         const data = await res.json()
         setAiStatus(data)
@@ -62,7 +62,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
   const fetchEditingReport = useCallback(async () => {
     if (!sessionId) return
     try {
-      const res = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/report`))
+      const res = await authFetch(getApiUrl(`/api/editing/sessions/${sessionId}/report`))
       if (res.ok) {
         const data = await res.json()
         setEditingData(data)
@@ -104,7 +104,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
       setIsGenerating(true)
       setShowRegenConfirm(false)
 
-      const res = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/generate`), {
+      const res = await authFetch(getApiUrl(`/api/editing/sessions/${sessionId}/generate`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -134,7 +134,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
     try {
       setErrorBanner(null)
       setIsSaving(true)
-      const res = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/save`), {
+      const res = await authFetch(getApiUrl(`/api/editing/sessions/${sessionId}/save`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -161,7 +161,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
 
   const handleActivateRevision = async (revId) => {
     try {
-      const res = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/revisions/${revId}/activate`), {
+      const res = await authFetch(getApiUrl(`/api/editing/sessions/${sessionId}/revisions/${revId}/activate`), {
         method: 'POST',
       })
       if (res.ok) {
@@ -176,7 +176,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
 
   const executeCompleteEditing = async () => {
     try {
-      const res = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/complete`), {
+      const res = await authFetch(getApiUrl(`/api/editing/sessions/${sessionId}/complete`), {
         method: 'POST',
       })
       if (res.ok) {

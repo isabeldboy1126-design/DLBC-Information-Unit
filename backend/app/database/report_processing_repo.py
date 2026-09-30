@@ -985,10 +985,12 @@ class ReportProcessingRepository:
         date_to: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
+        account_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Queries all finalized reports across the archive with filtering.
         Merges completed final_reports records with active report_processing_runs.
+        Scoped to account_id when provided.
         """
         await self.init_db()
         async with get_db_connection() as conn:
@@ -1016,6 +1018,10 @@ class ReportProcessingRepository:
                 WHERE fr.is_active = 1 AND s.is_archived = 0
             """
             params = []
+
+            if account_id:
+                query += " AND s.account_id = ?"
+                params.append(account_id)
 
             if search and search.strip():
                 clean_search = f"%{search.strip()}%".lower()

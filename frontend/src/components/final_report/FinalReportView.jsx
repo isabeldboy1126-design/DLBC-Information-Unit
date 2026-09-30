@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 import { Icon } from '../common/Icon'
 import { SourceAudio } from '../common/SourceAudio'
 import { SourceReferenceDrawer } from '../editing/SourceReferenceDrawer'
@@ -29,7 +29,7 @@ export function FinalReportView({ session, onBack, onNavigateToProofreading, onR
   setSourceTitleOverride('')
   setData(previous => previous ? { ...previous, can_export: false, can_approve: false, can_finalize: false } : previous)
   try {
-   const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}`))
+   const res = await authFetch(getApiUrl(`/api/final-report/sessions/${sessionId}`))
    if (!res.ok) throw new Error(`Report unavailable (${res.status}).`)
    const next = await res.json()
    if (request !== loadRequestRef.current) return false
@@ -51,7 +51,7 @@ export function FinalReportView({ session, onBack, onNavigateToProofreading, onR
  const action = async (kind, path, body) => {
   setBusy(kind); setError(null); setFeedback(null)
   try {
-   const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/${path}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })
+   const res = await authFetch(getApiUrl(`/api/final-report/sessions/${sessionId}/${path}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })
    if (currentSessionRef.current !== sessionId) return
    if (!res.ok) {
     if (res.status === 409) {
@@ -73,7 +73,7 @@ export function FinalReportView({ session, onBack, onNavigateToProofreading, onR
   if (!approved || editing) return
   setBusy('download'); setError(null)
   try {
-   const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/download`))
+   const res = await authFetch(getApiUrl(`/api/final-report/sessions/${sessionId}/download`))
    if (!res.ok) { const result = await res.json(); throw new Error(result.detail || 'Approved document could not be downloaded.') }
    const url = URL.createObjectURL(await res.blob())
    const a = document.createElement('a'); a.href = url; a.download = `${title || 'Report'}.docx`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)

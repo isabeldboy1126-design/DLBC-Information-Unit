@@ -1,6 +1,6 @@
 import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useRef } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 
 /**
  * YouTubeSessionView — Dedicated YouTube Ingestion Interface.
@@ -41,7 +41,7 @@ export function YouTubeSessionView({
     let isMounted = true
     async function loadProgrammes() {
       try {
-        const res = await fetch(getApiUrl('/api/programmes?include_archived=false'))
+        const res = await authFetch(getApiUrl('/api/programmes?include_archived=false'))
         if (res.ok && isMounted) {
           const data = await res.json()
           setProgrammes(data)
@@ -96,7 +96,7 @@ export function YouTubeSessionView({
     setJobError('')
 
     try {
-      const res = await fetch(getApiUrl('/api/youtube/analyze'), {
+      const res = await authFetch(getApiUrl('/api/youtube/analyze'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: trimmed }),
@@ -153,7 +153,7 @@ export function YouTubeSessionView({
     const sessName = currentProgrammeSessions.find((s) => s.id === selectedSessionId)?.name || ''
 
     try {
-      const res = await fetch(getApiUrl('/api/youtube/transcribe-recorded'), {
+      const res = await authFetch(getApiUrl('/api/youtube/transcribe-recorded'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -177,7 +177,7 @@ export function YouTubeSessionView({
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
       pollIntervalRef.current = setInterval(async () => {
         try {
-          const pollRes = await fetch(getApiUrl(`/api/transcription/jobs/${data.job.job_id}`))
+          const pollRes = await authFetch(getApiUrl(`/api/transcription/jobs/${data.job.job_id}`))
           if (pollRes.ok) {
             const pollData = await pollRes.json()
             setActiveJob(pollData.job)

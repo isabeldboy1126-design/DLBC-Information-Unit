@@ -35,6 +35,7 @@ async function fixturePage(hash = 'dashboard', viewport = { width: 1440, height:
   const context = await browser.newContext({ viewport })
   contexts.push(context)
   await context.addInitScript(() => {
+    sessionStorage.setItem('dlbc_demo_mode', '1')
     window.__microphoneRequests = 0
     navigator.mediaDevices.getUserMedia = async () => {
       window.__microphoneRequests++
@@ -52,6 +53,7 @@ async function fixturePage(hash = 'dashboard', viewport = { width: 1440, height:
       return route.abort('blockedbyclient')
     }
     const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+  if (url.pathname === '/api/auth/me') return json({user_id:'fixture-user',supabase_user_id:'fixture-sub',email:'fixture@example.test',account:{id:'legacy_default_account',account_name:'Synthetic review account',onboarding_completed_at:'2026-10-01'},is_onboarded:true,role:'owner'})
     if (url.pathname === '/api/sessions') {
       if (state.sessionGate) await state.sessionGate.promise
       if (state.sessions === 'offline') return route.abort('connectionrefused')

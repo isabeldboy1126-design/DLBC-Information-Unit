@@ -116,6 +116,12 @@ async def test_reorder_programme_sessions():
 async def test_programmes_api_endpoints():
     """Verifies FastAPI REST API endpoints for programmes and sessions."""
     await programmes_repo.init_db()
+    from app.database.account_repo import account_repo
+    await account_repo.init_db()
+    user = await account_repo.create_or_update_user("user_prog_test", "prog_test@dlbc.org")
+    acct = await account_repo.create_draft_account(user["id"], sector="Adult", church_state="Lagos")
+    await account_repo.complete_account_onboarding(acct["id"], {"sector": "Adult", "church_state": "Lagos", "terminal_level": "state_headquarters"})
+    headers = {"Authorization": "Bearer test_token_user_prog_test:prog_test@dlbc.org"}
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -126,7 +132,7 @@ async def test_programmes_api_endpoints():
         assert len(progs) > 0
 
         # 2. POST /api/programmes
-        create_res = await ac.post("/api/programmes", json={"name": "Youth Camp 2026"})
+        create_res = await ac.post("/api/programmes", headers=headers, json={"name": "Youth Camp 2026"})
         assert create_res.status_code == 200
         created_prog = create_res.json()
         assert created_prog["name"] == "Youth Camp 2026"
@@ -135,6 +141,7 @@ async def test_programmes_api_endpoints():
         # 3. POST /api/programmes/{id}/sessions
         add_sess_res = await ac.post(
             f"/api/programmes/{prog_id}/sessions",
+            headers=headers,
             json={"name": "Morning Devotion"},
         )
         assert add_sess_res.status_code == 200
@@ -142,11 +149,11 @@ async def test_programmes_api_endpoints():
         assert any(s["name"] == "Morning Devotion" for s in prog_with_sess["sessions"])
 
         # 4. PUT /api/programmes/{id}
-        put_res = await ac.put(f"/api/programmes/{prog_id}", json={"name": "National Youth Camp 2026"})
+        put_res = await ac.put(f"/api/programmes/{prog_id}", headers=headers, json={"name": "National Youth Camp 2026"})
         assert put_res.status_code == 200
         assert put_res.json()["name"] == "National Youth Camp 2026"
 
         # 5. DELETE /api/programmes/{id} (Archive)
-        del_res = await ac.delete(f"/api/programmes/{prog_id}")
+        del_res = await ac.delete(f"/api/programmes/{prog_id}", headers=headers)
         assert del_res.status_code == 200
         assert del_res.json()["is_archived"] is True

@@ -1,10 +1,12 @@
 import { ReadinessSummary } from './ReadinessSummary'
 import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { getApiUrl, API_BASE_URL } from '../../config'
+import { getApiUrl, API_BASE_URL, authFetch } from '../../config'
+import { useAuth } from '../../context/AuthContext'
 import { ProgrammesSettingsSection } from './ProgrammesSettingsSection'
 
-export function SettingsView({ onBack }) {
+export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
+  const { account, demoMode } = useAuth()
   const [instruction, setInstruction] = useState('')
   const [instructionLoaded, setInstructionLoaded] = useState(false)
   const [autoProcessAfterVerification, setAutoProcessAfterVerification] = useState(null)
@@ -15,6 +17,24 @@ export function SettingsView({ onBack }) {
   const [error, setError] = useState(null)
   const [lastRefreshed, setLastRefreshed] = useState(null)
   const settingsRequest = useRef(0)
+  const [hasDemoDraft, setHasDemoDraft] = useState(() => {
+    try {
+      return Boolean(localStorage.getItem('dlbc_demo_onboarding_draft'))
+    } catch (e) {
+      return false
+    }
+  })
+
+  const handleResetDemoDraft = () => {
+    try {
+      localStorage.removeItem('dlbc_demo_onboarding_draft')
+      setHasDemoDraft(false)
+      setFeedback('Demo test onboarding draft cleared.')
+      setTimeout(() => setFeedback(null), 3000)
+    } catch (e) {
+      console.warn('Error clearing demo draft:', e)
+    }
+  }
 
   const fetchSettingsData = useCallback(async () => {
     const request = ++settingsRequest.current
@@ -25,7 +45,7 @@ export function SettingsView({ onBack }) {
     try {
       // 1. Fetch settings (auto-process after verification)
       try {
-        const setRes = await fetch(getApiUrl('/api/report-processing/settings'))
+        const setRes = await authFetch(getApiUrl('/api/report-processing/settings'))
         if (!setRes.ok) throw new Error(`Settings request failed: ${setRes.status}`)
         const setData = await setRes.json()
         const autoVal = setData.auto_process_after_verification
@@ -44,7 +64,7 @@ export function SettingsView({ onBack }) {
 
       // Primary: /api/report-processing/instruction
       try {
-        const instRes = await fetch(getApiUrl('/api/report-processing/instruction'))
+        const instRes = await authFetch(getApiUrl('/api/report-processing/instruction'))
         if (instRes.ok) {
           const instData = await instRes.json()
           if (instData && (instData.instruction || instData.unified_instructions)) {
@@ -60,7 +80,7 @@ export function SettingsView({ onBack }) {
       // Fallback 1: /api/report-processing/settings
       if (!loadedInstruction) {
         try {
-          const setRes2 = await fetch(getApiUrl('/api/report-processing/settings'))
+          const setRes2 = await authFetch(getApiUrl('/api/report-processing/settings'))
           if (setRes2.ok) {
             const setData2 = await setRes2.json()
             if (setData2 && (setData2.instruction || setData2.unified_instructions)) {
@@ -75,7 +95,7 @@ export function SettingsView({ onBack }) {
       // Fallback 2: /api/report-processing/standards/active
       if (!loadedInstruction) {
         try {
-          const stdRes = await fetch(getApiUrl('/api/report-processing/standards/active'))
+          const stdRes = await authFetch(getApiUrl('/api/report-processing/standards/active'))
           if (stdRes.ok) {
             const stdData = await stdRes.json()
             if (stdData && (stdData.instruction || stdData.unified_instructions)) {
@@ -148,7 +168,7 @@ export function SettingsView({ onBack }) {
     setFeedback(null)
     setError(null)
     try {
-      const res = await fetch(getApiUrl('/api/report-processing/instruction'), {
+      const res = await authFetch(getApiUrl('/api/report-processing/instruction'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instruction: trimmed, unified_instructions: trimmed }),
@@ -181,7 +201,7 @@ export function SettingsView({ onBack }) {
     setAutoProcessAfterVerification(nextVal)
     setAutoStatus('saving')
     try {
-      const response = await fetch(getApiUrl('/api/report-processing/settings'), {
+      const response = await authFetch(getApiUrl('/api/report-processing/settings'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ auto_process_after_verification: nextVal }),
@@ -327,6 +347,65 @@ export function SettingsView({ onBack }) {
 
       {/* SECTION 2: App Programmes */}
       <ProgrammesSettingsSection />
+
+      {/* SECTION 3: Church Account & Hierarchy */}
+      <div className="settings-card">
+        <div className="settings-card-header">
+          <div className="settings-card-header-left">
+            <span className="settings-card-icon">🏛️</span>
+            <div>
+              <h2 className="settings-card-title">Church Account &amp; Hierarchy</h2>
+            </div>
+          </div>
+        </div>
+        <div className="settings-card-body">
+          <div className="settings-account-details-row">
+            <div className="settings-account-identity-box">
+              <span className="settings-account-name-label">Current Church Unit</span>
+              <span className="settings-account-name-val">{account?.account_name || 'DLBC Information Unit'}</span>
+              <span className="settings-account-sub-val">
+                {[account?.sector, account?.church_state, account?.terminal_level ? account.terminal_level.replace(/_/g, ' ') : null].filter(Boolean).join(' · ')}
+              </span>
+            </div>
+            {demoMode ? (
+              <div className="demo-settings-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                {onTestOnboarding && (
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn-replay-onboarding"
+                    onClick={onTestOnboarding}
+                    id="btn-test-onboarding"
+                  >
+                    Test Onboarding
+                  </button>
+                )}
+                {hasDemoDraft && (
+                  <button
+                    type="button"
+                    className="demo-reset-draft-btn"
+                    onClick={handleResetDemoDraft}
+                    id="btn-reset-demo-draft"
+                    title="Clear local test onboarding draft"
+                  >
+                    Reset test onboarding
+                  </button>
+                )}
+              </div>
+            ) : (
+              onReplayOnboarding && (
+                <button
+                  type="button"
+                  className="btn btn--secondary btn-replay-onboarding"
+                  onClick={onReplayOnboarding}
+                  id="btn-replay-onboarding"
+                >
+                  Replay Onboarding
+                </button>
+              )
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

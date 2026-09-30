@@ -4,7 +4,7 @@ import { ProofreadingView } from '../proofreading/ProofreadingView'
 import { isApproved, hasReviewableReport } from './sessionWorkflow'
 import { Icon } from '../common/Icon'
 import React, { useState, useRef, useEffect } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 import { RawTranscriptViewer } from '../transcription/RawTranscriptViewer'
 import { VerificationWorkflow } from '../verification/VerificationWorkflow'
 import { FinalReportView } from '../final_report/FinalReportView'
@@ -68,6 +68,97 @@ export function getSessionHierarchy(session) {
   }
 
   return { programme, sessionTitle, preacher }
+}
+
+/**
+ * Centrally derives the single authoritative presentation status for a session.
+ * Used consistently across Dashboard, Sessions History (Desktop & Mobile), and Workspace.
+ */
+export function deriveSessionDisplayStatus(sess) {
+  if (!sess) {
+    return {
+      statusKey: 'unknown',
+      statusText: 'UNKNOWN',
+      statusLabel: 'Unknown',
+      statusPillClass: 'status-pill--neutral',
+      cardPillClass: 'session-card-pill--neutral',
+      actionText: 'View →',
+      targetStage: 'overview',
+    }
+  }
+
+  const isInterrupted = !!sess.is_interrupted
+  const isLive = sess.status === 'recording'
+  const isFinalComplete = sess.final_report_status === 'complete' || sess.report_processing_status === 'completed' || !!sess.final_report_id
+  const isVerified = !isFinalComplete && (sess.verification_status === 'completed' || !!sess.verified_text || !!sess.verified_at)
+  const needsVerification = !isFinalComplete && !isVerified && (sess.flag_count > 0 || sess.verification_status === 'in_progress')
+
+  if (isInterrupted) {
+    return {
+      statusKey: 'interrupted',
+      statusText: 'INTERRUPTED',
+      statusLabel: 'Interrupted',
+      statusPillClass: 'status-pill--interrupted',
+      cardPillClass: 'session-card-pill--danger',
+      actionText: 'Review →',
+      targetStage: 'overview',
+    }
+  }
+  if (isLive) {
+    return {
+      statusKey: 'live',
+      statusText: 'LIVE',
+      statusLabel: 'Live',
+      statusPillClass: 'status-pill--brand',
+      cardPillClass: 'session-card-pill--brand',
+      actionText: 'Open Monitor →',
+      targetStage: 'overview',
+    }
+  }
+  if (isFinalComplete) {
+    return {
+      statusKey: 'completed',
+      statusText: 'COMPLETED',
+      statusLabel: 'Completed',
+      statusPillClass: 'status-pill--completed',
+      cardPillClass: 'session-card-pill--neutral',
+      actionText: 'View Report →',
+      targetStage: 'final_report',
+    }
+  }
+  if (isVerified) {
+    return {
+      statusKey: 'verified',
+      statusText: 'VERIFIED',
+      statusLabel: 'Verified',
+      statusPillClass: 'status-pill--verified',
+      cardPillClass: 'session-card-pill--neutral',
+      actionText: 'Process with AI →',
+      targetStage: 'report_processing',
+    }
+  }
+  if (needsVerification) {
+    const count = sess.flag_count || 1
+    return {
+      statusKey: 'needs_verification',
+      statusText: 'NEEDS VERIFICATION',
+      statusLabel: `${count} to verify`,
+      statusPillClass: 'status-pill--warning',
+      cardPillClass: 'session-card-pill--warning',
+      actionText: 'Review →',
+      targetStage: 'verification',
+    }
+  }
+
+  return {
+    statusKey: 'in_progress',
+    statusText: 'IN PROGRESS',
+    statusLabel: 'In Progress',
+    statusPillClass: 'status-pill--progress',
+    cardPillClass: 'session-card-pill--neutral',
+    actionText: 'View →',
+    targetStage: 'overview',
+  }
 }
 
 export function getCleanSessionName(session) {
@@ -842,7 +933,7 @@ function EditSessionDetailsModal({ isOpen, session, onClose, onSave }) {
     let isMounted = true
     async function loadProgrammes() {
       try {
-        const res = await fetch(getApiUrl('/api/programmes?include_archived=false'))
+        const res = await authFetch(getApiUrl('/api/programmes?include_archived=false'))
         if (res.ok && isMounted) {
           const data = await res.json()
           setProgrammes(data)

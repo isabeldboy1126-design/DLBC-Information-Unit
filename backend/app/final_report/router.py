@@ -1,3 +1,4 @@
+from app.auth.dependencies import require_session_access
 """
 Final Report & Downloadable Document API Router (Phase 9)
 
@@ -13,7 +14,7 @@ from typing import Any, Dict, List, Optional
 import urllib.parse
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
 
 from app.database.session_repo import session_repo
@@ -21,7 +22,7 @@ from app.database.proofreading_repo import proofreading_repo
 from app.database.final_report_repo import final_report_repo, FinalizationInputError, ReviewConflict
 from app.services.document_service import document_service
 
-router = APIRouter(prefix="/api/final-report", tags=["Final Report & Document Export (Phase 9)"])
+router = APIRouter(dependencies=[Depends(require_session_access)], prefix="/api/final-report", tags=["Final Report & Document Export (Phase 9)"])
 
 
 class FinalizeReportRequest(BaseModel):

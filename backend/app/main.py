@@ -22,6 +22,7 @@ if os.path.exists(_backend_env_path):
 from app.database.session_repo import session_repo
 from app.database.programmes_repo import programmes_repo
 from app.database.interruption_recovery import recover_interrupted_sessions
+from app.database.account_repo import account_repo
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -29,13 +30,14 @@ async def lifespan(app: FastAPI):
     # Startup
     print("DLBC Information Unit App backend starting...")
     try:
+        await account_repo.init_db()
         await session_repo.init_db()
         await programmes_repo.init_db()
         from app.database.report_processing_repo import report_processing_repo
         await report_processing_repo.init_db()
         await session_repo.index_existing_storage_files()
         await recover_interrupted_sessions()
-        print("SQLite Database and Session persistence initialized.")
+        print("Database, Accounts, and Session persistence initialized.")
     except Exception as e:
         print(f"Database startup initialization error: {e}")
 
@@ -75,6 +77,7 @@ app.add_middleware(
 )
 
 
+from app.auth.router import router as auth_router
 from app.audio.router import router as audio_router
 from app.transcription.router import router as transcription_router
 from app.sessions.router import router as sessions_router
@@ -87,6 +90,7 @@ from app.programmes.router import router as programmes_router
 from app.youtube.router import router as youtube_router
 from app.report_processing.router import router as report_processing_router
 
+app.include_router(auth_router)
 app.include_router(audio_router)
 app.include_router(transcription_router)
 app.include_router(verification_router)
