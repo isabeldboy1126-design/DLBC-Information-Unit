@@ -276,7 +276,7 @@ class ReportProcessingRepository:
                     INSERT INTO report_processing_settings ([key], [value], updated_at)
                     VALUES (?, ?, ?)
                     """,
-                    ('auto_process_after_verification', 'false', now_iso),
+                    ('auto_process_after_verification', 'true', now_iso),
                 )
 
             # 2. Version 1 Standards
@@ -546,7 +546,7 @@ class ReportProcessingRepository:
     # STANDARDS & INSTRUCTIONS VERSIONING
     # -------------------------------------------------------------------------
 
-    async def get_active_standard(self) -> Dict[str, Any]:
+    async def get_active_standard_raw(self) -> Dict[str, Any]:
         await self.init_db()
         async with get_db_connection() as conn:
             cur = await conn.execute(
@@ -566,6 +566,66 @@ class ReportProcessingRepository:
             )
             row2 = await cur2.fetchone()
             return dict(row2) if row2 else {}
+
+    async def get_active_standard(self) -> Dict[str, Any]:
+        res = await self.get_active_standard_raw()
+        if res:
+            res["unified_instructions"] = await self.get_active_unified_instruction()
+        return res
+
+    async def get_active_unified_instruction(self) -> str:
+        """
+        Returns the authoritative unified instruction for report processing.
+        Priority:
+        1. Custom saved instruction in report_processing_settings table ('unified_instructions')
+        2. Assembled instructions from the active report_processing_standards record
+        3. Default unified instruction template
+        """
+        await self.init_db()
+        saved = await self.get_setting("unified_instructions")
+        if saved and saved.strip():
+            return saved.strip()
+
+        std = await self.get_active_standard_raw()
+        parts = []
+        if std.get("anti_slop_rules"):
+            parts.append(f"ANTI-AI-SLOP RULES & TONE MANDATE (ZERO TOLERANCE):\n{std['anti_slop_rules'].strip()}")
+        if std.get("reporter_extraction_instructions"):
+            parts.append(f"1. REPORTER EXTRACTION STANDARDS:\n{std['reporter_extraction_instructions'].strip()}")
+        if std.get("editorial_selection_instructions"):
+            parts.append(f"2. EDITORIAL SELECTION STANDARDS (KEEP / COMPRESS / OMIT):\n{std['editorial_selection_instructions'].strip()}")
+        if std.get("writing_instructions"):
+            parts.append(f"3. INFORMATION UNIT WRITING STANDARDS:\n{std['writing_instructions'].strip()}")
+        if std.get("proofreading_instructions"):
+            parts.append(f"4. PROOFREADING & VALIDATION STANDARDS:\n{std['proofreading_instructions'].strip()}")
+
+        if parts:
+            return "\n\n".join(parts)
+
+        return f"""ANTI-AI-SLOP RULES & TONE MANDATE (ZERO TOLERANCE):
+{DEFAULT_ANTI_SLOP_RULES}
+
+1. REPORTER EXTRACTION STANDARDS:
+{DEFAULT_REPORTER_EXTRACTION_INSTRUCTIONS}
+
+2. EDITORIAL SELECTION STANDARDS (KEEP / COMPRESS / OMIT):
+{DEFAULT_EDITORIAL_SELECTION_INSTRUCTIONS}
+
+3. INFORMATION UNIT WRITING STANDARDS:
+{DEFAULT_WRITING_INSTRUCTIONS}
+
+4. PROOFREADING & VALIDATION STANDARDS:
+{DEFAULT_PROOFREADING_INSTRUCTIONS}"""
+
+    async def save_active_unified_instruction(self, instruction: str) -> str:
+        """
+        Persists the authoritative unified report processing instruction.
+        Saves persistently to report_processing_settings so both SQLite and MSSQL store it reliably.
+        """
+        await self.init_db()
+        cleaned = instruction.strip()
+        await self.set_setting("unified_instructions", cleaned)
+        return cleaned
 
     async def get_standard_by_version(self, version: int) -> Optional[Dict[str, Any]]:
         await self.init_db()
@@ -837,7 +897,11 @@ class ReportProcessingRepository:
             row = await cur.fetchone()
             if row and row["value"] is not None:
                 return str(row["value"])
-            return default if default is not None else ''
+            if default is not None:
+                return default
+            if key == "auto_process_after_verification":
+                return "true"
+            return ''
 
     async def set_setting(self, key: str, value: str):
         await self.init_db()
@@ -871,7 +935,10 @@ class ReportProcessingRepository:
         async with get_db_connection() as conn:
             cur = await conn.execute("SELECT [key], [value] FROM report_processing_settings")
             rows = await cur.fetchall()
-            return {r["key"]: r["value"] for r in rows}
+            settings = {r["key"]: r["value"] for r in rows}
+            if "auto_process_after_verification" not in settings:
+                settings["auto_process_after_verification"] = "true"
+            return settings
 
     # -------------------------------------------------------------------------
     # COMPLETED REPORTS ARCHIVE

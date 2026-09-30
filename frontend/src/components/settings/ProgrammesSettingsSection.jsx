@@ -287,7 +287,7 @@ export function ProgrammesSettingsSection() {
               + Add Programme
             </button>
           ) : (
-            <form onSubmit={handleAddProgramme} className="programme-add-form" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: '#f8fafc', padding: '0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <form onSubmit={handleAddProgramme} className="programme-add-form" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0.85rem', borderRadius: '8px' }}>
               <input
                 type="text"
                 className="form-control"
@@ -383,7 +383,7 @@ export function ProgrammesSettingsSection() {
                         </div>
                       ) : (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <strong style={{ fontSize: '0.98rem', color: '#0f2947' }}>{prog.name}</strong>
+                          <strong className="programme-name">{prog.name}</strong>
                           {prog.is_archived ? (
                             <span className="badge badge--warning" style={{ fontSize: '0.68rem' }}>Archived</span>
                           ) : (
@@ -400,7 +400,7 @@ export function ProgrammesSettingsSection() {
                       {!isEditing && (
                         <button
                           type="button"
-                          className="btn btn--outline btn--small"
+                          className="btn btn--outline btn--small btn-prog-action"
                           onClick={() => {
                             setEditingProgId(prog.id)
                             setEditingProgName(prog.name)
@@ -414,7 +414,7 @@ export function ProgrammesSettingsSection() {
 
                       <button
                         type="button"
-                        className="btn btn--outline btn--small"
+                        className="btn btn--outline btn--small btn-prog-action"
                         onClick={() => handleToggleArchiveProgramme(prog)}
                         title={prog.is_archived ? 'Restore programme' : 'Archive programme'}
                         style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }}
@@ -424,9 +424,8 @@ export function ProgrammesSettingsSection() {
 
                       <button
                         type="button"
-                        className="btn btn--secondary btn--small"
+                        className="btn btn-toggle-sessions btn--small"
                         onClick={() => toggleExpand(prog.id)}
-                        style={{ padding: '0.25rem 0.65rem', fontSize: '0.78rem', fontWeight: 600 }}
                         id={`btn-toggle-prog-${prog.id}`}
                       >
                         {isExpanded ? '▲ Close Sessions' : `▼ Sessions (${activeSessions.length})`}
@@ -438,7 +437,7 @@ export function ProgrammesSettingsSection() {
                   {isExpanded && (
                     <div className="programme-sessions-container" style={{ padding: '1rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.04em', color: '#64748b' }}>
+                        <span className="programme-sessions-heading">
                           CONFIGURED SESSIONS / SECTIONS UNDER &ldquo;{prog.name.toUpperCase()}&rdquo;
                         </span>
 
@@ -590,7 +589,7 @@ export function ProgrammesSettingsSection() {
                                       </button>
                                     </div>
                                   ) : (
-                                    <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1e293b' }}>
+                                    <span className="programme-session-name">
                                       {sess.name}
                                     </span>
                                   )}
@@ -607,7 +606,7 @@ export function ProgrammesSettingsSection() {
                                         setEditingSessionName(sess.name)
                                       }}
                                       title="Rename section"
-                                      style={{ fontSize: '0.75rem', color: '#64748b' }}
+                                      style={{ fontSize: '0.75rem' }}
                                     >
                                       Rename
                                     </button>

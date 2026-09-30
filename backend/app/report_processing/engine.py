@@ -164,17 +164,14 @@ synthesize it with the verified transcript below rather than discarding it:
 {legacy_material.strip()}
 """
 
-        prompt = f"""You are the Master Editor and Theological Document Specialist for the Deeper Life Bible Church (DLBC) Information Unit.
-Your sacred task is to produce the official, definitive, publication-ready Information Unit Report for this message.
-
-CRITICAL ARCHITECTURE REQUIREMENT:
-You must execute the entire reporting pipeline in this SINGLE response:
-1. REPORTER EXTRACTION: Identify speaker roles, key doctrines, all scripture readings/citations, major divisions, and illustrations.
-2. EDITORIAL SELECTION: Apply the KEEP / COMPRESS / OMIT editorial rules.
-3. INFORMATION UNIT WRITING: Compose the full, publication-grade markdown report in the authentic DLBC house style.
-4. PROOFREADING: Verify biblical precision, accurate names, grammatical flawlessness, and compliance with anti-slop rules.
-
+        unified_instruction = standard.get("unified_instructions")
+        if unified_instruction and str(unified_instruction).strip():
+            editorial_instructions_block = f"""================================================================================
+UNIFIED REPORT PROCESSING & EDITORIAL STANDARDS
 ================================================================================
+{str(unified_instruction).strip()}"""
+        else:
+            editorial_instructions_block = f"""================================================================================
 ANTI-AI-SLOP RULES & TONE MANDATE (ZERO TOLERANCE)
 ================================================================================
 {standard.get('anti_slop_rules', DEFAULT_ANTI_SLOP_RULES)}
@@ -197,7 +194,19 @@ ANTI-AI-SLOP RULES & TONE MANDATE (ZERO TOLERANCE)
 ================================================================================
 4. PROOFREADING & VALIDATION STANDARDS
 ================================================================================
-{standard.get('proofreading_instructions', '')}
+{standard.get('proofreading_instructions', '')}"""
+
+        prompt = f"""You are the Master Editor and Theological Document Specialist for the Deeper Life Bible Church (DLBC) Information Unit.
+Your sacred task is to produce the official, definitive, publication-ready Information Unit Report for this message.
+
+CRITICAL ARCHITECTURE REQUIREMENT:
+You must execute the entire reporting pipeline in this SINGLE response:
+1. REPORTER EXTRACTION: Identify speaker roles, key doctrines, all scripture readings/citations, major divisions, and illustrations.
+2. EDITORIAL SELECTION: Apply the KEEP / COMPRESS / OMIT editorial rules.
+3. INFORMATION UNIT WRITING: Compose the full, publication-grade markdown report in the authentic DLBC house style.
+4. PROOFREADING: Verify biblical precision, accurate names, grammatical flawlessness, and compliance with anti-slop rules.
+
+{editorial_instructions_block}
 
 ================================================================================
 APPROVED REFERENCE EXEMPLARS FROM THE LIBRARY

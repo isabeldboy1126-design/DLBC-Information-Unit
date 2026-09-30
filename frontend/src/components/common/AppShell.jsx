@@ -276,16 +276,6 @@ export function AppShell({
               <span className="nav-label">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
             )}
           </button>
-
-          <button
-            type="button"
-            className="sidebar-bottom-collapse-btn"
-            onClick={handleToggleCollapse}
-            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <span className="collapse-arrows">{isCollapsed ? '»' : '«'}</span>
-          </button>
         </div>
       </aside>
 

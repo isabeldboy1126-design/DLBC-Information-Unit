@@ -1,141 +1,37 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { getApiUrl, API_BASE_URL } from '../../config'
-import { ReportingStandardsModal } from '../reporting/ReportingStandardsModal'
-import { EditorStandardsModal } from '../editing/EditorStandardsModal'
-import { ProofreadingStandardsModal } from '../proofreading/ProofreadingStandardsModal'
 import { ProgrammesSettingsSection } from './ProgrammesSettingsSection'
 
 export function SettingsView({ onBack }) {
-  const [transcriptionConfig, setTranscriptionConfig] = useState(null)
-  const [reportingStatus, setReportingStatus] = useState(null)
-  const [editingStatus, setEditingStatus] = useState(null)
-  const [proofreadingStatus, setProofreadingStatus] = useState(null)
+  const [instruction, setInstruction] = useState('')
+  const [autoProcessAfterVerification, setAutoProcessAfterVerification] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [feedback, setFeedback] = useState(null)
   const [error, setError] = useState(null)
   const [lastRefreshed, setLastRefreshed] = useState(null)
 
-  // Standards Modals state
-  const [activeModal, setActiveModal] = useState(null) // 'reporting' | 'editing' | 'proofreading' | null
-
-  // Direct Inline Instructions State
-  const [activeStageTab, setActiveStageTab] = useState('report_processing') // 'report_processing' | 'reporting' | 'editing' | 'proofreading'
-  
-  // 0. Unified Report Processing Editable Fields
-  const [rpStandards, setRpStandards] = useState(null)
-  const [rpInstructions, setRpInstructions] = useState('')
-  const [rpAntiSlop, setRpAntiSlop] = useState('')
-  const [rpTerminology, setRpTerminology] = useState('')
-  const [rpNotes, setRpNotes] = useState('')
-  const [rpSaving, setRpSaving] = useState(false)
-  const [rpFeedback, setRpFeedback] = useState(null)
-  const [rpExamples, setRpExamples] = useState([])
-  const [autoProcessAfterVerification, setAutoProcessAfterVerification] = useState(false)
-  const [promptPreview, setPromptPreview] = useState(null)
-  const [loadingPromptPreview, setLoadingPromptPreview] = useState(false)
-  const [activeExamplePreview, setActiveExamplePreview] = useState(null)
-
-  // 1. Reporting Editable Fields
-  const [repGeneral, setRepGeneral] = useState('')
-  const [repReporterA, setRepReporterA] = useState('')
-  const [repReporterB, setRepReporterB] = useState('')
-  const [repTerminology, setRepTerminology] = useState('')
-  const [repExamples, setRepExamples] = useState('')
-  const [repNotes, setRepNotes] = useState('')
-  const [repSaving, setRepSaving] = useState(false)
-  const [repFeedback, setRepFeedback] = useState(null)
-
-  // 2. Editing Editable Fields
-  const [editGeneral, setEditGeneral] = useState('')
-  const [editCompilation, setEditCompilation] = useState('')
-  const [editTerminology, setEditTerminology] = useState('')
-  const [editExamples, setEditExamples] = useState('')
-  const [editNotes, setEditNotes] = useState('')
-  const [editSaving, setEditSaving] = useState(false)
-  const [editFeedback, setEditFeedback] = useState(null)
-
-  // 3. Proofreading Editable Fields
-  const [proofGuidelines, setProofGuidelines] = useState('')
-  const [proofTerminology, setProofTerminology] = useState('')
-  const [proofFormatting, setProofFormatting] = useState('')
-  const [proofNotes, setProofNotes] = useState('')
-  const [proofSaving, setProofSaving] = useState(false)
-  const [proofFeedback, setProofFeedback] = useState(null)
-
-  const fetchAllStatuses = useCallback(async () => {
+  const fetchSettingsData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const [transRes, repRes, editRes, proofRes, repStdRes, editStdRes, proofStdRes, rpStdRes, rpExRes, rpSetRes] = await Promise.all([
-        fetch(getApiUrl('/api/transcription/config-status')).catch(() => null),
-        fetch(getApiUrl('/api/reporting/status')).catch(() => null),
-        fetch(getApiUrl('/api/editing/status')).catch(() => null),
-        fetch(getApiUrl('/api/proofreading/status')).catch(() => null),
-        fetch(getApiUrl('/api/reporting/standards/active')).catch(() => null),
-        fetch(getApiUrl('/api/editing/standards/active')).catch(() => null),
-        fetch(getApiUrl('/api/proofreading/standards/active')).catch(() => null),
-        fetch(getApiUrl('/api/report-processing/standards/active')).catch(() => null),
-        fetch(getApiUrl('/api/report-processing/examples')).catch(() => null),
+      const [instRes, setRes] = await Promise.all([
+        fetch(getApiUrl('/api/report-processing/instruction')).catch(() => null),
         fetch(getApiUrl('/api/report-processing/settings')).catch(() => null),
       ])
 
-      if (transRes && transRes.ok) {
-        setTranscriptionConfig(await transRes.json())
+      if (instRes && instRes.ok) {
+        const instData = await instRes.json()
+        setInstruction(instData.instruction || '')
       }
-      if (repRes && repRes.ok) {
-        setReportingStatus(await repRes.json())
+      if (setRes && setRes.ok) {
+        const setData = await setRes.json()
+        const autoVal = setData.auto_process_after_verification
+        setAutoProcessAfterVerification(autoVal !== false && autoVal !== 'false')
       }
-      if (editRes && editRes.ok) {
-        setEditingStatus(await editRes.json())
-      }
-      if (proofRes && proofRes.ok) {
-        setProofreadingStatus(await proofRes.json())
-      }
-
-      // Load active standards content into inline editors
-      if (repStdRes && repStdRes.ok) {
-        const repData = await repStdRes.json()
-        const std = repData.standard || {}
-        setRepGeneral(std.general_guidelines || '')
-        setRepReporterA(std.reporter_a_instructions || '')
-        setRepReporterB(std.reporter_b_instructions || '')
-        setRepTerminology(std.terminology || '')
-        setRepExamples(std.examples || '')
-      }
-      if (editStdRes && editStdRes.ok) {
-        const editData = await editStdRes.json()
-        const std = editData.standard || {}
-        setEditGeneral(std.general_guidelines || '')
-        setEditCompilation(std.compilation_guidance || '')
-        setEditTerminology(std.terminology || '')
-        setEditExamples(std.approved_examples || '')
-      }
-      if (proofStdRes && proofStdRes.ok) {
-        const proofData = await proofStdRes.json()
-        const std = proofData.standard || {}
-        setProofGuidelines(std.guidelines || '')
-        setProofTerminology(std.terminology || '')
-        setProofFormatting(std.formatting_rules || '')
-      }
-      if (rpStdRes && rpStdRes.ok) {
-        const rpData = await rpStdRes.json()
-        const std = rpData.standard || {}
-        setRpStandards(std)
-        setRpInstructions(std.instructions || '')
-        setRpAntiSlop(std.anti_slop_rules || '')
-        setRpTerminology(std.terminology || '')
-      }
-      if (rpExRes && rpExRes.ok) {
-        const exData = await rpExRes.json()
-        setRpExamples(exData.examples || [])
-      }
-      if (rpSetRes && rpSetRes.ok) {
-        const setData = await rpSetRes.json()
-        setAutoProcessAfterVerification(!!setData.auto_process_after_verification)
-      }
-
       setLastRefreshed(new Date().toLocaleTimeString())
     } catch (err) {
-      console.error('Error loading settings status:', err)
+      console.error('Error fetching settings:', err)
       setError(`Could not connect to backend server at ${API_BASE_URL}.`)
     } finally {
       setIsLoading(false)
@@ -143,43 +39,34 @@ export function SettingsView({ onBack }) {
   }, [])
 
   useEffect(() => {
-    fetchAllStatuses()
-  }, [fetchAllStatuses])
+    fetchSettingsData()
+  }, [fetchSettingsData])
 
-  // Save Report Processing Standards (Stage 7 Unified)
-  const handleSaveRpStandards = async () => {
-    if (!rpInstructions.trim()) {
+  const handleSaveInstructions = async () => {
+    if (!instruction.trim()) {
       alert('Unified instructions cannot be empty.')
       return
     }
-    setRpSaving(true)
-    setRpFeedback(null)
+    setIsSaving(true)
+    setFeedback(null)
     try {
-      const res = await fetch(getApiUrl('/api/report-processing/standards'), {
+      const res = await fetch(getApiUrl('/api/report-processing/instruction'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instructions: rpInstructions,
-          anti_slop_rules: rpAntiSlop,
-          terminology: rpTerminology,
-          notes: rpNotes.trim() || 'Updated instructions from Settings',
-          set_active: true,
-        }),
+        body: JSON.stringify({ instruction: instruction.trim() }),
       })
       if (res.ok) {
-        const data = await res.json()
-        setRpFeedback(`✓ Saved & Activated Report Processing Standard ${data.standard.version_label}! All subsequent unified runs will follow these rules.`)
-        setRpNotes('')
-        fetchAllStatuses()
-        setTimeout(() => setRpFeedback(null), 6000)
+        setFeedback('✓ Instructions saved successfully. Future Report Processing runs will follow these rules.')
+        fetchSettingsData()
+        setTimeout(() => setFeedback(null), 5000)
       } else {
         const err = await res.json()
-        alert(`Failed to save standards: ${err.detail || 'Unknown error'}`)
+        alert(`Failed to save instructions: ${err.detail || 'Unknown error'}`)
       }
     } catch (err) {
-      alert(`Error saving standards: ${err.message}`)
+      alert(`Error saving instructions: ${err.message}`)
     } finally {
-      setRpSaving(false)
+      setIsSaving(false)
     }
   }
 
@@ -197,129 +84,15 @@ export function SettingsView({ onBack }) {
     }
   }
 
-  // Save Reporting Instructions
-  const handleSaveReportingInstructions = async () => {
-    if (!repGeneral.trim()) {
-      alert('General reporting guidelines cannot be empty.')
-      return
-    }
-    setRepSaving(true)
-    setRepFeedback(null)
-    try {
-      const res = await fetch(getApiUrl('/api/reporting/standards'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          general_guidelines: repGeneral,
-          reporter_a_instructions: repReporterA,
-          reporter_b_instructions: repReporterB,
-          terminology: repTerminology,
-          examples: repExamples,
-          notes: repNotes.trim() || 'Updated instructions from Settings',
-          set_active: true,
-        }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setRepFeedback(`✓ Saved & Activated Reporting Standard ${data.standard.version_label}! All subsequent reporting runs will strictly follow these instructions.`)
-        setRepNotes('')
-        fetchAllStatuses()
-        setTimeout(() => setRepFeedback(null), 6000)
-      } else {
-        const err = await res.json()
-        alert(`Failed to save reporting instructions: ${err.detail || 'Unknown error'}`)
-      }
-    } catch (err) {
-      alert(`Error saving reporting instructions: ${err.message}`)
-    } finally {
-      setRepSaving(false)
-    }
-  }
-
-  // Save Editor Instructions
-  const handleSaveEditorInstructions = async () => {
-    if (!editGeneral.trim()) {
-      alert('General editorial guidelines cannot be empty.')
-      return
-    }
-    setEditSaving(true)
-    setEditFeedback(null)
-    try {
-      const res = await fetch(getApiUrl('/api/editing/standards'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          general_guidelines: editGeneral,
-          compilation_guidance: editCompilation,
-          terminology: editTerminology,
-          approved_examples: editExamples,
-          notes: editNotes.trim() || 'Updated instructions from Settings',
-          set_active: true,
-        }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setEditFeedback(`✓ Saved & Activated Editor Standard ${data.standard.version_label}! All subsequent editor synthesis runs will strictly follow these instructions.`)
-        setEditNotes('')
-        fetchAllStatuses()
-        setTimeout(() => setEditFeedback(null), 6000)
-      } else {
-        const err = await res.json()
-        alert(`Failed to save editor instructions: ${err.detail || 'Unknown error'}`)
-      }
-    } catch (err) {
-      alert(`Error saving editor instructions: ${err.message}`)
-    } finally {
-      setEditSaving(false)
-    }
-  }
-
-  // Save Proofreading Instructions
-  const handleSaveProofreadingInstructions = async () => {
-    if (!proofGuidelines.trim()) {
-      alert('Proofreading guidelines cannot be empty.')
-      return
-    }
-    setProofSaving(true)
-    setProofFeedback(null)
-    try {
-      const res = await fetch(getApiUrl('/api/proofreading/standards'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          guidelines: proofGuidelines,
-          terminology: proofTerminology,
-          formatting_rules: proofFormatting,
-          notes: proofNotes.trim() || 'Updated instructions from Settings',
-          set_active: true,
-        }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setProofFeedback(`✓ Saved & Activated Proofreading Standard ${data.standard.version_label}! All subsequent proofreading runs will strictly follow these instructions.`)
-        setProofNotes('')
-        fetchAllStatuses()
-        setTimeout(() => setProofFeedback(null), 6000)
-      } else {
-        const err = await res.json()
-        alert(`Failed to save proofreading instructions: ${err.detail || 'Unknown error'}`)
-      }
-    } catch (err) {
-      alert(`Error saving proofreading instructions: ${err.message}`)
-    } finally {
-      setProofSaving(false)
-    }
-  }
-
   return (
     <div className="settings-page-container">
       {/* Top Header */}
       <div className="settings-page-header">
         <div className="settings-header-left">
           <div>
-            <h1 className="settings-title">System Settings &amp; AI Standards</h1>
+            <h1 className="settings-title">System Settings &amp; Editorial Standards</h1>
             <p className="settings-subtitle">
-              Manage editorial guidelines, inspect transcription providers, and verify system operational status.
+              Manage authoritative editorial instructions and configure church programmes.
             </p>
           </div>
         </div>
@@ -331,10 +104,10 @@ export function SettingsView({ onBack }) {
           <button
             type="button"
             className="btn btn--outline btn--small"
-            onClick={fetchAllStatuses}
+            onClick={fetchSettingsData}
             disabled={isLoading}
           >
-            {isLoading ? 'Checking...' : '↻ Refresh Status'}
+            {isLoading ? 'Checking...' : '↻ Refresh'}
           </button>
         </div>
       </div>
@@ -345,766 +118,74 @@ export function SettingsView({ onBack }) {
         </div>
       )}
 
-      <div className="settings-grid">
-        {/* Section 0: Programmes & Sessions Management (User-Facing) */}
-        <ProgrammesSettingsSection />
-
-        {/* Section 1: Editorial Standards & Knowledge Management (User-Facing) */}
-        <div className="card settings-card">
-          <div className="card-header settings-card-header">
-            <div className="settings-card-header-title">
-              <span className="settings-icon">📜</span>
-              <h3>Editorial Standards &amp; Instruction Management</h3>
-            </div>
-            <span className="badge badge--primary">User Manageable &bull; Instant AI Update</span>
-          </div>
-
-          <div className="card-body">
-            <p className="settings-card-desc">
-              Directly edit and save the instructions, ministerial vocabulary, and formatting standards for each AI stage. When you click <strong>Save Instructions</strong>, the updated rules immediately become active for all subsequent runs without keeping older context.
-            </p>
-
-            {/* Stage Selector Tabs */}
-            <div className="settings-stage-tabs" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className={`btn btn--small ${activeStageTab === 'report_processing' ? 'btn--primary' : 'btn--outline'}`}
-                onClick={() => setActiveStageTab('report_processing')}
-                id="tab-select-report-processing-instructions"
-              >
-                <span>⚡ Unified Report Processing</span>
-                <span className="badge" style={{ marginLeft: '0.4rem', background: activeStageTab === 'report_processing' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: activeStageTab === 'report_processing' ? '#fff' : '#334155' }}>
-                  {rpStandards?.version_label || 'v1.0'}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className={`btn btn--small ${activeStageTab === 'reporting' ? 'btn--primary' : 'btn--outline'}`}
-                onClick={() => setActiveStageTab('reporting')}
-                id="tab-select-reporting-instructions"
-              >
-                <span>1. Reporting Instructions (Dual Reporters)</span>
-                <span className="badge" style={{ marginLeft: '0.4rem', background: activeStageTab === 'reporting' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: activeStageTab === 'reporting' ? '#fff' : '#334155' }}>
-                  {reportingStatus?.active_standard_version || 'v1'}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className={`btn btn--small ${activeStageTab === 'editing' ? 'btn--primary' : 'btn--outline'}`}
-                onClick={() => setActiveStageTab('editing')}
-                id="tab-select-editor-instructions"
-              >
-                <span>2. AI Editor Instructions (Synthesis)</span>
-                <span className="badge" style={{ marginLeft: '0.4rem', background: activeStageTab === 'editing' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: activeStageTab === 'editing' ? '#fff' : '#334155' }}>
-                  {editingStatus?.active_standard_version || 'v1'}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className={`btn btn--small ${activeStageTab === 'proofreading' ? 'btn--primary' : 'btn--outline'}`}
-                onClick={() => setActiveStageTab('proofreading')}
-                id="tab-select-proofreading-instructions"
-              >
-                <span>3. Proofreading Instructions (Quality &amp; Rules)</span>
-                <span className="badge" style={{ marginLeft: '0.4rem', background: activeStageTab === 'proofreading' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: activeStageTab === 'proofreading' ? '#fff' : '#334155' }}>
-                  {proofreadingStatus?.active_standard_version || 'v1'}
-                </span>
-              </button>
-            </div>
-
-            {/* TAB 0: UNIFIED REPORT PROCESSING */}
-            {activeStageTab === 'report_processing' && (
-              <div className="stage-instructions-panel">
-                {rpFeedback && (
-                  <div className="settings-alert" style={{ background: '#dcfce7', border: '1px solid #86efac', color: '#14532d', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                    <strong>{rpFeedback}</strong>
-                  </div>
-                )}
-
-                {/* Auto-Process Workflow Toggle Card */}
-                <div className="settings-banner-box" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h4 className="settings-banner-title" style={{ margin: '0 0 0.25rem 0', fontSize: '1rem' }}>
-                      Auto-Process After Verification
-                    </h4>
-                    <p className="settings-banner-desc" style={{ margin: 0, fontSize: '0.85rem' }}>
-                      Automatically trigger unified Report Processing as soon as all verification items are resolved.
-                    </p>
-                  </div>
-                  <label className="toggle-switch" style={{ position: 'relative', display: 'inline-block', width: '50px', height: '26px' }}>
-                    <input
-                      type="checkbox"
-                      checked={autoProcessAfterVerification}
-                      onChange={handleToggleAutoProcess}
-                      style={{ opacity: 0, width: 0, height: 0 }}
-                    />
-                    <span
-                      style={{
-                        position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundColor: autoProcessAfterVerification ? '#2563eb' : '#cbd5e1',
-                        borderRadius: '26px', transition: '.3s',
-                      }}
-                    >
-                      <span
-                        style={{
-                          position: 'absolute', content: '""', height: '20px', width: '20px', left: autoProcessAfterVerification ? '26px' : '3px', bottom: '3px',
-                          backgroundColor: 'white', borderRadius: '50%', transition: '.3s',
-                        }}
-                      />
-                    </span>
-                  </label>
-                </div>
-
-                {/* Unified Instructions & Anti-Slop Form */}
-                <div className="instructions-form-grid" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
-                      <span>📄 Unified Instructions (Extraction, Editorial Selection &amp; Writing) *</span>
-                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Applies to the single-call AI reasoning pipeline</span>
-                    </label>
-                    <textarea
-                      className="form-control"
-                      style={{ minHeight: '160px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                      value={rpInstructions}
-                      onChange={(e) => setRpInstructions(e.target.value)}
-                      placeholder="Unified extraction, KEEP/COMPRESS/OMIT rules, paragraph conventions, and final report structuring..."
-                    />
-                  </div>
-
-                  <div className="form-row-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontWeight: 600 }}>
-                        🚫 Anti-AI-Slop &amp; Forbidden Cliches Rules
-                      </label>
-                      <textarea
-                        className="form-control"
-                        style={{ minHeight: '130px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                        value={rpAntiSlop}
-                        onChange={(e) => setRpAntiSlop(e.target.value)}
-                        placeholder="List of forbidden marketing cliches, buzzwords, and mandatory replacement phrasing..."
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontWeight: 600 }}>
-                        📖 Church Terminology &amp; Biblical Vocabulary
-                      </label>
-                      <textarea
-                        className="form-control"
-                        style={{ minHeight: '130px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                        value={rpTerminology}
-                        onChange={(e) => setRpTerminology(e.target.value)}
-                        placeholder="Ministerial titles, church departments, spelling standards, KJV reference formats..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                      Change note for this version:
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="e.g. Added forbidden cliches and updated ministerial titles..."
-                      value={rpNotes}
-                      onChange={(e) => setRpNotes(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Save Action Bar */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '0.75rem' }}>
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      style={{ padding: '0.65rem 1.4rem', fontSize: '0.95rem', fontWeight: 700 }}
-                      onClick={handleSaveRpStandards}
-                      disabled={rpSaving}
-                      id="btn-save-rp-standards"
-                    >
-                      {rpSaving ? 'Saving...' : '💾 Save & Apply Standards v1.0'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Approved Examples Library (Seeds AM, AN, AO, AP) */}
-                <div style={{ marginTop: '2rem', borderTop: '2px solid #e2e8f0', paddingTop: '1.25rem' }}>
-                  <h4 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#0f172a', marginBottom: '0.5rem' }}>
-                    Approved Exemplars Library (Pre-Seeded)
-                  </h4>
-                  <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem' }}>
-                    These exemplary reports serve as few-shot in-context learning references for the reasoning model.
-                  </p>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                    {rpExamples.map((ex) => (
-                      <div
-                        key={ex.example_id}
-                        style={{
-                          background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                          <span style={{ background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 700 }}>
-                            {ex.example_code}
-                          </span>
-                          <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                            {ex.word_count} words
-                          </span>
-                        </div>
-                        <h5 style={{ margin: '0 0 0.35rem 0', fontSize: '0.95rem', color: '#1e293b' }}>
-                          {ex.title}
-                        </h5>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.75rem' }}>
-                          {ex.minister || 'Pastor (Dr) W.F. Kumuyi'}
-                        </div>
-                        <button
-                          type="button"
-                          className="btn btn--outline btn--small"
-                          onClick={() => setActiveExamplePreview(activeExamplePreview === ex.example_id ? null : ex.example_id)}
-                          style={{ width: '100%', fontSize: '0.8rem' }}
-                        >
-                          {activeExamplePreview === ex.example_id ? 'Hide Preview' : 'Preview Exemplar'}
-                        </button>
-                        {activeExamplePreview === ex.example_id && (
-                          <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#f8fafc', borderRadius: '8px', fontSize: '0.8rem', maxHeight: '200px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
-                            {ex.exemplar_text}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 1: REPORTING INSTRUCTIONS */}
-            {activeStageTab === 'reporting' && (
-              <div className="stage-instructions-panel">
-                {repFeedback && (
-                  <div className="settings-alert" style={{ background: '#dcfce7', border: '1px solid #86efac', color: '#14532d', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                    <strong>{repFeedback}</strong>
-                  </div>
-                )}
-
-                <div className="instructions-form-grid" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
-                      <span>📄 General Reporting Guidelines &amp; Outline Conventions *</span>
-                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Applies to both Reporter A and Reporter B</span>
-                    </label>
-                    <textarea
-                      className="form-control"
-                      style={{ minHeight: '140px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                      value={repGeneral}
-                      onChange={(e) => setRepGeneral(e.target.value)}
-                      placeholder="Overall tone, structure, paragraph length, and Information Unit guidelines..."
-                    />
-                  </div>
-
-                  <div className="form-row-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontWeight: 600 }}>
-                        👤 Reporter A Instructions (Structure &amp; Flow)
-                      </label>
-                      <textarea
-                        className="form-control"
-                        style={{ minHeight: '130px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                        value={repReporterA}
-                        onChange={(e) => setRepReporterA(e.target.value)}
-                        placeholder="Instructions focusing on sermon outline, central message, primary scriptures..."
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontWeight: 600 }}>
-                        🔍 Reporter B Instructions (Detail &amp; Omissions Watch)
-                      </label>
-                      <textarea
-                        className="form-control"
-                        style={{ minHeight: '130px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                        value={repReporterB}
-                        onChange={(e) => setRepReporterB(e.target.value)}
-                        placeholder="Instructions focusing on supporting facts, illustrations, dates, quotes, secondary scriptures..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-row-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontWeight: 600 }}>
-                        📖 Church Terminology &amp; Glossary
-                      </label>
-                      <textarea
-                        className="form-control"
-                        style={{ minHeight: '110px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                        value={repTerminology}
-                        onChange={(e) => setRepTerminology(e.target.value)}
-                        placeholder="Ministerial titles, church departments, specific spelling conventions..."
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontWeight: 600 }}>
-                        🌟 Approved Reference Examples
-                      </label>
-                      <textarea
-                        className="form-control"
-                        style={{ minHeight: '110px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                        value={repExamples}
-                        onChange={(e) => setRepExamples(e.target.value)}
-                        placeholder="High quality reference examples to guide the AI..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                      Change note for this save (optional):
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="e.g. Updated sermon title formatting and pastoral titles..."
-                      value={repNotes}
-                      onChange={(e) => setRepNotes(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Save Action Bar */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '0.75rem' }}>
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      style={{ padding: '0.65rem 1.4rem', fontSize: '0.95rem', fontWeight: 700 }}
-                      onClick={handleSaveReportingInstructions}
-                      disabled={repSaving}
-                      id="btn-save-reporting-instructions"
-                    >
-                      {repSaving ? 'Saving...' : '💾 Save & Apply Reporting Instructions'}
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn btn--outline btn--small"
-                      onClick={() => setActiveModal('reporting')}
-                    >
-                      ⚙️ Version History &amp; Revert
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: EDITOR INSTRUCTIONS */}
-            {activeStageTab === 'editing' && (
-              <div className="stage-instructions-panel">
-                {editFeedback && (
-                  <div className="settings-alert" style={{ background: '#dcfce7', border: '1px solid #86efac', color: '#14532d', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                    <strong>{editFeedback}</strong>
-                  </div>
-                )}
-
-                <div className="instructions-form-grid" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: 600 }}>
-                      📄 General Editorial &amp; Synthesis Guidelines *
-                    </label>
-                    <textarea
-                      className="form-control"
-                      style={{ minHeight: '140px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                      value={editGeneral}
-                      onChange={(e) => setEditGeneral(e.target.value)}
-                      placeholder="Rules for synthesizing Reporter A & B into a unified official report..."
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: 600 }}>
-                      🔀 Compilation &amp; Reconciliation Guidance
-                    </label>
-                    <textarea
-                      className="form-control"
-                      style={{ minHeight: '130px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                      value={editCompilation}
-                      onChange={(e) => setEditCompilation(e.target.value)}
-                      placeholder="How to resolve discrepancies between drafts, retain facts, and structure headings..."
-                    />
-                  </div>
-
-                  <div className="form-row-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontWeight: 600 }}>
-                        📖 Church Terminology &amp; Glossary
-                      </label>
-                      <textarea
-                        className="form-control"
-                        style={{ minHeight: '110px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                        value={editTerminology}
-                        onChange={(e) => setEditTerminology(e.target.value)}
-                        placeholder="Ministerial titles, official vocabulary, terminology..."
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontWeight: 600 }}>
-                        🌟 Approved Synthesis Examples
-                      </label>
-                      <textarea
-                        className="form-control"
-                        style={{ minHeight: '110px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                        value={editExamples}
-                        onChange={(e) => setEditExamples(e.target.value)}
-                        placeholder="Reference examples of high quality edited reports..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                      Change note for this save (optional):
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="e.g. Adjusted heading levels and scripture format..."
-                      value={editNotes}
-                      onChange={(e) => setEditNotes(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Save Action Bar */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '0.75rem' }}>
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      style={{ padding: '0.65rem 1.4rem', fontSize: '0.95rem', fontWeight: 700 }}
-                      onClick={handleSaveEditorInstructions}
-                      disabled={editSaving}
-                      id="btn-save-editor-instructions"
-                    >
-                      {editSaving ? 'Saving...' : '💾 Save & Apply Editor Instructions'}
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn btn--outline btn--small"
-                      onClick={() => setActiveModal('editing')}
-                    >
-                      ⚙️ Version History &amp; Revert
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 3: PROOFREADING INSTRUCTIONS */}
-            {activeStageTab === 'proofreading' && (
-              <div className="stage-instructions-panel">
-                {proofFeedback && (
-                  <div className="settings-alert" style={{ background: '#dcfce7', border: '1px solid #86efac', color: '#14532d', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                    <strong>{proofFeedback}</strong>
-                  </div>
-                )}
-
-                <div className="instructions-form-grid" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: 600 }}>
-                      📄 Conservative Proofreading Guidelines *
-                    </label>
-                    <textarea
-                      className="form-control"
-                      style={{ minHeight: '140px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                      value={proofGuidelines}
-                      onChange={(e) => setProofGuidelines(e.target.value)}
-                      placeholder="Spelling, grammar, punctuation, conservative edit rules (no unnecessary rewording)..."
-                    />
-                  </div>
-
-                  <div className="form-row-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontWeight: 600 }}>
-                        📖 Church Terminology &amp; Reverence Capitalization
-                      </label>
-                      <textarea
-                        className="form-control"
-                        style={{ minHeight: '130px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                        value={proofTerminology}
-                        onChange={(e) => setProofTerminology(e.target.value)}
-                        placeholder="Reverence pronouns (He, Him, His for God/Jesus), ministerial names and titles..."
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontWeight: 600 }}>
-                        📜 Scripture Citation &amp; Typography Rules
-                      </label>
-                      <textarea
-                        className="form-control"
-                        style={{ minHeight: '130px', fontFamily: 'monospace', fontSize: '0.88rem', lineHeight: 1.45 }}
-                        value={proofFormatting}
-                        onChange={(e) => setProofFormatting(e.target.value)}
-                        placeholder="Bible verse formatting conventions (e.g. John 3:16; 1 Thessalonians 5:17)..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                      Change note for this save (optional):
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="e.g. Refined KJV Scripture notation and reverence pronouns..."
-                      value={proofNotes}
-                      onChange={(e) => setProofNotes(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Save Action Bar */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '0.75rem' }}>
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      style={{ padding: '0.65rem 1.4rem', fontSize: '0.95rem', fontWeight: 700 }}
-                      onClick={handleSaveProofreadingInstructions}
-                      disabled={proofSaving}
-                      id="btn-save-proofreading-instructions"
-                    >
-                      {proofSaving ? 'Saving...' : '💾 Save & Apply Proofreading Instructions'}
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn btn--outline btn--small"
-                      onClick={() => setActiveModal('proofreading')}
-                    >
-                      ⚙️ Version History &amp; Revert
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+      {feedback && (
+        <div className="settings-alert settings-alert--success">
+          <span>{feedback}</span>
         </div>
+      )}
 
-        {/* Section 2: AI Pipeline & Language Engine Status */}
-        <div className="card settings-card">
-          <div className="card-header settings-card-header">
-            <div className="settings-card-header-title">
-              <span className="settings-icon">🤖</span>
-              <h3>AI Language Engine &amp; Pipelines</h3>
-            </div>
-            <span className="badge badge--success">Backend Managed</span>
-          </div>
-
-          <div className="card-body">
-            <p className="settings-card-desc">
-              Live configuration status of backend AI services. API keys are safely configured in environment variables and never exposed in the client.
-            </p>
-
-            <div className="settings-status-table-container">
-              <table className="settings-status-table">
-                <thead>
-                  <tr>
-                    <th>Pipeline Stage</th>
-                    <th>Provider / Model</th>
-                    <th>Status</th>
-                    <th>Security</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>
-                      <strong>AI Reporting (Dual)</strong>
-                    </td>
-                    <td>{reportingStatus?.provider || 'Google Gemini'} ({reportingStatus?.model || 'gemini-3.7-flash'})</td>
-                    <td>
-                      {reportingStatus?.configured ? (
-                        <span className="badge badge--success">✓ Ready</span>
-                      ) : (
-                        <span className="badge badge--warning">⚠ Key Required (.env)</span>
-                      )}
-                    </td>
-                    <td><span className="settings-secure-pill">🔒 Backend Only</span></td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>AI Editor Synthesis</strong>
-                    </td>
-                    <td>{editingStatus?.provider || 'Google Gemini'} ({editingStatus?.model || 'gemini-3.7-flash'})</td>
-                    <td>
-                      {editingStatus?.configured ? (
-                        <span className="badge badge--success">✓ Ready</span>
-                      ) : (
-                        <span className="badge badge--warning">⚠ Key Required (.env)</span>
-                      )}
-                    </td>
-                    <td><span className="settings-secure-pill">🔒 Backend Only</span></td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>AI Proofreader</strong>
-                    </td>
-                    <td>{proofreadingStatus?.provider || 'Google Gemini'} ({proofreadingStatus?.model || 'gemini-3.7-flash'})</td>
-                    <td>
-                      {proofreadingStatus?.configured ? (
-                        <span className="badge badge--success">✓ Ready</span>
-                      ) : (
-                        <span className="badge badge--warning">⚠ Key Required (.env)</span>
-                      )}
-                    </td>
-                    <td><span className="settings-secure-pill">🔒 Backend Only</span></td>
-                  </tr>
-                </tbody>
-              </table>
+      {/* SECTION 1: Editorial Standards & Instruction Management */}
+      <div className="settings-card editorial-standards-card">
+        <div className="settings-card-header">
+          <div className="settings-card-title-group">
+            <span className="settings-card-icon">📋</span>
+            <div>
+              <h2 className="settings-card-title">Editorial Standards &amp; Instruction Management</h2>
+              <p className="settings-card-subtitle">
+                Unified rules, theology style, and report structure enforced during single-stage Report Processing.
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Section 3: Speech-to-Text & Transcription Providers */}
-        <div className="card settings-card">
-          <div className="card-header settings-card-header">
-            <div className="settings-card-header-title">
-              <span className="settings-icon">🎙️</span>
-              <h3>Speech Recognition &amp; Audio Transcription</h3>
-            </div>
-            <span className="badge badge--info">Live &amp; Batch</span>
+        <div className="settings-card-body">
+          {/* Simple Auto-Process Row */}
+          <div className="settings-auto-process-row">
+            <span className="settings-auto-process-label">Auto-Process After Verification</span>
+            <label className="toggle-switch" aria-label="Auto-Process After Verification">
+              <input
+                type="checkbox"
+                checked={autoProcessAfterVerification}
+                onChange={handleToggleAutoProcess}
+              />
+              <span className="toggle-slider"></span>
+            </label>
           </div>
 
-          <div className="card-body">
-            <div className="settings-provider-grid">
-              {/* Azure Speech */}
-              <div className="settings-provider-card">
-                <div className="settings-provider-header">
-                  <div>
-                    <strong>Azure Speech Service</strong>
-                    <div className="settings-provider-sub">Primary Live &amp; Recorded Engine</div>
-                  </div>
-                  {transcriptionConfig?.providers?.azure_speech?.is_configured ? (
-                    <span className="badge badge--success">✓ Configured</span>
-                  ) : (
-                    <span className="badge badge--warning">⚠ Unconfigured</span>
-                  )}
-                </div>
-                <div className="settings-provider-details">
-                  <div className="settings-detail-row">
-                    <span>Region:</span>
-                    <code>{transcriptionConfig?.providers?.azure_speech?.region || 'southafricanorth'}</code>
-                  </div>
-                  <div className="settings-detail-row">
-                    <span>Locale:</span>
-                    <code>{transcriptionConfig?.providers?.azure_speech?.language || 'en-NG'} (Nigeria)</code>
-                  </div>
-                  <div className="settings-detail-row">
-                    <span>Active Provider:</span>
-                    <span>{transcriptionConfig?.active_provider === 'azure_speech' ? 'Yes' : 'No'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Faster Whisper Local Fallback */}
-              <div className="settings-provider-card">
-                <div className="settings-provider-header">
-                  <div>
-                    <strong>Faster-Whisper (Local)</strong>
-                    <div className="settings-provider-sub">Offline / Resilient Fallback</div>
-                  </div>
-                  <span className="badge badge--success">✓ Built-in</span>
-                </div>
-                <div className="settings-provider-details">
-                  <div className="settings-detail-row">
-                    <span>Mode:</span>
-                    <code>Local Device Inference</code>
-                  </div>
-                  <div className="settings-detail-row">
-                    <span>Internet Required:</span>
-                    <span>No</span>
-                  </div>
-                  <div className="settings-detail-row">
-                    <span>Audio Sync:</span>
-                    <span>High-Fidelity Lossless PCM</span>
-                  </div>
-                </div>
-              </div>
+          {/* Unified Instructions Area */}
+          <div className="unified-instructions-group">
+            <div className="unified-instructions-header">
+              <label htmlFor="unified-instructions-textarea" className="unified-instructions-label">
+                Unified Report Processing Instructions
+              </label>
+              <span className="unified-instructions-badge">Authoritative Prompt</span>
             </div>
-          </div>
-        </div>
-
-        {/* Section 4: Storage, Persistence & Data Safety */}
-        <div className="card settings-card">
-          <div className="card-header settings-card-header">
-            <div className="settings-card-header-title">
-              <span className="settings-icon">💾</span>
-              <h3>Storage &amp; Data Integrity Rules</h3>
-            </div>
-            <span className="badge badge--secondary">System Architecture</span>
-          </div>
-
-          <div className="card-body">
-            <div className="settings-integrity-grid">
-              <div className="settings-integrity-item">
-                <div className="settings-integrity-title">📁 Master Audio Directory</div>
-                <p>Preserved in <code>storage/</code> as original lossless 16kHz PCM WAV. Master audio is never deleted or compressed destructively.</p>
-              </div>
-
-              <div className="settings-integrity-item">
-                <div className="settings-integrity-title">🗄️ Database Architecture</div>
-                <p>Persistent SQLite database at <code>storage/app.db</code>. Automated tests operate on isolated temp databases.</p>
-              </div>
-
-              <div className="settings-integrity-item">
-                <div className="settings-integrity-title">📄 Document Export Engine</div>
-                <p>Deterministic <code>.docx</code> generator. Renders approved proofread text without altering wording or hallucinating changes.</p>
-              </div>
-
-              <div className="settings-integrity-item">
-                <div className="settings-integrity-title">🔒 Session Isolation Rule</div>
-                <p>One Church Service = Exactly One Session ID. Processing stages append revisions without creating duplicate sessions.</p>
-              </div>
+            <textarea
+              id="unified-instructions-textarea"
+              className="unified-instructions-textarea"
+              rows={16}
+              value={instruction}
+              onChange={(e) => setInstruction(e.target.value)}
+              placeholder="Loading unified editorial instructions..."
+              disabled={isLoading}
+            />
+            <div className="unified-instructions-actions">
+              <button
+                type="button"
+                className="btn btn--primary btn-save-instructions"
+                onClick={handleSaveInstructions}
+                disabled={isSaving || isLoading}
+              >
+                {isSaving ? 'Saving Instructions...' : 'Save Instructions'}
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Modals for Standards */}
-      {activeModal === 'reporting' && (
-        <ReportingStandardsModal
-          isOpen={true}
-          onClose={() => {
-            setActiveModal(null)
-            fetchAllStatuses()
-          }}
-          onStandardActivated={fetchAllStatuses}
-        />
-      )}
-
-      {activeModal === 'editing' && (
-        <EditorStandardsModal
-          isOpen={true}
-          onClose={() => {
-            setActiveModal(null)
-            fetchAllStatuses()
-          }}
-          onStandardActivated={fetchAllStatuses}
-        />
-      )}
-
-      {activeModal === 'proofreading' && (
-        <ProofreadingStandardsModal
-          isOpen={true}
-          onClose={() => {
-            setActiveModal(null)
-            fetchAllStatuses()
-          }}
-          onStandardActivated={fetchAllStatuses}
-        />
-      )}
+      {/* SECTION 2: App Programmes */}
+      <ProgrammesSettingsSection />
     </div>
   )
 }
+

@@ -982,7 +982,7 @@ Return a JSON array of decision objects matching this schema:
             # Stage 7: Auto-process after verification if enabled
             try:
                 from app.database.report_processing_repo import report_processing_repo
-                is_auto = await report_processing_repo.get_setting("auto_process_after_verification", default="false")
+                is_auto = await report_processing_repo.get_setting("auto_process_after_verification", default="true")
                 if str(is_auto).strip().lower() in ("true", "1", "yes", "on"):
                     from app.report_processing.engine import report_processing_engine
                     import asyncio

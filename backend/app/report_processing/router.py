@@ -49,6 +49,10 @@ class SettingUpdateRequest(BaseModel):
     value: str
 
 
+class InstructionUpdateRequest(BaseModel):
+    instruction: str
+
+
 class StandardCreateRequest(BaseModel):
     version_label: str
     reporter_extraction_instructions: str
@@ -405,9 +409,30 @@ async def get_settings():
 
 
 @router.post("/settings", response_model=Dict[str, Any])
-async def update_setting(payload: SettingUpdateRequest):
-    await report_processing_repo.set_setting(payload.key, payload.value)
-    return {"status": "success", "key": payload.key, "value": payload.value}
+async def update_setting(payload: Dict[str, Any]):
+    if "key" in payload and "value" in payload:
+        k = str(payload["key"])
+        v = str(payload["value"])
+        await report_processing_repo.set_setting(k, v)
+        return {"status": "success", "key": k, "value": v}
+    for k, v in payload.items():
+        val_str = "true" if v is True else "false" if v is False else str(v)
+        await report_processing_repo.set_setting(k, val_str)
+    return {"status": "success", "settings": payload}
+
+
+@router.get("/instruction", response_model=Dict[str, Any])
+async def get_unified_instruction():
+    instruction = await report_processing_repo.get_active_unified_instruction()
+    return {"instruction": instruction, "status": "success"}
+
+
+@router.post("/instruction", response_model=Dict[str, Any])
+async def save_unified_instruction(payload: InstructionUpdateRequest):
+    if not payload.instruction.strip():
+        raise HTTPException(status_code=400, detail="Instruction cannot be empty")
+    saved = await report_processing_repo.save_active_unified_instruction(payload.instruction.strip())
+    return {"instruction": saved, "status": "success"}
 
 
 @router.get("/prompt-preview/{session_id}", response_model=Dict[str, Any])

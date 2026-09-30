@@ -396,19 +396,40 @@ async def test_human_diff_recording_and_exemplar_promotion():
 @pytest.mark.asyncio
 async def test_settings_auto_process_toggle():
     """Verifies reading and updating auto_process_after_verification."""
-    # Default is false
+    # Default is true
     default_val = await report_processing_repo.get_setting("auto_process_after_verification")
-    assert default_val.lower() == "false"
+    assert default_val.lower() == "true"
 
-    # Turn ON
-    await report_processing_repo.set_setting("auto_process_after_verification", "true")
-    new_val = await report_processing_repo.get_setting("auto_process_after_verification")
-    assert new_val.lower() == "true"
-
-    # Turn back OFF
+    # Turn OFF
     await report_processing_repo.set_setting("auto_process_after_verification", "false")
+    new_val = await report_processing_repo.get_setting("auto_process_after_verification")
+    assert new_val.lower() == "false"
+
+    # Turn back ON
+    await report_processing_repo.set_setting("auto_process_after_verification", "true")
     reset_val = await report_processing_repo.get_setting("auto_process_after_verification")
-    assert reset_val.lower() == "false"
+    assert reset_val.lower() == "true"
+
+
+def test_api_instruction_endpoints():
+    """Verifies getting and persisting authoritative unified instructions via API."""
+    # Fetch active instruction
+    res = client.get("/api/report-processing/instruction")
+    assert res.status_code == 200
+    data = res.json()
+    assert "instruction" in data
+    assert len(data["instruction"]) > 50
+
+    # Update instruction
+    custom_inst = "CUSTOM INFORMATION UNIT DIRECTIVE: Prioritize high-fidelity biblical exposition."
+    post_res = client.post("/api/report-processing/instruction", json={"instruction": custom_inst})
+    assert post_res.status_code == 200
+    assert post_res.json()["status"] == "success"
+
+    # Verify persisted on re-fetch
+    refetch = client.get("/api/report-processing/instruction")
+    assert refetch.status_code == 200
+    assert refetch.json()["instruction"] == custom_inst
 
 
 # -----------------------------------------------------------------------------
