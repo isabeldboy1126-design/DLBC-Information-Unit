@@ -475,6 +475,8 @@ function App() {
     )
   }
 
+  const { title: currentScreenTitle, onBack: currentScreenBack } = getHeaderContext()
+
   return (
     <AppShell
       activeView={
