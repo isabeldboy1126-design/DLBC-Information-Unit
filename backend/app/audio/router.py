@@ -11,8 +11,10 @@ import json
 import os
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from app.auth.auth_context import AuthContext
+from app.auth.dependencies import require_account
 from app.audio.stream_manager import (
     MANIFEST_FILE,
     STORAGE_AUDIO_DIR,
@@ -337,8 +339,13 @@ async def download_recording(recording_id: str):
 
 
 @router.delete("/recordings/{recording_id}")
-async def delete_recording(recording_id: str):
+async def delete_recording(recording_id: str, auth: AuthContext = Depends(require_account)):
     """Deletes a recording from disk and updates the manifest."""
+    if getattr(auth, "is_demo", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Recording deletion is disabled in Demo mode to protect shared sample data.",
+        )
     file_path = os.path.join(STORAGE_AUDIO_DIR, f"{recording_id}.wav")
     if os.path.exists(file_path):
         try:

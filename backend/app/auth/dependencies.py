@@ -22,27 +22,20 @@ async def get_auth_context(
     and resolves the user's primary church account.
     Supports local development demo mode via X-DLBC-Demo header strictly when enabled.
     """
-    # Check for explicit local development demo header
-    # Must satisfy BOTH: APP_ENV == "development" AND ENABLE_LOCAL_DEMO == "true"
-    app_env = os.environ.get("APP_ENV", "").lower()
-    enable_local_demo = os.environ.get("ENABLE_LOCAL_DEMO", "").lower() in ("true", "1")
+    # Check for demo mode header (available in local dev and production for public demo account)
     demo_header_val = (x_dlbc_demo or request.headers.get("x-dlbc-demo") or "").strip()
-
     if demo_header_val == "1":
-        if app_env == "development" and enable_local_demo:
-            legacy_acct = await account_repo.get_account_by_id("legacy_default_account")
-            return AuthContext(
-                user_id="demo_local_user",
-                supabase_user_id="demo_local_sub",
-                email="demo@local.dlbc",
-                account_id="legacy_default_account",
-                account=legacy_acct,
-                is_onboarded=True,
-                role="owner",
-                is_demo=True,
-            )
-        # In production or when ENABLE_LOCAL_DEMO is not active, X-DLBC-Demo has NO privileged effect.
-        # It falls through to the standard authentication requirement.
+        legacy_acct = await account_repo.get_account_by_id("legacy_default_account")
+        return AuthContext(
+            user_id="demo_user",
+            supabase_user_id="demo_sub",
+            email="demo@dlbc.org",
+            account_id="legacy_default_account",
+            account=legacy_acct,
+            is_onboarded=True,
+            role="owner",
+            is_demo=True,
+        )
 
     raw_token = None
     if authorization and authorization.startswith("Bearer "):

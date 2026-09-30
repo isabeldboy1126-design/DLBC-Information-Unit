@@ -94,7 +94,13 @@ async def update_session(session_id: str, payload: UpdateSessionRequest, auth: A
 @router.delete("/{session_id}")
 async def delete_session(session_id: str, auth: AuthContext = Depends(require_account)):
     """Deletes a session record upon explicit user confirmation."""
+    if getattr(auth, "is_demo", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Session deletion is disabled in Demo mode to protect shared sample data.",
+        )
     success = await session_repo.delete_session(session_id, account_id=auth.account_id)
     if not success:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
     return {"status": "deleted", "session_id": session_id}
+

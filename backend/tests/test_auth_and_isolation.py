@@ -331,80 +331,86 @@ async def test_legacy_production_session_migration():
 @pytest.mark.asyncio
 async def test_demo_mode_security_and_gating():
     """
-    Mandatory Security Verification for Local Demo Mode:
-    1. Production mode + X-DLBC-Demo: 1 -> 401 Unauthorized
-    2. Development mode without ENABLE_LOCAL_DEMO + X-DLBC-Demo: 1 -> 401 Unauthorized
-    3. Development mode with ENABLE_LOCAL_DEMO=true but no Demo header -> 401 Unauthorized
-    4. Development mode with ENABLE_LOCAL_DEMO=true + X-DLBC-Demo: 1 -> 200 OK with legacy_default_account
-    5. Demo mode cannot execute authoritative onboarding mutations -> 400 Bad Request
-    6. Demo mode does not insert fake users or memberships into the database
+    Mandatory Security Verification for Demo Mode (Public & Development):
+    1. Unauthenticated request without header -> 401 Unauthorized
+    2. Valid demo request with X-DLBC-Demo: 1 -> 200 OK with legacy_default_account
+    3. Demo mode does not insert fake users or memberships into the database
+    4. Destructive Protection: Demo mode cannot delete sessions -> 403 Forbidden
+    5. Destructive Protection: Demo mode cannot delete recordings -> 403 Forbidden
+    6. Destructive Protection: Demo mode cannot create/modify/delete programmes -> 403 Forbidden
+    7. Destructive Protection: Demo mode cannot modify account settings -> 403 Forbidden
+    8. Destructive Protection: Demo mode cannot mutate authoritative onboarding -> 400 Bad Request
     """
-    import os
-    orig_app_env = os.environ.get("APP_ENV")
-    orig_local_demo = os.environ.get("ENABLE_LOCAL_DEMO")
-
     transport = ASGITransport(app=app)
-    try:
-        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-            # 1. PRODUCTION MODE + X-DLBC-Demo: 1 -> MUST BE 401
-            os.environ["APP_ENV"] = "production"
-            os.environ["ENABLE_LOCAL_DEMO"] = "true"  # Even if mistakenly set, production mode must strictly block it
-            res_prod = await client.get("/api/auth/me", headers={"X-DLBC-Demo": "1"})
-            assert res_prod.status_code == 401, f"Production mode allowed demo header: {res_prod.status_code}"
-            res_prod_sess = await client.get("/api/sessions", headers={"X-DLBC-Demo": "1"})
-            assert res_prod_sess.status_code == 401, f"Production mode allowed demo sessions: {res_prod_sess.status_code}"
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        # 1. Unauthenticated request without header -> MUST BE 401
+        res_no_header = await client.get("/api/auth/me")
+        assert res_no_header.status_code == 401
+        res_no_header_sess = await client.get("/api/sessions")
+        assert res_no_header_sess.status_code == 401
 
-            # 2. DEVELOPMENT WITHOUT ENABLE_LOCAL_DEMO -> MUST BE 401
-            os.environ["APP_ENV"] = "development"
-            os.environ.pop("ENABLE_LOCAL_DEMO", None)
-            res_dev_no_flag = await client.get("/api/auth/me", headers={"X-DLBC-Demo": "1"})
-            assert res_dev_no_flag.status_code == 401, f"Development without flag allowed demo: {res_dev_no_flag.status_code}"
+        # 2. Public demo request with X-DLBC-Demo: 1 -> 200 OK bound to legacy_default_account
+        res_demo_me = await client.get("/api/auth/me", headers={"X-DLBC-Demo": "1"})
+        assert res_demo_me.status_code == 200, f"Demo request failed: {res_demo_me.status_code}"
+        demo_data = res_demo_me.json()
+        assert demo_data["account_id"] == "legacy_default_account"
+        assert demo_data["is_demo"] is True
+        assert demo_data["is_onboarded"] is True
 
-            os.environ["ENABLE_LOCAL_DEMO"] = "false"
-            res_dev_false_flag = await client.get("/api/auth/me", headers={"X-DLBC-Demo": "1"})
-            assert res_dev_false_flag.status_code == 401, f"Development with false flag allowed demo: {res_dev_false_flag.status_code}"
+        res_demo_sess = await client.get("/api/sessions", headers={"X-DLBC-Demo": "1"})
+        assert res_demo_sess.status_code == 200, f"Demo sessions request rejected: {res_demo_sess.status_code}"
 
-            # 3. DEVELOPMENT WITH ENABLE_LOCAL_DEMO=true BUT NO DEMO HEADER -> MUST BE 401
-            os.environ["APP_ENV"] = "development"
-            os.environ["ENABLE_LOCAL_DEMO"] = "true"
-            res_no_header = await client.get("/api/auth/me")
-            assert res_no_header.status_code == 401, f"Dev with flag allowed unauthenticated request without header: {res_no_header.status_code}"
-            res_no_header_sess = await client.get("/api/sessions")
-            assert res_no_header_sess.status_code == 401, f"Dev with flag allowed session list without header: {res_no_header_sess.status_code}"
+        # 3. DEMO MODE DOES NOT INSERT FAKE USERS OR MEMBERSHIPS IN DATABASE
+        async with get_db_connection() as conn:
+            cur = await conn.execute("SELECT COUNT(*) as cnt FROM app_users WHERE id = 'demo_user'")
+            row = await cur.fetchone()
+            assert row["cnt"] == 0, "demo_user was incorrectly persisted to app_users"
 
-            # 4. DEVELOPMENT WITH ENABLE_LOCAL_DEMO=true + EXPLICIT DEMO HEADER -> 200 OK
-            res_demo_me = await client.get("/api/auth/me", headers={"X-DLBC-Demo": "1"})
-            assert res_demo_me.status_code == 200, f"Valid demo request rejected: {res_demo_me.status_code}"
-            demo_data = res_demo_me.json()
-            assert demo_data["account_id"] == "legacy_default_account"
-            assert demo_data["is_demo"] is True
-            assert demo_data["is_onboarded"] is True
+        # 4. DESTRUCTIVE GUARD: DEMO CANNOT DELETE SESSIONS -> 403 FORBIDDEN
+        res_del_sess = await client.delete("/api/sessions/any_session_id", headers={"X-DLBC-Demo": "1"})
+        assert res_del_sess.status_code == 403, f"Demo session deletion was not blocked: {res_del_sess.status_code}"
+        assert "Session deletion is disabled in Demo mode" in res_del_sess.json()["detail"]
 
-            res_demo_sess = await client.get("/api/sessions", headers={"X-DLBC-Demo": "1"})
-            assert res_demo_sess.status_code == 200, f"Demo sessions request rejected: {res_demo_sess.status_code}"
+        # 5. DESTRUCTIVE GUARD: DEMO CANNOT DELETE RECORDINGS -> 403 FORBIDDEN
+        res_del_rec = await client.delete("/api/audio/recordings/any_rec_id", headers={"X-DLBC-Demo": "1"})
+        assert res_del_rec.status_code == 403, f"Demo recording deletion was not blocked: {res_del_rec.status_code}"
+        assert "Recording deletion is disabled in Demo mode" in res_del_rec.json()["detail"]
 
-            # 5. DEMO MODE CANNOT MUTATE AUTHORITATIVE ONBOARDING IN DATABASE -> 400
-            res_demo_mut = await client.post(
-                "/api/auth/onboarding/complete",
-                headers={"X-DLBC-Demo": "1"},
-                json={"sector": "Youth", "church_state": "Abia", "terminal_level": "state_headquarters"},
-            )
-            assert res_demo_mut.status_code == 400, f"Demo mutation was not blocked: {res_demo_mut.status_code}"
-            assert "Demo mode cannot modify authoritative onboarding" in res_demo_mut.json()["detail"]
+        # 6. DESTRUCTIVE GUARD: DEMO CANNOT CREATE OR MODIFY PROGRAMMES -> 403 FORBIDDEN
+        res_create_prog = await client.post(
+            "/api/programmes",
+            headers={"X-DLBC-Demo": "1"},
+            json={"name": "Demo Test Programme"},
+        )
+        assert res_create_prog.status_code == 403, f"Demo programme creation was not blocked: {res_create_prog.status_code}"
+        assert "Modifying programmes is disabled in Demo mode" in res_create_prog.json()["detail"]
 
-            # 6. DEMO MODE DOES NOT INSERT FAKE USERS OR MEMBERSHIPS IN DATABASE
-            async with get_db_connection() as conn:
-                cur = await conn.execute("SELECT COUNT(*) as cnt FROM app_users WHERE id = 'demo_local_user'")
-                row = await cur.fetchone()
-                assert row["cnt"] == 0, "demo_local_user was incorrectly persisted to app_users"
-    finally:
-        # Restore environment variables
-        if orig_app_env is not None:
-            os.environ["APP_ENV"] = orig_app_env
-        else:
-            os.environ.pop("APP_ENV", None)
-        if orig_local_demo is not None:
-            os.environ["ENABLE_LOCAL_DEMO"] = orig_local_demo
-        else:
-            os.environ.pop("ENABLE_LOCAL_DEMO", None)
+        res_update_prog = await client.put(
+            "/api/programmes/prog_1",
+            headers={"X-DLBC-Demo": "1"},
+            json={"name": "New Name"},
+        )
+        assert res_update_prog.status_code == 403, f"Demo programme update was not blocked: {res_update_prog.status_code}"
+
+        res_archive_prog = await client.delete("/api/programmes/prog_1", headers={"X-DLBC-Demo": "1"})
+        assert res_archive_prog.status_code == 403, f"Demo programme archive was not blocked: {res_archive_prog.status_code}"
+
+        # 7. DESTRUCTIVE GUARD: DEMO CANNOT MODIFY ACCOUNT SETTINGS -> 403 FORBIDDEN
+        res_set_setting = await client.post(
+            "/api/auth/account-settings",
+            headers={"X-DLBC-Demo": "1"},
+            json={"key": "instruction", "value": "demo change"},
+        )
+        assert res_set_setting.status_code == 403, f"Demo account setting change was not blocked: {res_set_setting.status_code}"
+        assert "Modifying account settings is disabled in Demo mode" in res_set_setting.json()["detail"]
+
+        # 8. DESTRUCTIVE GUARD: DEMO CANNOT MUTATE AUTHORITATIVE ONBOARDING -> 400 BAD REQUEST
+        res_demo_mut = await client.post(
+            "/api/auth/onboarding/complete",
+            headers={"X-DLBC-Demo": "1"},
+            json={"sector": "Youth", "church_state": "Abia", "terminal_level": "state_headquarters"},
+        )
+        assert res_demo_mut.status_code == 400, f"Demo onboarding mutation was not blocked: {res_demo_mut.status_code}"
+        assert "Demo mode cannot modify authoritative onboarding" in res_demo_mut.json()["detail"]
+
 

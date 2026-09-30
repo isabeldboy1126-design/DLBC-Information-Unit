@@ -57,7 +57,7 @@ export function AuthProvider({ children }) {
           if (res.ok) {
             const data = await res.json()
             if (isMounted) {
-              setUser({ id: 'demo_local_user', email: 'demo@local.dlbc', is_demo: true })
+              setUser({ id: 'demo_user', email: 'demo@dlbc.org', is_demo: true })
               setAccount(data.account || {
                 id: 'legacy_default_account',
                 account_name: 'DLBC Information Unit (Demo)',
@@ -333,7 +333,7 @@ export function AuthProvider({ children }) {
     setAuthNotice(null)
     setDemoMode(true)
     setDemoModeState(true)
-    const demoUser = { id: 'demo_local_user', email: 'demo@local.dlbc', is_demo: true }
+    const demoUser = { id: 'demo_user', email: 'demo@dlbc.org', is_demo: true }
     setUser(demoUser)
     try {
       const res = await authFetch('/api/auth/me')

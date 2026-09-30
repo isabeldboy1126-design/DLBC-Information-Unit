@@ -15872,7 +15872,12 @@ textarea.form-control {
   color: #F5F7FA !important;
 }
 
-/* YouTube & New Live Session Cards */
+/* YouTube Session Dark Theme Contrast Rules */
+[data-theme="dark"] .youtube-session-title,
+.dark .youtube-session-title {
+  color: #F5F7FA !important;
+}
+
 [data-theme="dark"] .youtube-input-card,
 [data-theme="dark"] .youtube-meta-card,
 [data-theme="dark"] .new-session-card,
@@ -15883,6 +15888,206 @@ textarea.form-control {
 .dark .start-recording-card {
   background: #12161D !important;
   border: 1px solid #263142 !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .youtube-url-group .form-label,
+[data-theme="dark"] .youtube-url-form .form-label,
+.dark .youtube-url-group .form-label,
+.dark .youtube-url-form .form-label {
+  color: #A7B0BE !important;
+}
+
+[data-theme="dark"] .youtube-url-field,
+.dark .youtube-url-field {
+  background: #101419 !important;
+  border: 1px solid #263142 !important;
+  color: #F5F7FA !important;
+}
+
+[data-theme="dark"] .youtube-url-field::placeholder,
+.dark .youtube-url-field::placeholder {
+  color: #7E8998 !important;
+}
+
+[data-theme="dark"] .youtube-url-field:focus,
+.dark .youtube-url-field:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25) !important;
+}
+
+[data-theme="dark"] .youtube-analyze-btn--disabled,
+.dark .youtube-analyze-btn--disabled {
+  background: #171C24 !important;
+  border: 1px solid #263142 !important;
+  color: #7E8998 !important;
+  opacity: 1 !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .youtube-analyze-btn--enabled,
+.dark .youtube-analyze-btn--enabled {
+  background: #1d68f2 !important;
+  border: 1px solid #1d68f2 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(29, 104, 242, 0.25) !important;
+  cursor: pointer !important;
+}
+
+[data-theme="dark"] .youtube-analyze-btn--enabled:hover,
+.dark .youtube-analyze-btn--enabled:hover {
+  background: #1558d6 !important;
+  border-color: #1558d6 !important;
+  box-shadow: 0 4px 14px rgba(29, 104, 242, 0.35) !important;
+}
+
+[data-theme="dark"] .youtube-video-title,
+.dark .youtube-video-title {
+  color: #F5F7FA !important;
+}
+
+[data-theme="dark"] .youtube-channel-name,
+.dark .youtube-channel-name {
+  color: #A7B0BE !important;
+}
+
+[data-theme="dark"] .youtube-channel-name strong,
+.dark .youtube-channel-name strong {
+  color: #F5F7FA !important;
+}
+
+[data-theme="dark"] .youtube-thumbnail-img,
+.dark .youtube-thumbnail-img {
+  border-color: #263142 !important;
+}
+
+[data-theme="dark"] .youtube-thumbnail-placeholder,
+.dark .youtube-thumbnail-placeholder {
+  background: #101419 !important;
+  border: 1px solid #263142 !important;
+  color: #7E8998 !important;
+}
+
+[data-theme="dark"] .youtube-details-container .form-label,
+.dark .youtube-details-container .form-label {
+  color: #A7B0BE !important;
+}
+
+[data-theme="dark"] .youtube-details-container .form-control,
+.dark .youtube-details-container .form-control {
+  background: #101419 !important;
+  border: 1px solid #263142 !important;
+  color: #F5F7FA !important;
+}
+
+[data-theme="dark"] .youtube-details-container .form-control:focus,
+.dark .youtube-details-container .form-control:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25) !important;
+}
+
+[data-theme="dark"] .youtube-progress-section,
+.dark .youtube-progress-section {
+  border-top-color: #263142 !important;
+}
+
+[data-theme="dark"] .youtube-progress-title,
+.dark .youtube-progress-title {
+  color: #F5F7FA !important;
+}
+
+[data-theme="dark"] .youtube-progress-sub,
+.dark .youtube-progress-sub {
+  color: #A7B0BE !important;
+}
+
+[data-theme="dark"] .youtube-progress-pct,
+.dark .youtube-progress-pct {
+  color: #F5F7FA !important;
+}
+
+[data-theme="dark"] .youtube-live-monitor-section,
+.dark .youtube-live-monitor-section {
+  border-top-color: #263142 !important;
+}
+
+[data-theme="dark"] .youtube-live-monitor-header,
+.dark .youtube-live-monitor-header {
+  background: #171C24 !important;
+  border-color: #263142 !important;
+}
+
+[data-theme="dark"] .live-timer-text,
+.dark .live-timer-text {
+  color: #F5F7FA !important;
+}
+
+[data-theme="dark"] .live-azure-badge,
+.dark .live-azure-badge {
+  color: #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.15) !important;
+}
+
+[data-theme="dark"] .youtube-live-ticker-box,
+.dark .youtube-live-ticker-box {
+  background: #171C24 !important;
+  border-color: #263142 !important;
+}
+
+[data-theme="dark"] .ticker-label,
+.dark .ticker-label {
+  color: #7E8998 !important;
+}
+
+[data-theme="dark"] .ticker-text,
+.dark .ticker-text {
+  color: #F5F7FA !important;
+}
+
+[data-theme="dark"] .youtube-live-segments-scroll,
+.dark .youtube-live-segments-scroll {
+  background: #101419 !important;
+  border-color: #263142 !important;
+}
+
+[data-theme="dark"] .youtube-live-segment-row .seg-time,
+.dark .youtube-live-segment-row .seg-time {
+  color: #7E8998 !important;
+}
+
+[data-theme="dark"] .youtube-live-segment-row .seg-text,
+.dark .youtube-live-segment-row .seg-text {
+  color: #F5F7FA !important;
+}
+
+[data-theme="dark"] .youtube-error-banner,
+.dark .youtube-error-banner {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #fca5a5 !important;
+}
+
+[data-theme="dark"] .tab-capture-hero-box,
+.dark .tab-capture-hero-box {
+  background: rgba(30, 27, 75, 0.4) !important;
+  border-color: #3730a3 !important;
+}
+
+[data-theme="dark"] .tab-hero-title,
+.dark .tab-hero-title {
+  color: #e0e7ff !important;
+}
+
+[data-theme="dark"] .tab-hero-desc,
+.dark .tab-hero-desc {
+  color: #a5b4fc !important;
+}
+
+[data-theme="dark"] .youtube-bot-fallback-box,
+.dark .youtube-bot-fallback-box {
+  background: rgba(180, 83, 9, 0.12) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
 }
 
 [data-theme="dark"] .recorded-option-card,

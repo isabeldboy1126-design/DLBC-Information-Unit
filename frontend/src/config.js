@@ -89,13 +89,8 @@ export function getAuthToken() {
 }
 
 export function isLocalDemoAllowed() {
-  if (typeof window === 'undefined') return false
-  const isDev = Boolean(import.meta.env.DEV)
-  const envFlag = (import.meta.env.VITE_ENABLE_LOCAL_DEMO || '').toLowerCase()
-  const flagEnabled = envFlag === 'true' || envFlag === '1'
-  const hostname = (window.location.hostname || '').toLowerCase()
-  const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
-  return isDev && flagEnabled && isLocalHost
+  // Public Demo mode is available in both local development and production
+  return true
 }
 
 let _isDemoActive = false
