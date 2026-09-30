@@ -39,27 +39,14 @@ export function SettingsView({ onBack }) {
           if (instData && (instData.instruction || instData.unified_instructions)) {
             loadedInstruction = instData.instruction || instData.unified_instructions
           }
+        } else {
+          console.warn(`Primary instruction endpoint returned HTTP ${instRes.status}`)
         }
       } catch (e) {
         console.warn('Primary instruction fetch failed:', e)
       }
 
-      // Fallback 1: /api/report-processing/standards/active
-      if (!loadedInstruction) {
-        try {
-          const stdRes = await fetch(getApiUrl('/api/report-processing/standards/active'))
-          if (stdRes.ok) {
-            const stdData = await stdRes.json()
-            if (stdData && (stdData.instruction || stdData.unified_instructions)) {
-              loadedInstruction = stdData.instruction || stdData.unified_instructions
-            }
-          }
-        } catch (e) {
-          console.warn('Standards fallback fetch failed:', e)
-        }
-      }
-
-      // Fallback 2: /api/report-processing/settings
+      // Fallback 1: /api/report-processing/settings
       if (!loadedInstruction) {
         try {
           const setRes2 = await fetch(getApiUrl('/api/report-processing/settings'))
@@ -74,19 +61,57 @@ export function SettingsView({ onBack }) {
         }
       }
 
+      // Fallback 2: /api/report-processing/standards/active
+      if (!loadedInstruction) {
+        try {
+          const stdRes = await fetch(getApiUrl('/api/report-processing/standards/active'))
+          if (stdRes.ok) {
+            const stdData = await stdRes.json()
+            if (stdData && (stdData.instruction || stdData.unified_instructions)) {
+              loadedInstruction = stdData.instruction || stdData.unified_instructions
+            } else if (stdData && (stdData.reporter_extraction_instructions || stdData.anti_slop_rules)) {
+              // Intelligently synthesize from standard sections if un-migrated standard record returned
+              const parts = []
+              if (stdData.anti_slop_rules) {
+                parts.push(`ANTI-AI-SLOP RULES & TONE MANDATE (ZERO TOLERANCE):\n${stdData.anti_slop_rules.trim()}`)
+              }
+              if (stdData.reporter_extraction_instructions) {
+                parts.push(`1. REPORTER EXTRACTION STANDARDS:\n${stdData.reporter_extraction_instructions.trim()}`)
+              }
+              if (stdData.editorial_selection_instructions) {
+                parts.push(`2. EDITORIAL SELECTION STANDARDS (KEEP / COMPRESS / OMIT):\n${stdData.editorial_selection_instructions.trim()}`)
+              }
+              if (stdData.writing_instructions) {
+                parts.push(`3. INFORMATION UNIT WRITING STANDARDS:\n${stdData.writing_instructions.trim()}`)
+              }
+              if (stdData.proofreading_instructions) {
+                parts.push(`4. PROOFREADING & VALIDATION STANDARDS:\n${stdData.proofreading_instructions.trim()}`)
+              }
+              if (parts.length > 0) {
+                loadedInstruction = parts.join('\n\n')
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Standards fallback fetch failed:', e)
+        }
+      }
+
       if (loadedInstruction && typeof loadedInstruction === 'string' && loadedInstruction.trim()) {
         setInstruction(loadedInstruction)
         setInstructionLoaded(true)
+        setError(null)
       } else {
         setInstructionLoaded(false)
-        setError(`Unable to load AI Processing Instructions from backend (${API_BASE_URL}). Please verify backend connectivity.`)
+        console.error(`Unable to load AI Processing Instructions from backend (${API_BASE_URL}).`)
+        setError('AI Processing Instructions could not be loaded.')
       }
 
       setLastRefreshed(new Date().toLocaleTimeString())
     } catch (err) {
-      console.error('Error fetching settings:', err)
+      console.error(`Error connecting to backend server at ${API_BASE_URL}:`, err)
       setInstructionLoaded(false)
-      setError(`Could not connect to backend server at ${API_BASE_URL}.`)
+      setError('AI Processing Instructions could not be loaded.')
     } finally {
       setIsLoading(false)
     }
@@ -98,7 +123,7 @@ export function SettingsView({ onBack }) {
 
   const handleSaveInstructions = async () => {
     if (!instructionLoaded) {
-      setError('Cannot save: instructions failed to load from server. Please refresh first.')
+      setError('Cannot save: instructions could not be loaded. Please click Retry first.')
       return
     }
     const trimmed = instruction.trim()
@@ -125,10 +150,12 @@ export function SettingsView({ onBack }) {
         setTimeout(() => setFeedback(null), 5000)
       } else {
         const err = await res.json().catch(() => ({}))
-        setError(`Failed to save instructions: ${err.detail || 'Unknown error'}`)
+        console.error('Server rejected instruction save:', err)
+        setError(`Failed to save instructions: ${err.detail || 'Server rejected request'}`)
       }
     } catch (err) {
-      setError(`Error saving instructions: ${err.message}`)
+      console.error('Network error saving instructions:', err)
+      setError('AI Processing Instructions could not be saved.')
     } finally {
       setIsSaving(false)
     }
@@ -174,8 +201,18 @@ export function SettingsView({ onBack }) {
       </div>
 
       {error && (
-        <div className="settings-alert settings-alert--error">
-          <span>⚠️ {error}</span>
+        <div className="settings-alert settings-alert--error" role="alert">
+          <div className="settings-alert-content">
+            <span className="settings-alert-text">⚠️ {error}</span>
+            <button
+              type="button"
+              className="btn btn--small btn--outline btn-retry-load"
+              onClick={fetchSettingsData}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Retrying...' : 'Retry'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -224,25 +261,15 @@ export function SettingsView({ onBack }) {
               )}
             </div>
 
-            {isLoading && !instructionLoaded ? (
-              <div className="instructions-loading-skeleton" aria-hidden="true">
-                <div className="skeleton-line" style={{ width: '60%' }}></div>
-                <div className="skeleton-line" style={{ width: '85%' }}></div>
-                <div className="skeleton-line" style={{ width: '75%' }}></div>
-                <div className="skeleton-line" style={{ width: '90%' }}></div>
-                <div className="skeleton-line" style={{ width: '50%' }}></div>
-              </div>
-            ) : (
-              <textarea
-                id="unified-instructions-textarea"
-                className="unified-instructions-textarea"
-                rows={16}
-                value={instruction}
-                onChange={(e) => setInstruction(e.target.value)}
-                placeholder="Enter AI processing instructions..."
-                disabled={isLoading || !instructionLoaded}
-              />
-            )}
+            <textarea
+              id="unified-instructions-textarea"
+              className="unified-instructions-textarea"
+              rows={16}
+              value={instruction}
+              onChange={(e) => setInstruction(e.target.value)}
+              placeholder={isLoading ? '' : 'AI Processing Instructions will appear here when loaded...'}
+              disabled={isLoading || !instructionLoaded}
+            />
 
             <div className="unified-instructions-actions">
               <button
@@ -257,6 +284,7 @@ export function SettingsView({ onBack }) {
           </div>
         </div>
       </div>
+
 
       {/* SECTION 2: App Programmes */}
       <ProgrammesSettingsSection />
