@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getApiUrl } from '../config'
+import { getApiUrl, authFetch, isDemoModeActive, getAuthToken } from '../config'
 
 const API_BASE = getApiUrl('/api/sessions')
 
@@ -19,7 +19,7 @@ export function useSessions() {
     setIsLoading(true)
     setRefreshWarning(null)
     try {
-      const res = await fetch(API_BASE)
+      const res = await authFetch(API_BASE)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setSessions(data.sessions || [])
@@ -47,7 +47,7 @@ export function useSessions() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}`)
+      const res = await authFetch(`${API_BASE}/${encodeURIComponent(sessionId)}`)
       if (!res.ok) throw new Error(`Failed to load session details: ${res.status}`)
       const data = await res.json()
       setActiveSession(data.session)
@@ -66,7 +66,7 @@ export function useSessions() {
     if (!newTitle || !newTitle.strip?.() && !newTitle.trim()) return false
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}`, {
+      const res = await authFetch(`${API_BASE}/${encodeURIComponent(sessionId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: newTitle.trim() }),
@@ -90,7 +90,7 @@ export function useSessions() {
   const updateSessionDetails = useCallback(async (sessionId, { programme, sessionTitle, minister }) => {
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}`, {
+      const res = await authFetch(`${API_BASE}/${encodeURIComponent(sessionId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -119,7 +119,7 @@ export function useSessions() {
   const deleteSession = useCallback(async (sessionId) => {
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}`, {
+      const res = await authFetch(`${API_BASE}/${encodeURIComponent(sessionId)}`, {
         method: 'DELETE',
       })
       if (!res.ok) throw new Error(`Failed to delete session: ${res.status}`)
@@ -152,7 +152,7 @@ export function useSessions() {
   const startVerification = useCallback(async (sessionId) => {
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}/verification/start`, {
+      const res = await authFetch(`${API_BASE}/${encodeURIComponent(sessionId)}/verification/start`, {
         method: 'POST',
       })
       if (!res.ok) {
@@ -179,7 +179,7 @@ export function useSessions() {
   const loadVerificationState = useCallback(async (sessionId) => {
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}/verification`)
+      const res = await authFetch(`${API_BASE}/${encodeURIComponent(sessionId)}/verification`)
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
         throw new Error(errData.detail || `Failed to load verification: ${res.status}`)
@@ -198,7 +198,7 @@ export function useSessions() {
   const resolveVerificationItem = useCallback(async (sessionId, segmentIndex, payload) => {
     setError(null)
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${API_BASE}/${encodeURIComponent(sessionId)}/verification/${segmentIndex}`,
         {
           method: 'PATCH',
@@ -224,7 +224,7 @@ export function useSessions() {
   const addVerificationItem = useCallback(async (sessionId, segmentIndex) => {
     setError(null)
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${API_BASE}/${encodeURIComponent(sessionId)}/verification/add-item`,
         {
           method: 'POST',
@@ -250,7 +250,7 @@ export function useSessions() {
   const finaliseVerification = useCallback(async (sessionId) => {
     setError(null)
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${API_BASE}/${encodeURIComponent(sessionId)}/verification/finalise`,
         { method: 'POST' }
       )
@@ -287,7 +287,7 @@ export function useSessions() {
   const confirmAllRemaining = useCallback(async (sessionId) => {
     setError(null)
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${API_BASE}/${encodeURIComponent(sessionId)}/verification/confirm-all-remaining`,
         { method: 'POST' }
       )
@@ -318,7 +318,7 @@ export function useSessions() {
   const confirmRawAsVerified = useCallback(async (sessionId) => {
     setError(null)
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${API_BASE}/${encodeURIComponent(sessionId)}/verification/confirm-raw`,
         { method: 'POST' }
       )
@@ -353,7 +353,9 @@ export function useSessions() {
   }, [])
 
   useEffect(() => {
-    fetchSessions()
+    if (isDemoModeActive() || getAuthToken()) {
+      fetchSessions()
+    }
   }, [fetchSessions])
 
   return {

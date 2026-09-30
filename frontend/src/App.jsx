@@ -131,6 +131,12 @@ function App() {
   // Phase 4: Persistent Church Sessions Hook
   const sessionsHook = useSessions()
 
+  useEffect(() => {
+    if (user && isOnboarded) {
+      sessionsHook.fetchSessions()
+    }
+  }, [user, isOnboarded])
+
   // Global background processing job tracker (Verification & Report Processing)
   const { activeProcess, clearActiveProcess } = useActiveProcess()
 
