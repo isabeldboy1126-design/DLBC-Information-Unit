@@ -6,9 +6,11 @@ retrieving session detail, editing session titles, and explicit deletion.
 """
 
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from app.auth.auth_context import AuthContext
+from app.auth.dependencies import require_account
 from app.database.session_repo import session_repo
 
 router = APIRouter(prefix="/api/sessions", tags=["Sessions"])
@@ -31,14 +33,14 @@ class UpdateSessionRequest(BaseModel):
 
 
 @router.get("")
-async def list_sessions():
-    """Lists all saved sessions ordered by creation date descending."""
-    sessions = await session_repo.list_sessions()
+async def list_sessions(auth: AuthContext = Depends(require_account)):
+    """Lists all saved sessions for the authenticated account ordered by creation date descending."""
+    sessions = await session_repo.list_sessions(account_id=auth.account_id)
     return {"sessions": sessions}
 
 
 @router.post("")
-async def create_session(payload: CreateSessionRequest):
+async def create_session(payload: CreateSessionRequest, auth: AuthContext = Depends(require_account)):
     """Explicitly initializes a new session prior to recording."""
     import time, uuid
     session_id = f"session_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
@@ -49,21 +51,22 @@ async def create_session(payload: CreateSessionRequest):
         language_code=payload.language_code or "en-NG",
         raw_text=payload.raw_text,
         verified_text=payload.verified_text,
+        account_id=auth.account_id,
     )
     return {"session": session}
 
 
 @router.get("/{session_id}")
-async def get_session(session_id: str):
+async def get_session(session_id: str, auth: AuthContext = Depends(require_account)):
     """Retrieves full details of a session with linked audio, transcript segments, and flags."""
-    session = await session_repo.get_session(session_id)
+    session = await session_repo.get_session(session_id, account_id=auth.account_id)
     if not session:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
     return {"session": session}
 
 
 @router.patch("/{session_id}")
-async def update_session(session_id: str, payload: UpdateSessionRequest):
+async def update_session(session_id: str, payload: UpdateSessionRequest, auth: AuthContext = Depends(require_account)):
     """Updates session metadata (programme, session title, minister) or title cleanly."""
     if (
         not payload.title
@@ -81,6 +84,7 @@ async def update_session(session_id: str, payload: UpdateSessionRequest):
         programme=payload.programme,
         session_name=sess_title,
         minister=payload.minister,
+        account_id=auth.account_id,
     )
     if not session:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
@@ -88,9 +92,9 @@ async def update_session(session_id: str, payload: UpdateSessionRequest):
 
 
 @router.delete("/{session_id}")
-async def delete_session(session_id: str):
+async def delete_session(session_id: str, auth: AuthContext = Depends(require_account)):
     """Deletes a session record upon explicit user confirmation."""
-    success = await session_repo.delete_session(session_id)
+    success = await session_repo.delete_session(session_id, account_id=auth.account_id)
     if not success:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
     return {"status": "deleted", "session_id": session_id}

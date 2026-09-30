@@ -17,32 +17,47 @@ from app.main import app
 from app.database.session_repo import session_repo
 
 
+async def get_test_auth():
+    auth_header = {"Authorization": "Bearer test_token_verify_router:verify_router@dlbc.org"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        onboard_res = await client.post(
+            "/api/auth/onboarding/complete",
+            headers=auth_header,
+            json={"sector": "Adult", "church_state": "Lagos", "terminal_level": "state_headquarters"},
+        )
+        account_id = onboard_res.json()["account"]["id"]
+    return auth_header, account_id
+
+
 @pytest.mark.asyncio
 async def test_ai_status_endpoint_not_found():
+    auth_header, _ = await get_test_auth()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/api/sessions/nonexistent-session-id/verification/ai-status")
+        resp = await client.get("/api/sessions/nonexistent-session-id/verification/ai-status", headers=auth_header)
         assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_ai_status_and_verification_state_endpoints():
+    auth_header, account_id = await get_test_auth()
     session_id = f"test_vstat_{uuid.uuid4().hex[:8]}"
     await session_repo.create_session(
         session_id=session_id,
         title="AI Status Test",
         status="completed",
+        account_id=account_id,
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # Check initial ai-status
-        resp = await client.get(f"/api/sessions/{session_id}/verification/ai-status")
+        resp = await client.get(f"/api/sessions/{session_id}/verification/ai-status", headers=auth_header)
         assert resp.status_code == 200
         data = resp.json()
         assert data["session_id"] == session_id
         assert data["ai_verification_status"] == "idle"
 
         # Check full verification endpoint includes ai fields
-        v_resp = await client.get(f"/api/sessions/{session_id}/verification")
+        v_resp = await client.get(f"/api/sessions/{session_id}/verification", headers=auth_header)
         assert v_resp.status_code == 200
         v_data = v_resp.json()
         assert v_data["ai_verification_status"] == "idle"
@@ -51,18 +66,21 @@ async def test_ai_status_and_verification_state_endpoints():
 
 @pytest.mark.asyncio
 async def test_trigger_ai_verification_not_found():
+    auth_header, _ = await get_test_auth()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post("/api/sessions/nonexistent-session/verification/verify-ai")
+        resp = await client.post("/api/sessions/nonexistent-session/verification/verify-ai", headers=auth_header)
         assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_trigger_ai_verification_synchronous():
+    auth_header, account_id = await get_test_auth()
     session_id = f"test_vsync_{uuid.uuid4().hex[:8]}"
     await session_repo.create_session(
         session_id=session_id,
         title="AI Verify Sync Test",
         status="completed",
+        account_id=account_id,
     )
 
     mock_result = {
@@ -76,6 +94,7 @@ async def test_trigger_ai_verification_synchronous():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.post(
                 f"/api/sessions/{session_id}/verification/verify-ai",
+                headers=auth_header,
                 json={"auto_resolve": True, "background": False},
             )
             assert resp.status_code == 200
@@ -87,11 +106,13 @@ async def test_trigger_ai_verification_synchronous():
 
 @pytest.mark.asyncio
 async def test_trigger_ai_verification_background_and_in_progress_guard():
+    auth_header, account_id = await get_test_auth()
     session_id = f"test_vbg_{uuid.uuid4().hex[:8]}"
     await session_repo.create_session(
         session_id=session_id,
         title="AI Verify BG Test",
         status="completed",
+        account_id=account_id,
     )
 
     with patch("app.verification.router.verification_decision_engine.verify_session", new_callable=AsyncMock) as mock_verify:
@@ -100,6 +121,7 @@ async def test_trigger_ai_verification_background_and_in_progress_guard():
             # 1. Start verification in background
             resp = await client.post(
                 f"/api/sessions/{session_id}/verification/verify-ai",
+                headers=auth_header,
                 json={"auto_resolve": True, "background": True},
             )
             assert resp.status_code == 200
@@ -110,6 +132,7 @@ async def test_trigger_ai_verification_background_and_in_progress_guard():
             # 2. Try to start again while in compiling: should return in-progress guard
             resp2 = await client.post(
                 f"/api/sessions/{session_id}/verification/verify-ai",
+                headers=auth_header,
                 json={"auto_resolve": True, "background": True},
             )
             assert resp2.status_code == 200
@@ -128,11 +151,13 @@ async def test_a_manual_verification_route_variations():
     5. POST /api/sessions/verify-ai (with session_id in JSON payload)
     6. GET /api/sessions/{session_id}/verification/verify-ai (GET status fallback alias)
     """
+    auth_header, account_id = await get_test_auth()
     session_id = f"test_route_var_{uuid.uuid4().hex[:8]}"
     await session_repo.create_session(
         session_id=session_id,
         title="Route Variations Test",
         status="completed",
+        account_id=account_id,
     )
 
     mock_result = {
@@ -147,6 +172,7 @@ async def test_a_manual_verification_route_variations():
             # 1. Canonical route
             r1 = await client.post(
                 f"/api/sessions/{session_id}/verification/verify-ai",
+                headers=auth_header,
                 json={"auto_resolve": True, "background": False},
             )
             assert r1.status_code == 200, f"Failed on canonical route: {r1.status_code} {r1.text}"
@@ -155,6 +181,7 @@ async def test_a_manual_verification_route_variations():
             # 2. Canonical route with trailing slash
             r2 = await client.post(
                 f"/api/sessions/{session_id}/verification/verify-ai/",
+                headers=auth_header,
                 json={"auto_resolve": True, "background": False},
             )
             assert r2.status_code == 200, f"Failed on trailing slash: {r2.status_code} {r2.text}"
@@ -163,6 +190,7 @@ async def test_a_manual_verification_route_variations():
             # 3. Direct verify-ai subpath
             r3 = await client.post(
                 f"/api/sessions/{session_id}/verify-ai",
+                headers=auth_header,
                 json={"auto_resolve": True, "background": False},
             )
             assert r3.status_code == 200, f"Failed on direct subpath: {r3.status_code} {r3.text}"
@@ -171,6 +199,7 @@ async def test_a_manual_verification_route_variations():
             # 4. Direct verify-ai subpath with trailing slash
             r4 = await client.post(
                 f"/api/sessions/{session_id}/verify-ai/",
+                headers=auth_header,
                 json={"auto_resolve": True, "background": False},
             )
             assert r4.status_code == 200, f"Failed on subpath trailing slash: {r4.status_code} {r4.text}"
@@ -179,13 +208,14 @@ async def test_a_manual_verification_route_variations():
             # 5. Direct /verify-ai endpoint with session_id in body
             r5 = await client.post(
                 "/api/sessions/verify-ai",
+                headers=auth_header,
                 json={"session_id": session_id, "auto_resolve": True, "background": False},
             )
             assert r5.status_code == 200, f"Failed on body endpoint: {r5.status_code} {r5.text}"
             assert r5.json()["status"] == "completed_verified"
 
             # 6. GET status fallback alias (prevents 405 on accidental GET / redirect)
-            r6 = await client.get(f"/api/sessions/{session_id}/verification/verify-ai")
+            r6 = await client.get(f"/api/sessions/{session_id}/verification/verify-ai", headers=auth_header)
             assert r6.status_code == 200, f"Failed on GET fallback alias: {r6.status_code} {r6.text}"
             assert "ai_verification_status" in r6.json()
 

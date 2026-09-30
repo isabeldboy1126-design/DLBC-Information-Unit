@@ -341,6 +341,57 @@ CREATE TABLE IF NOT EXISTS deleted_session_tombstones (
     deleted_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_tombstones_deleted ON deleted_session_tombstones(deleted_at DESC);
+
+-- Authentication & Church Account Model
+CREATE TABLE IF NOT EXISTS app_users (
+    id TEXT PRIMARY KEY,
+    supabase_user_id TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_login_at TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_app_users_supabase ON app_users(supabase_user_id);
+CREATE INDEX IF NOT EXISTS idx_app_users_email ON app_users(email);
+
+CREATE TABLE IF NOT EXISTS accounts (
+    id TEXT PRIMARY KEY,
+    sector TEXT NOT NULL,
+    custom_sector TEXT,
+    church_state TEXT NOT NULL,
+    region TEXT,
+    old_group TEXT,
+    group_name TEXT,
+    district TEXT,
+    terminal_level TEXT NOT NULL,
+    onboarding_step INTEGER NOT NULL DEFAULT 1,
+    onboarding_completed_at TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_accounts_status ON accounts(status);
+
+CREATE TABLE IF NOT EXISTS account_memberships (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'owner',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES app_users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_memberships_account ON account_memberships(account_id);
+CREATE INDEX IF NOT EXISTS idx_memberships_user ON account_memberships(user_id);
+
+CREATE TABLE IF NOT EXISTS account_settings (
+    account_id TEXT NOT NULL,
+    setting_key TEXT NOT NULL,
+    setting_value TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY(account_id, setting_key)
+);
 """
 
 # Phase 5 migration: add verification columns to sessions table.
@@ -401,6 +452,12 @@ STAGE7_REPORT_PROCESSING_COLUMNS = [
     "ALTER TABLE sessions ADD COLUMN report_processing_status TEXT DEFAULT 'not_started'",
     "ALTER TABLE sessions ADD COLUMN report_processing_run_id TEXT",
     "ALTER TABLE sessions ADD COLUMN report_processing_completed_at TEXT",
+]
+
+# Authentication & Account scoping migration: add account_id columns
+AUTH_MIGRATION_COLUMNS = [
+    "ALTER TABLE sessions ADD COLUMN account_id TEXT",
+    "ALTER TABLE programmes ADD COLUMN account_id TEXT",
 ]
 
 # ---------------------------------------------------------------------------
@@ -793,6 +850,71 @@ CREATE TABLE deleted_session_tombstones (
 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_tombstones_deleted')
 CREATE INDEX idx_tombstones_deleted ON deleted_session_tombstones(deleted_at DESC);
+
+-- Authentication & Church Account Model (MSSQL)
+IF OBJECT_ID(N'app_users', N'U') IS NULL
+CREATE TABLE app_users (
+    id VARCHAR(255) PRIMARY KEY,
+    supabase_user_id VARCHAR(255) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'active',
+    created_at VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(255) NOT NULL,
+    last_login_at VARCHAR(255)
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_app_users_supabase')
+CREATE UNIQUE INDEX idx_app_users_supabase ON app_users(supabase_user_id);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_app_users_email')
+CREATE INDEX idx_app_users_email ON app_users(email);
+
+IF OBJECT_ID(N'accounts', N'U') IS NULL
+CREATE TABLE accounts (
+    id VARCHAR(255) PRIMARY KEY,
+    sector VARCHAR(100) NOT NULL,
+    custom_sector NVARCHAR(255),
+    church_state NVARCHAR(255) NOT NULL,
+    region NVARCHAR(255),
+    old_group NVARCHAR(255),
+    group_name NVARCHAR(255),
+    district NVARCHAR(255),
+    terminal_level VARCHAR(100) NOT NULL,
+    onboarding_step INT NOT NULL DEFAULT 1,
+    onboarding_completed_at VARCHAR(255),
+    status VARCHAR(50) NOT NULL DEFAULT 'active',
+    created_at VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(255) NOT NULL
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_accounts_status')
+CREATE INDEX idx_accounts_status ON accounts(status);
+
+IF OBJECT_ID(N'account_memberships', N'U') IS NULL
+CREATE TABLE account_memberships (
+    id VARCHAR(255) PRIMARY KEY,
+    account_id VARCHAR(255) NOT NULL,
+    user_id VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL DEFAULT 'owner',
+    created_at VARCHAR(255) NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES app_users(id) ON DELETE CASCADE
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_memberships_account')
+CREATE INDEX idx_memberships_account ON account_memberships(account_id);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_memberships_user')
+CREATE INDEX idx_memberships_user ON account_memberships(user_id);
+
+IF OBJECT_ID(N'account_settings', N'U') IS NULL
+CREATE TABLE account_settings (
+    account_id VARCHAR(255) NOT NULL,
+    setting_key VARCHAR(100) NOT NULL,
+    setting_value NVARCHAR(MAX) NOT NULL,
+    updated_at VARCHAR(255) NOT NULL,
+    PRIMARY KEY(account_id, setting_key)
+);
 """
 
 PHASE5_MIGRATION_COLUMNS_MSSQL = [
@@ -846,6 +968,11 @@ STAGE7_REPORT_PROCESSING_COLUMNS_MSSQL = [
     "IF COL_LENGTH('sessions', 'report_processing_status') IS NULL ALTER TABLE sessions ADD report_processing_status VARCHAR(100) DEFAULT 'not_started'",
     "IF COL_LENGTH('sessions', 'report_processing_run_id') IS NULL ALTER TABLE sessions ADD report_processing_run_id VARCHAR(255)",
     "IF COL_LENGTH('sessions', 'report_processing_completed_at') IS NULL ALTER TABLE sessions ADD report_processing_completed_at VARCHAR(255)",
+]
+
+AUTH_MIGRATION_COLUMNS_MSSQL = [
+    "IF COL_LENGTH('sessions', 'account_id') IS NULL ALTER TABLE sessions ADD account_id VARCHAR(255)",
+    "IF COL_LENGTH('programmes', 'account_id') IS NULL ALTER TABLE programmes ADD account_id VARCHAR(255)",
 ]
 
 

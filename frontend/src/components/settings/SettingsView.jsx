@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { getApiUrl, API_BASE_URL } from '../../config'
+import { useAuth } from '../../context/AuthContext'
 import { ProgrammesSettingsSection } from './ProgrammesSettingsSection'
 
-export function SettingsView({ onBack }) {
+export function SettingsView({ onBack, onReplayOnboarding }) {
+  const { account } = useAuth()
   const [instruction, setInstruction] = useState('')
   const [instructionLoaded, setInstructionLoaded] = useState(false)
   const [autoProcessAfterVerification, setAutoProcessAfterVerification] = useState(false)
@@ -320,6 +322,39 @@ export function SettingsView({ onBack }) {
 
       {/* SECTION 2: App Programmes */}
       <ProgrammesSettingsSection />
+
+      {/* SECTION 3: Church Account & Hierarchy */}
+      <div className="settings-card">
+        <div className="settings-card-header">
+          <div className="settings-card-header-left">
+            <span className="settings-card-icon">🏛️</span>
+            <div>
+              <h2 className="settings-card-title">Church Account &amp; Hierarchy</h2>
+            </div>
+          </div>
+        </div>
+        <div className="settings-card-body">
+          <div className="settings-account-details-row">
+            <div className="settings-account-identity-box">
+              <span className="settings-account-name-label">Current Church Unit</span>
+              <span className="settings-account-name-val">{account?.account_name || 'DLBC Information Unit'}</span>
+              <span className="settings-account-sub-val">
+                {[account?.sector, account?.church_state, account?.terminal_level ? account.terminal_level.replace(/_/g, ' ') : null].filter(Boolean).join(' · ')}
+              </span>
+            </div>
+            {onReplayOnboarding && (
+              <button
+                type="button"
+                className="btn btn--secondary btn-replay-onboarding"
+                onClick={onReplayOnboarding}
+                id="btn-replay-onboarding"
+              >
+                Replay Onboarding
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

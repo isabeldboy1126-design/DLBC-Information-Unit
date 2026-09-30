@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useTheme } from '../../hooks/useTheme'
+import { useAuth } from '../../context/AuthContext'
 
 function SunIcon() {
   return (
@@ -95,11 +96,14 @@ export function AppShell({
   children,
 }) {
   const { isDark, toggleTheme } = useTheme()
+  const { user, account, signOut } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const mobileToggleRef = useRef(null)
   const sidebarRef = useRef(null)
   const notificationsRef = useRef(null)
+  const userMenuRef = useRef(null)
 
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
@@ -212,6 +216,30 @@ export function AppShell({
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [isNotificationsOpen])
+
+  useEffect(() => {
+    if (!isUserMenuOpen) return
+
+    const handleClickOutside = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setIsUserMenuOpen(false)
+      }
+    }
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsUserMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isUserMenuOpen])
 
   return (
     <div className="app-shell-container">
@@ -440,8 +468,41 @@ export function AppShell({
               )}
             </div>
 
-            <div className="topbar-avatar" title="Account">
-              <span>D</span>
+            <div className="topbar-user-anchor" ref={userMenuRef}>
+              <button
+                type="button"
+                className="topbar-avatar"
+                title="Account menu"
+                aria-label="Account menu"
+                aria-expanded={isUserMenuOpen}
+                onClick={() => setIsUserMenuOpen(prev => !prev)}
+                id="topbar-user-avatar-btn"
+              >
+                <span>{user?.email ? user.email.charAt(0).toUpperCase() : 'D'}</span>
+              </button>
+
+              {isUserMenuOpen && (
+                <div className="user-menu-popover" role="menu" aria-label="Account Menu">
+                  <div className="user-menu-header">
+                    <span className="user-menu-email">{user?.email || 'user@church.org'}</span>
+                    <span className="user-menu-unit">{account?.account_name || 'DLBC Information Unit'}</span>
+                    <span className="user-menu-role">{account?.role ? `${account.role.charAt(0).toUpperCase() + account.role.slice(1)}` : 'Owner'}</span>
+                  </div>
+                  <div className="user-menu-divider" />
+                  <button
+                    type="button"
+                    className="user-menu-item user-menu-item--danger"
+                    onClick={() => {
+                      setIsUserMenuOpen(false)
+                      signOut()
+                    }}
+                    id="btn-user-signout"
+                    role="menuitem"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>

@@ -64,9 +64,11 @@ def isolated_test_database():
 
     # Initialise the full schema (all migrations) on the temp database
     async def _init_schema():
+        from app.database.account_repo import account_repo
         from app.database.session_repo import session_repo
         # Ensure init_db() runs even if another import already set _initialized
         session_repo._initialized = False
+        await account_repo.init_db()
         await session_repo.init_db()
 
     asyncio.run(_init_schema())

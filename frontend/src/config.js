@@ -60,3 +60,54 @@ export function getWsUrl(path = '') {
   const cleanPath = path.startsWith('/') ? path : `/${path}`
   return `${WS_BASE_URL}${cleanPath}`
 }
+
+let _cachedToken = null
+
+export function setAuthToken(token) {
+  _cachedToken = token || null
+}
+
+export function getAuthToken() {
+  if (_cachedToken) return _cachedToken
+  try {
+    if (typeof localStorage !== 'undefined') {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+          const item = JSON.parse(localStorage.getItem(key))
+          if (item && item.access_token) {
+            _cachedToken = item.access_token
+            return item.access_token
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // Ignore JSON parse errors in localStorage
+  }
+  return null
+}
+
+export function getAuthHeaders(customHeaders = {}) {
+  const token = getAuthToken()
+  const headers = { ...customHeaders }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return headers
+}
+
+export async function authFetch(url, options = {}) {
+  const fullUrl = url.startsWith('http://') || url.startsWith('https://') ? url : getApiUrl(url)
+  const token = getAuthToken()
+  const headers = {
+    ...(options.headers || {}),
+  }
+  if (token && !headers['Authorization']) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return fetch(fullUrl, {
+    ...options,
+    headers,
+  })
+}

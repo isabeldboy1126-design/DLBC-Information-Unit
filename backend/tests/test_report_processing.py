@@ -458,8 +458,15 @@ def test_api_status_and_standards_endpoints():
 @pytest.mark.asyncio
 async def test_api_generate_and_download_docx():
     """Verifies Word (.docx) generation and download endpoints."""
+    auth_header = {"Authorization": "Bearer test_token_report_user:report_user@dlbc.org"}
+    onboard_res = client.post(
+        "/api/auth/onboarding/complete",
+        headers=auth_header,
+        json={"sector": "Adult", "church_state": "Lagos", "terminal_level": "state_headquarters"},
+    )
+    account_id = onboard_res.json()["account"]["id"]
     session_id = f"test_docx_sess_{int(time.time())}"
-    await session_repo.create_session(session_id=session_id, title="Faith and Victory Service")
+    await session_repo.create_session(session_id=session_id, title="Faith and Victory Service", account_id=account_id)
 
     # Finalize a report
     await final_report_repo.finalize_report(
@@ -473,7 +480,7 @@ async def test_api_generate_and_download_docx():
     )
 
     # 1. POST generate-docx
-    gen_res = client.post(f"/api/report-processing/generate-docx/{session_id}")
+    gen_res = client.post(f"/api/report-processing/generate-docx/{session_id}", headers=auth_header)
     assert gen_res.status_code == 200
     gen_data = gen_res.json()
     assert gen_data["status"] == "success"
@@ -481,7 +488,7 @@ async def test_api_generate_and_download_docx():
     assert gen_data["file_size"] > 1000
 
     # 2. GET download-docx
-    dl_res = client.get(f"/api/report-processing/download-docx/{session_id}")
+    dl_res = client.get(f"/api/report-processing/download-docx/{session_id}", headers=auth_header)
     assert dl_res.status_code == 200
     assert "application/vnd.openxmlformats-officedocument.wordprocessingml.document" in dl_res.headers["content-type"]
     assert len(dl_res.content) == gen_data["file_size"]
@@ -490,8 +497,15 @@ async def test_api_generate_and_download_docx():
 @pytest.mark.asyncio
 async def test_api_completed_reports_archive_filtering():
     """Verifies archive endpoint with search, minister, and programme filtering."""
+    auth_header = {"Authorization": "Bearer test_token_archive_user:archive_user@dlbc.org"}
+    onboard_res = client.post(
+        "/api/auth/onboarding/complete",
+        headers=auth_header,
+        json={"sector": "Adult", "church_state": "Lagos", "terminal_level": "state_headquarters"},
+    )
+    account_id = onboard_res.json()["account"]["id"]
     session_id = f"test_archive_{int(time.time())}"
-    await session_repo.create_session(session_id=session_id, title="National Youth Retreat")
+    await session_repo.create_session(session_id=session_id, title="National Youth Retreat", account_id=account_id)
 
     await final_report_repo.finalize_report(
         session_id=session_id,
@@ -504,19 +518,19 @@ async def test_api_completed_reports_archive_filtering():
     )
 
     # 1. Search filter
-    res1 = client.get("/api/report-processing/archive?search=Conformity")
+    res1 = client.get("/api/report-processing/archive?search=Conformity", headers=auth_header)
     assert res1.status_code == 200
     items1 = res1.json()
     assert any(i["session_id"] == session_id for i in items1)
 
     # 2. Programme filter
-    res2 = client.get("/api/report-processing/archive?programme=Youth Retreat")
+    res2 = client.get("/api/report-processing/archive?programme=Youth Retreat", headers=auth_header)
     assert res2.status_code == 200
     items2 = res2.json()
     assert any(i["session_id"] == session_id for i in items2)
 
     # 3. Unmatched filter returns empty for this session
-    res3 = client.get("/api/report-processing/archive?search=NonExistentSermonQueryXYZ")
+    res3 = client.get("/api/report-processing/archive?search=NonExistentSermonQueryXYZ", headers=auth_header)
     assert res3.status_code == 200
     items3 = res3.json()
     assert not any(i["session_id"] == session_id for i in items3)

@@ -19,10 +19,12 @@ import os
 import urllib.parse
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.auth.auth_context import AuthContext
+from app.auth.dependencies import require_account
 from app.config import STORAGE_DOCUMENTS_DIR
 from app.database.final_report_repo import final_report_repo
 from app.database.report_processing_repo import report_processing_repo
@@ -98,12 +100,12 @@ class HumanDiffCreateRequest(BaseModel):
 # -----------------------------------------------------------------------------
 
 @router.post("/start", response_model=Dict[str, Any])
-async def start_report_processing(payload: StartProcessingRequest):
+async def start_report_processing(payload: StartProcessingRequest, auth: AuthContext = Depends(require_account)):
     """
     Initiates the unified report processing pipeline.
     Idempotent: if a run is already in progress for this session, reconnects to that active run.
     """
-    session = await session_repo.get_session(payload.session_id)
+    session = await session_repo.get_session(payload.session_id, account_id=auth.account_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -118,11 +120,17 @@ async def start_report_processing(payload: StartProcessingRequest):
 
 
 @router.get("/status/{session_id}", response_model=Dict[str, Any])
-async def get_report_processing_status(session_id: str):
+async def get_report_processing_status(session_id: str, auth: AuthContext = Depends(require_account)):
     """
     Returns the active or latest report processing run for a given session.
     Used by the floating processing card and session detail views.
     """
+    session = await session_repo.get_session(session_id, account_id=auth.account_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
     run = await report_processing_engine.get_active_or_latest_run(session_id)
     if not run:
         return {"status": "not_started", "session_id": session_id}
@@ -173,12 +181,12 @@ async def get_report_processing_result(run_id: str):
 # -----------------------------------------------------------------------------
 
 @router.post("/generate-docx/{session_id}", response_model=Dict[str, Any])
-async def generate_report_docx(session_id: str):
+async def generate_report_docx(session_id: str, auth: AuthContext = Depends(require_account)):
     """
     Generates the publication-ready Word (.docx) document for the finalized report.
     Persists file metadata into the final_reports table.
     """
-    session = await session_repo.get_session(session_id)
+    session = await session_repo.get_session(session_id, account_id=auth.account_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -242,8 +250,15 @@ async def generate_report_docx(session_id: str):
 
 
 @router.get("/download-docx/{session_id}")
-async def download_report_docx(session_id: str):
+async def download_report_docx(session_id: str, auth: AuthContext = Depends(require_account)):
     """Serves the generated .docx file for immediate download."""
+    session = await session_repo.get_session(session_id, account_id=auth.account_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
     active_final = await final_report_repo.get_active_final_report(session_id)
     if not active_final:
         raise HTTPException(
@@ -301,6 +316,7 @@ async def list_completed_reports_archive(
     date_to: Optional[str] = Query(None, description="Filter date to (YYYY-MM-DD)"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    auth: AuthContext = Depends(require_account),
 ):
     """
     Returns the completed Information Unit reports archive with multi-attribute filtering.
@@ -315,6 +331,7 @@ async def list_completed_reports_archive(
         date_to=date_to,
         limit=limit,
         offset=offset,
+        account_id=auth.account_id,
     )
     return reports
 
@@ -376,8 +393,14 @@ async def create_approved_example(payload: ExampleCreateRequest):
 
 
 @router.post("/diffs", response_model=Dict[str, Any])
-async def record_human_diff(payload: HumanDiffCreateRequest):
+async def record_human_diff(payload: HumanDiffCreateRequest, auth: AuthContext = Depends(require_account)):
     """Records human corrections to an AI-generated report for reinforcement learning."""
+    session = await session_repo.get_session(payload.session_id, account_id=auth.account_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {payload.session_id} not found",
+        )
     return await report_processing_repo.save_human_diff(
         session_id=payload.session_id,
         original_ai_text=payload.original_ai_text,
@@ -456,12 +479,12 @@ async def save_unified_instruction(payload: InstructionUpdateRequest):
 
 
 @router.get("/prompt-preview/{session_id}", response_model=Dict[str, Any])
-async def preview_compiled_prompt(session_id: str):
+async def preview_compiled_prompt(session_id: str, auth: AuthContext = Depends(require_account)):
     """
     Returns the live compiled prompt that would be sent to Gemini for this session,
     including the active standards and few-shot exemplars interpolated.
     """
-    session = await session_repo.get_session(session_id)
+    session = await session_repo.get_session(session_id, account_id=auth.account_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

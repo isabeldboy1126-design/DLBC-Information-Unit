@@ -27,6 +27,12 @@ import { RawTranscriptViewer } from './components/transcription/RawTranscriptVie
 import { TranscriptsHistoryList } from './components/transcription/TranscriptsHistoryList'
 
 import { ErrorBanner } from './components/ErrorBanner'
+import { useAuth } from './context/AuthContext'
+import { LoginView } from './views/LoginView'
+import { CreateAccountView } from './views/CreateAccountView'
+import { ForgotPasswordView } from './views/ForgotPasswordView'
+import { ResetPasswordView } from './views/ResetPasswordView'
+import { OnboardingView } from './views/OnboardingView'
 import './App.css'
 
 function App() {
@@ -98,6 +104,22 @@ function App() {
   })
   const [sessionsStatusFilter, setSessionsStatusFilter] = useState('all')
   const scrollPositions = useRef({})
+
+  const { user, isOnboarded, loading: authLoading } = useAuth()
+  const [authScreen, setAuthScreen] = useState('login')
+  const [replayOnboardingActive, setReplayOnboardingActive] = useState(false)
+
+  useEffect(() => {
+    const handleHash = () => {
+      const h = typeof window !== 'undefined' ? window.location.hash || '' : ''
+      if (h.includes('reset-password')) {
+        setAuthScreen('reset')
+      }
+    }
+    handleHash()
+    window.addEventListener('hashchange', handleHash)
+    return () => window.removeEventListener('hashchange', handleHash)
+  }, [])
 
   // Phase 1 & 3: Audio Capture & Live Transcription Hook
   const liveAudio = useAudioCapture()
@@ -393,7 +415,53 @@ function App() {
     }
   }
 
-  const { title: currentScreenTitle, onBack: currentScreenBack } = getHeaderContext()
+  // Boot / Loading guard — prevents any flashing of private content
+  if (authLoading) {
+    return (
+      <div className="auth-boot-screen">
+        <div className="auth-boot-content">
+          <div className="auth-logo-badge auth-logo-badge--large">DLBC</div>
+          <div className="auth-boot-spinner" />
+          <p className="auth-boot-text">Loading DLBC Information Unit...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Unauthenticated routing
+  if (!user) {
+    if (authScreen === 'create') {
+      return <CreateAccountView onSwitchToLogin={() => setAuthScreen('login')} />
+    }
+    if (authScreen === 'forgot') {
+      return <ForgotPasswordView onSwitchToLogin={() => setAuthScreen('login')} />
+    }
+    if (authScreen === 'reset') {
+      return <ResetPasswordView onComplete={() => setAuthScreen('login')} />
+    }
+    return (
+      <LoginView
+        onSwitchToCreate={() => setAuthScreen('create')}
+        onSwitchToForgot={() => setAuthScreen('forgot')}
+      />
+    )
+  }
+
+  // First-time onboarding guard
+  if (!isOnboarded) {
+    return <OnboardingView isReplay={false} />
+  }
+
+  // Replay onboarding mode triggered from Settings
+  if (replayOnboardingActive) {
+    return (
+      <OnboardingView
+        isReplay={true}
+        onReplayCancel={() => setReplayOnboardingActive(false)}
+        onReplayComplete={() => setReplayOnboardingActive(false)}
+      />
+    )
+  }
 
   return (
     <AppShell
@@ -671,7 +739,7 @@ function App() {
         /* ----------------------------------------------------------- */
         /* VIEW 5: SETTINGS & STANDARDS                                */
         /* ----------------------------------------------------------- */
-        <SettingsView onBack={handleInAppBack} />
+        <SettingsView onBack={handleInAppBack} onReplayOnboarding={() => setReplayOnboardingActive(true)} />
       ) : currentView === 'youtube' ? (
         /* ----------------------------------------------------------- */
         /* VIEW 6: YOUTUBE INGESTION PIPELINE                          */

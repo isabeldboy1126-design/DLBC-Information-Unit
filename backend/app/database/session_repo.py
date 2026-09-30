@@ -120,12 +120,15 @@ class SessionRepository:
         metadata: Optional[Dict[str, Any]] = None,
         raw_text: Optional[str] = None,
         verified_text: Optional[str] = None,
+        account_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Creates a new durable Session record."""
+        """Creates a new durable Session record scoped to a church account."""
         await self.init_db()
         now = time.time()
         start_ts = start_time or now
         created_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(start_ts))
+
+        target_account_id = account_id or "legacy_default_account"
 
         # Default human-readable title if not provided
         if not title or not title.strip():
@@ -159,6 +162,7 @@ class SessionRepository:
             "is_interrupted": 0,
             "recovery_notes": None,
             "metadata_json": json.dumps(metadata or {}),
+            "account_id": target_account_id,
         }
 
         async with get_db_connection() as conn:
@@ -180,7 +184,8 @@ class SessionRepository:
                         raw_text = ?,
                         verified_text = ?,
                         verification_status = ?,
-                        metadata_json = ?
+                        metadata_json = ?,
+                        account_id = COALESCE(account_id, ?)
                     WHERE session_id = ?
                     """,
                     (
@@ -194,6 +199,7 @@ class SessionRepository:
                         session_record["verified_text"],
                         session_record["verification_status"],
                         session_record["metadata_json"],
+                        target_account_id,
                         session_id,
                     ),
                 )
@@ -206,14 +212,14 @@ class SessionRepository:
                         audio_file_path, audio_file_size, audio_duration_seconds,
                         transcript_id, raw_text, verified_text, verification_status,
                         provider_name, language_code, segment_count, flag_count,
-                        is_interrupted, recovery_notes, metadata_json
+                        is_interrupted, recovery_notes, metadata_json, account_id
                     ) VALUES (
                         ?, ?, ?, ?, ?,
                         ?, ?, ?, ?,
                         ?, ?, ?,
                         ?, ?, ?, ?,
                         ?, ?, ?, ?,
-                        ?, ?, ?
+                        ?, ?, ?, ?
                     )
                     """,
                     (
@@ -240,11 +246,12 @@ class SessionRepository:
                         session_record["is_interrupted"],
                         session_record["recovery_notes"],
                         session_record["metadata_json"],
+                        session_record["account_id"],
                     ),
                 )
             await conn.commit()
 
-        return await self.get_session(session_id)
+        return await self.get_session(session_id, account_id=target_account_id)
 
     async def append_segment(
         self,
@@ -469,17 +476,26 @@ class SessionRepository:
 
         return await self.get_session(session_id)
 
-    async def update_session_title(self, session_id: str, new_title: str) -> Optional[Dict[str, Any]]:
+    async def update_session_title(self, session_id: str, new_title: str, account_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Renames a session title cleanly without touching files or underlying IDs."""
         if not new_title or not new_title.strip():
             return None
+        existing = await self.get_session(session_id, account_id=account_id)
+        if not existing:
+            return None
         async with get_db_connection() as conn:
-            await conn.execute(
-                "UPDATE sessions SET title = ? WHERE session_id = ?",
-                (new_title.strip(), session_id),
-            )
+            if account_id:
+                await conn.execute(
+                    "UPDATE sessions SET title = ? WHERE session_id = ? AND account_id = ?",
+                    (new_title.strip(), session_id, account_id),
+                )
+            else:
+                await conn.execute(
+                    "UPDATE sessions SET title = ? WHERE session_id = ?",
+                    (new_title.strip(), session_id),
+                )
             await conn.commit()
-        return await self.get_session(session_id)
+        return await self.get_session(session_id, account_id=account_id)
 
     async def update_session_details(
         self,
@@ -488,9 +504,10 @@ class SessionRepository:
         programme: Optional[str] = None,
         session_name: Optional[str] = None,
         minister: Optional[str] = None,
+        account_id: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Updates session metadata (programme, session title, minister) and updates title cleanly."""
-        current = await self.get_session(session_id)
+        current = await self.get_session(session_id, account_id=account_id)
         if not current:
             return None
 
@@ -529,21 +546,32 @@ class SessionRepository:
             new_title = session_name.strip()
 
         async with get_db_connection() as conn:
-            await conn.execute(
-                "UPDATE sessions SET title = ?, metadata_json = ?, event_id = ? WHERE session_id = ?",
-                (new_title, json.dumps(meta), event_id, session_id),
-            )
+            if account_id:
+                await conn.execute(
+                    "UPDATE sessions SET title = ?, metadata_json = ?, event_id = ? WHERE session_id = ? AND account_id = ?",
+                    (new_title, json.dumps(meta), event_id, session_id, account_id),
+                )
+            else:
+                await conn.execute(
+                    "UPDATE sessions SET title = ?, metadata_json = ?, event_id = ? WHERE session_id = ?",
+                    (new_title, json.dumps(meta), event_id, session_id),
+                )
             await conn.commit()
 
-        return await self.get_session(session_id)
+        return await self.get_session(session_id, account_id=account_id)
 
-    async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    async def get_session(self, session_id: str, account_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Retrieves a full session with linked audio, transcript segments, and flags."""
         await self.init_db()
         async with get_db_connection() as conn:
-            cursor = await conn.execute(
-                "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
-            )
+            if account_id:
+                cursor = await conn.execute(
+                    "SELECT * FROM sessions WHERE session_id = ? AND account_id = ?", (session_id, account_id)
+                )
+            else:
+                cursor = await conn.execute(
+                    "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
+                )
             row = await cursor.fetchone()
             if not row:
                 return None
@@ -597,34 +625,60 @@ class SessionRepository:
 
             return session
 
-    async def list_sessions(self) -> List[Dict[str, Any]]:
-        """Lists all sessions ordered by creation date descending."""
+    async def list_sessions(self, account_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Lists all sessions for an account ordered by creation date descending."""
         await self.init_db()
         async with get_db_connection() as conn:
-            cursor = await conn.execute(
-                """
-                SELECT session_id, title, date_created, duration_seconds, status,
-                       recording_id, audio_filename, audio_file_size, audio_duration_seconds,
-                       transcript_id, provider_name, language_code, segment_count,
-                       flag_count, is_interrupted, recovery_notes,
-                       verification_status, verification_items_total,
-                       verification_items_resolved, verified_at,
-                       reporting_status, reporting_completed_at,
-                       reporting_standard_version,
-                       editing_status, editing_completed_at,
-                       editing_standard_version,
-                       proofreading_status, proofreading_completed_at,
-                       proofreading_standard_version, accepted_proofread_revision_id,
-                       final_report_status, final_report_completed_at, final_report_id,
-                       ai_verification_status, ai_verification_completed_at, event_id
-                FROM sessions
-                ORDER BY date_created DESC
-                """
-            )
+            if account_id:
+                cursor = await conn.execute(
+                    """
+                    SELECT session_id, title, date_created, duration_seconds, status,
+                           recording_id, audio_filename, audio_file_size, audio_duration_seconds,
+                           transcript_id, provider_name, language_code, segment_count,
+                           flag_count, is_interrupted, recovery_notes,
+                           verification_status, verification_items_total,
+                           verification_items_resolved, verified_at,
+                           reporting_status, reporting_completed_at,
+                           reporting_standard_version,
+                           editing_status, editing_completed_at,
+                           editing_standard_version,
+                           proofreading_status, proofreading_completed_at,
+                           proofreading_standard_version, accepted_proofread_revision_id,
+                           final_report_status, final_report_completed_at, final_report_id,
+                           ai_verification_status, ai_verification_completed_at, event_id,
+                           account_id
+                    FROM sessions
+                    WHERE account_id = ?
+                    ORDER BY date_created DESC
+                    """,
+                    (account_id,),
+                )
+            else:
+                cursor = await conn.execute(
+                    """
+                    SELECT session_id, title, date_created, duration_seconds, status,
+                           recording_id, audio_filename, audio_file_size, audio_duration_seconds,
+                           transcript_id, provider_name, language_code, segment_count,
+                           flag_count, is_interrupted, recovery_notes,
+                           verification_status, verification_items_total,
+                           verification_items_resolved, verified_at,
+                           reporting_status, reporting_completed_at,
+                           reporting_standard_version,
+                           editing_status, editing_completed_at,
+                           editing_standard_version,
+                           proofreading_status, proofreading_completed_at,
+                           proofreading_standard_version, accepted_proofread_revision_id,
+                           final_report_status, final_report_completed_at, final_report_id,
+                           ai_verification_status, ai_verification_completed_at, event_id,
+                           account_id
+                    FROM sessions
+                    ORDER BY date_created DESC
+                    """
+                )
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
 
-    async def delete_session(self, session_id: str) -> bool:
+    async def delete_session(self, session_id: str, account_id: Optional[str] = None) -> bool:
         """
         Authoritative hard deletion:
         1. Query session details to obtain recording_id, transcript_id, audio_filename, docx_file_path.
@@ -646,13 +700,20 @@ class SessionRepository:
         deleted_rows = 0
 
         async with get_db_connection() as conn:
-            cursor = await conn.execute(
-                "SELECT session_id, recording_id, transcript_id, audio_filename FROM sessions WHERE session_id = ?",
-                (session_id,),
-            )
+            if account_id:
+                cursor = await conn.execute(
+                    "SELECT session_id, recording_id, transcript_id, audio_filename FROM sessions WHERE session_id = ? AND account_id = ?",
+                    (session_id, account_id),
+                )
+            else:
+                cursor = await conn.execute(
+                    "SELECT session_id, recording_id, transcript_id, audio_filename FROM sessions WHERE session_id = ?",
+                    (session_id,),
+                )
             row = await cursor.fetchone()
-            if row:
-                sess_dict = dict(row)
+            if not row:
+                return False
+            sess_dict = dict(row)
 
             try:
                 cur_doc = await conn.execute(
