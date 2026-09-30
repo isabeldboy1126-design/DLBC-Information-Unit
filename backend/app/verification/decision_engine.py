@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from google.genai import types
@@ -740,7 +741,23 @@ Return a JSON array of decision objects matching this schema:
             temperature=0.1,
         )
 
+        logger.info(
+            "[%s] Starting Call 2 (reasoning) across %d chunk(s) of max size %d (%d items total, preferred model: %s)",
+            session_id, len(reasoning_chunks), REASONING_CHUNK_SIZE, len(audio_items), target_model
+        )
+
         for chunk_idx, chunk_items in enumerate(reasoning_chunks):
+            chunk_num = chunk_idx + 1
+            total_chunks = len(reasoning_chunks)
+            chunk_size = len(chunk_items)
+            chunk_start_time = time.time()
+            fallback_model_used = None
+
+            logger.info(
+                "[%s] Processing reasoning chunk %d/%d (%d items, preferred model: %s)...",
+                session_id, chunk_num, total_chunks, chunk_size, target_model
+            )
+
             chunk_packet: List[Dict[str, Any]] = []
             for it in chunk_items:
                 s_idx = it["segment_index"]
@@ -811,59 +828,77 @@ Return a JSON array of decision objects matching this schema:
                     resp_model_name = resp.model_name
                 except GeminiUnavailableError as e:
                     if target_model != "gemini-2.5-flash":
+                        fallback_model = "gemini-2.5-flash"
                         logger.warning(
-                            "[%s] %s unavailable (%s); attempting resilient fallback to gemini-2.5-flash for chunk %d/%d",
-                            session_id, target_model, e, chunk_idx + 1, len(reasoning_chunks)
+                            "[%s] %s unavailable (%s); attempting resilient fallback to %s for chunk %d/%d (%d items)",
+                            session_id, target_model, e, fallback_model, chunk_num, total_chunks, chunk_size
                         )
                         try:
                             resp = await self.gateway.generate(
                                 operation="ai_verification_reasoning",
-                                model="gemini-2.5-flash",
+                                model=fallback_model,
                                 contents=reasoning_prompt,
                                 config=config,
                             )
                             raw_reasoning_text = resp.text
                             resp_model_name = resp.model_name
+                            fallback_model_used = fallback_model
                         except GeminiUnavailableError as e2:
-                            logger.error("[%s] Both primary and fallback models unavailable on chunk %d: %s", session_id, chunk_idx + 1, e2)
+                            logger.error("[%s] Both primary and fallback models unavailable on chunk %d: %s", session_id, chunk_num, e2)
                             gateway_unavailable = True
                             raw_reasoning_text = None
                         except Exception as e2:
-                            logger.error("[%s] Fallback model failed on chunk %d: %s", session_id, chunk_idx + 1, e2)
+                            logger.error("[%s] Fallback model failed on chunk %d: %s", session_id, chunk_num, e2)
                             is_unavail = "503" in str(e2) or "429" in str(e2) or "quota" in str(e2).lower()
                             gateway_unavailable = is_unavail
                             raw_reasoning_text = None
                     else:
-                        logger.error("[%s] Gemini gateway unavailable on chunk %d: %s", session_id, chunk_idx + 1, e)
+                        logger.error("[%s] Gemini gateway unavailable on chunk %d: %s", session_id, chunk_num, e)
                         gateway_unavailable = True
                         raw_reasoning_text = None
                 except Exception as e:
-                    logger.error("[%s] AI batch reasoning error on chunk %d: %s", session_id, chunk_idx + 1, e)
+                    logger.error("[%s] AI batch reasoning error on chunk %d: %s", session_id, chunk_num, e)
                     is_unavail = "503" in str(e) or "429" in str(e) or "quota" in str(e).lower()
                     if is_unavail and target_model != "gemini-2.5-flash":
+                        fallback_model = "gemini-2.5-flash"
                         logger.warning(
-                            "[%s] Transient capacity failure (%s); attempting fallback to gemini-2.5-flash for chunk %d/%d",
-                            session_id, e, chunk_idx + 1, len(reasoning_chunks)
+                            "[%s] Transient capacity failure (%s); attempting fallback to %s for chunk %d/%d (%d items)",
+                            session_id, e, fallback_model, chunk_num, total_chunks, chunk_size
                         )
                         try:
                             resp = await self.gateway.generate(
                                 operation="ai_verification_reasoning",
-                                model="gemini-2.5-flash",
+                                model=fallback_model,
                                 contents=reasoning_prompt,
                                 config=config,
                             )
                             raw_reasoning_text = resp.text
                             resp_model_name = resp.model_name
+                            fallback_model_used = fallback_model
                         except Exception as e2:
-                            logger.error("[%s] Fallback model error on chunk %d: %s", session_id, chunk_idx + 1, e2)
+                            logger.error("[%s] Fallback model error on chunk %d: %s", session_id, chunk_num, e2)
                             gateway_unavailable = True
                             raw_reasoning_text = None
                     else:
                         gateway_unavailable = is_unavail
                         raw_reasoning_text = None
 
+            chunk_duration = time.time() - chunk_start_time
             # Validate decisions adhering to the 7 validation rules
             chunk_decisions = validate_batch_decisions(raw_reasoning_text, chunk_packet)
+            missing_items = [it["clean_id"] for it in chunk_items if it["clean_id"] not in chunk_decisions]
+            if missing_items:
+                logger.warning(
+                    "[%s] Chunk %d/%d validation/mapping failure: %d/%d items missing from decisions: %s",
+                    session_id, chunk_num, total_chunks, len(missing_items), chunk_size, missing_items
+                )
+
+            logger.info(
+                "[%s] Chunk %d/%d completed in %.2fs (model: %s, fallback_used: %s): %d returned, %d missing/unresolved",
+                session_id, chunk_num, total_chunks, chunk_duration, resp_model_name,
+                fallback_model_used or "none", len(chunk_decisions), len(missing_items)
+            )
+
             for d in chunk_decisions.values():
                 d["model_name"] = resp_model_name
                 d["gateway_unavailable"] = gateway_unavailable
@@ -957,6 +992,11 @@ Return a JSON array of decision objects matching this schema:
                 logging.getLogger("app.verification.decision_engine").warning(f"Auto-process trigger error: {e}")
         else:
             final_status = "completed_needs_review"
+
+        logger.info(
+            "[%s] AI verification complete: status=%s, verified=%d, corrected=%d, remaining_unresolved=%d",
+            session_id, final_status, verified_count, corrected_count, remaining_pending
+        )
 
         await session_repo.set_ai_verification_status(session_id, final_status, summary=summary)
 
