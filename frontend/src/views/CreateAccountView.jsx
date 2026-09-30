@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react'
+import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 
 export function CreateAccountView({ onSwitchToLogin }) {
@@ -54,9 +54,7 @@ export function CreateAccountView({ onSwitchToLogin }) {
           <div className="auth-header">
             <div className="auth-brand">
               <div className="auth-logo-badge">DLBC</div>
-              <div className="auth-brand-text">
-                <span className="auth-brand-title">Information Unit</span>
-              </div>
+              <div className="auth-brand-title">Information Unit</div>
             </div>
             <h1 className="auth-title">Check your email</h1>
           </div>
@@ -85,10 +83,7 @@ export function CreateAccountView({ onSwitchToLogin }) {
         <div className="auth-header">
           <div className="auth-brand">
             <div className="auth-logo-badge">DLBC</div>
-            <div className="auth-brand-text">
-              <span className="auth-brand-title">Information Unit</span>
-              <span className="auth-brand-sub">Report & Session Workspace</span>
-            </div>
+            <div className="auth-brand-title">Information Unit</div>
           </div>
           <h1 className="auth-title">Create church account</h1>
         </div>

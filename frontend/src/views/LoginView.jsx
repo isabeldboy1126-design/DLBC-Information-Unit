@@ -38,10 +38,7 @@ export function LoginView({ onSwitchToCreate, onSwitchToForgot }) {
         <div className="auth-header">
           <div className="auth-brand">
             <div className="auth-logo-badge">DLBC</div>
-            <div className="auth-brand-text">
-              <span className="auth-brand-title">Information Unit</span>
-              <span className="auth-brand-sub">Report & Session Workspace</span>
-            </div>
+            <div className="auth-brand-title">Information Unit</div>
           </div>
           <h1 className="auth-title">Sign in to your account</h1>
         </div>
@@ -78,21 +75,9 @@ export function LoginView({ onSwitchToCreate, onSwitchToForgot }) {
           </div>
 
           <div className="auth-field">
-            <div className="auth-field-header">
-              <label htmlFor="auth-login-password" className="auth-label">
-                Password
-              </label>
-              {onSwitchToForgot && (
-                <button
-                  type="button"
-                  className="auth-link-btn"
-                  onClick={onSwitchToForgot}
-                  disabled={isSubmitting}
-                >
-                  Forgot password?
-                </button>
-              )}
-            </div>
+            <label htmlFor="auth-login-password" className="auth-label">
+              Password
+            </label>
             <div className="auth-input-wrapper">
               <input
                 id="auth-login-password"
@@ -126,6 +111,19 @@ export function LoginView({ onSwitchToCreate, onSwitchToForgot }) {
                 )}
               </button>
             </div>
+            {onSwitchToForgot && (
+              <div className="auth-forgot-row">
+                <button
+                  type="button"
+                  className="auth-link-btn"
+                  onClick={onSwitchToForgot}
+                  disabled={isSubmitting}
+                  id="link-forgot-password"
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
           </div>
 
           <button

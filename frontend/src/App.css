@@ -17222,7 +17222,15 @@ textarea.form-control {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
+}
+
+.auth-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
 }
 
 .auth-logo-badge {
@@ -17237,7 +17245,13 @@ textarea.form-control {
   padding: 0.35rem 0.75rem;
   font-size: 0.85rem;
   box-shadow: 0 2px 8px rgba(29, 104, 242, 0.35);
-  margin-bottom: 0.5rem;
+}
+
+.auth-brand-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #A7B0BE;
+  letter-spacing: 0.01em;
 }
 
 .auth-logo-badge--large {
@@ -17388,25 +17402,68 @@ textarea.form-control {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  font-size: 0.85rem;
+  gap: 0.35rem;
+  font-size: 0.875rem;
   color: #A7B0BE;
+  margin-top: 0.5rem;
+  text-align: center;
 }
 
+.auth-footer-text {
+  color: #A7B0BE;
+  font-size: 0.875rem;
+}
+
+.auth-forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.35rem;
+}
+
+/* Inline text link buttons across all auth screens */
+.auth-footer-link,
 .auth-link-btn {
-  background: none;
-  border: none;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  outline: none;
+  box-shadow: none !important;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   color: #60a5fa;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
-  padding: 0;
+  padding: 0 !important;
+  margin: 0;
+  display: inline;
+  vertical-align: baseline;
   text-decoration: underline;
   text-underline-offset: 3px;
+  font-family: inherit;
+  line-height: inherit;
+  transition: color 0.15s ease, opacity 0.15s ease;
 }
 
-.auth-link-btn:hover {
+.auth-footer-link:hover:not(:disabled),
+.auth-link-btn:hover:not(:disabled) {
   color: #93c5fd;
+  text-decoration: underline;
+}
+
+.auth-footer-link:focus-visible,
+.auth-link-btn:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.auth-footer-link:disabled,
+.auth-link-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 
 .auth-footer-divider {
@@ -18017,8 +18074,14 @@ textarea.form-control {
 }
 
 .auth-demo-link {
-  background: transparent;
-  border: none;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  outline: none;
+  box-shadow: none !important;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   padding: 3px 8px;
   font-size: 12px;
   color: #64748B;

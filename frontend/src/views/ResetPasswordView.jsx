@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react'
+import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 
 export function ResetPasswordView({ onComplete }) {
@@ -46,9 +46,7 @@ export function ResetPasswordView({ onComplete }) {
         <div className="auth-header">
           <div className="auth-brand">
             <div className="auth-logo-badge">DLBC</div>
-            <div className="auth-brand-text">
-              <span className="auth-brand-title">Information Unit</span>
-            </div>
+            <div className="auth-brand-title">Information Unit</div>
           </div>
           <h1 className="auth-title">Set new password</h1>
         </div>
