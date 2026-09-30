@@ -34,6 +34,7 @@ async def get_auth_context(
             account=legacy_acct,
             is_onboarded=True,
             role="owner",
+            display_name="Demo User",
             is_demo=True,
         )
 
@@ -84,7 +85,8 @@ async def get_auth_context(
         account_id=account["id"] if account else None,
         account=account,
         is_onboarded=is_onboarded,
-        role=role or "owner"
+        role=role or "owner",
+        display_name=user.get("display_name"),
     )
 
 

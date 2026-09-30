@@ -33,6 +33,7 @@ import { CreateAccountView } from './views/CreateAccountView'
 import { ForgotPasswordView } from './views/ForgotPasswordView'
 import { ResetPasswordView } from './views/ResetPasswordView'
 import { OnboardingView } from './views/OnboardingView'
+import { ProfileView } from './components/profile/ProfileView'
 import './App.css'
 
 function App() {
@@ -68,7 +69,7 @@ function App() {
     if (clean === 'verification_workspace') {
       return { view: 'sessions', sessionId: null, stage: 'verification', subAction: null }
     }
-    if (['new_live', 'transcribe', 'youtube', 'settings', 'live_recording', 'reports', 'events'].includes(clean)) {
+    if (['new_live', 'transcribe', 'youtube', 'settings', 'live_recording', 'reports', 'events', 'profile'].includes(clean)) {
       return { view: clean, sessionId: null, stage: null, subAction: null }
     }
     return { view: 'dashboard', sessionId: null, stage: null, subAction: null }
@@ -246,7 +247,7 @@ function App() {
         }
       } else if (clean.startsWith('completion/')) {
         navigateTo('sessions')
-      } else if (['sessions', 'new_live', 'transcribe', 'youtube', 'settings'].includes(clean)) {
+      } else if (['sessions', 'new_live', 'transcribe', 'youtube', 'settings', 'profile'].includes(clean)) {
         navigateTo('dashboard')
       } else {
         navigateTo('dashboard')
@@ -374,6 +375,12 @@ function App() {
     if (currentView === 'youtube') {
       return {
         title: 'YouTube Session',
+        onBack: handleInAppBack,
+      }
+    }
+    if (currentView === 'profile') {
+      return {
+        title: 'Account Profile',
         onBack: handleInAppBack,
       }
     }
@@ -803,6 +810,14 @@ function App() {
           onStartLiveSession={handleStartLiveRecording}
           onOpenTranscribe={() => navigateTo('transcribe')}
           initialFilter="all"
+        />
+      ) : currentView === 'profile' ? (
+        /* ----------------------------------------------------------- */
+        /* VIEW 9: USER PROFILE & CHURCH IDENTITY                      */
+        /* ----------------------------------------------------------- */
+        <ProfileView
+          onBack={handleInAppBack}
+          onEditChurchDetails={() => setReplayOnboardingActive(true)}
         />
       ) : null}
       </ErrorBoundary>

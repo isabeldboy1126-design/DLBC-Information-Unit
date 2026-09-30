@@ -30,6 +30,13 @@ export function AuthProvider({ children }) {
         const data = await res.json()
         setAccount(data.account || null)
         setIsOnboarded(Boolean(data.is_onboarded))
+        if (data.user) {
+          setUser(prev => ({
+            ...(prev || {}),
+            ...data.user,
+            display_name: data.user.display_name || data.display_name || (prev?.display_name ?? null),
+          }))
+        }
         return data
       } else if (res.status === 401) {
         // Token invalid / expired
@@ -57,7 +64,7 @@ export function AuthProvider({ children }) {
           if (res.ok) {
             const data = await res.json()
             if (isMounted) {
-              setUser({ id: 'demo_user', email: 'demo@dlbc.org', is_demo: true })
+              setUser({ id: 'demo_user', email: 'demo@dlbc.org', display_name: 'Demo User', is_demo: true })
               setAccount(data.account || {
                 id: 'legacy_default_account',
                 account_name: 'DLBC Information Unit (Demo)',
@@ -308,6 +315,21 @@ export function AuthProvider({ children }) {
 
   // Atomic finish for Replay Onboarding
   const replayOnboardingFinish = async (payload) => {
+    if (demoMode) {
+      setAccount(prev => ({
+        ...(prev || {}),
+        ...payload,
+        account_name: `${payload.church_state || 'DLBC'} Information Unit`,
+      }))
+      return {
+        status: 'updated',
+        account: {
+          ...(account || {}),
+          ...payload,
+          account_name: `${payload.church_state || 'DLBC'} Information Unit`,
+        },
+      }
+    }
     try {
       const res = await authFetch('/api/auth/onboarding/replay-finish', {
         method: 'POST',
@@ -326,6 +348,33 @@ export function AuthProvider({ children }) {
     }
   }
 
+  // Update personal display name
+  const updateDisplayName = async (displayName) => {
+    setError(null)
+    const cleanName = displayName ? displayName.trim() : ''
+    if (demoMode) {
+      setUser(prev => ({ ...(prev || {}), display_name: cleanName }))
+      return { success: true, display_name: cleanName }
+    }
+    try {
+      const res = await authFetch('/api/auth/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_name: cleanName }),
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || 'Failed to update profile name')
+      }
+      const data = await res.json()
+      setUser(prev => ({ ...(prev || {}), display_name: data.display_name }))
+      return data
+    } catch (e) {
+      console.error('Error updating display name:', e)
+      throw e
+    }
+  }
+
   // Enter local demo mode
   const enterDemoMode = async () => {
     if (!isLocalDemoAllowed()) return false
@@ -333,7 +382,7 @@ export function AuthProvider({ children }) {
     setAuthNotice(null)
     setDemoMode(true)
     setDemoModeState(true)
-    const demoUser = { id: 'demo_user', email: 'demo@dlbc.org', is_demo: true }
+    const demoUser = { id: 'demo_user', email: 'demo@dlbc.org', display_name: 'Demo User', is_demo: true }
     setUser(demoUser)
     try {
       const res = await authFetch('/api/auth/me')
@@ -394,6 +443,7 @@ export function AuthProvider({ children }) {
     exitDemoMode,
     resetPassword,
     updatePassword,
+    updateDisplayName,
     refreshAccount: () => session?.access_token ? fetchAccountProfile(session.access_token) : null,
     saveOnboardingProgress,
     completeOnboarding,
