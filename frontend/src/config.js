@@ -6,8 +6,27 @@
  * - VITE_WS_BASE_URL: Base WS(S) URL for backend WebSockets (default: derived from API_BASE_URL or 'ws://localhost:8000')
  */
 
-const rawApiUrl = (import.meta.env.VITE_API_BASE_URL || '').trim()
-export const API_BASE_URL = rawApiUrl.replace(/\/+$/, '') || 'http://localhost:8000'
+const PRODUCTION_API_URL = 'https://dlbc-information-unit-api.icycliff-cc807421.southafricanorth.azurecontainerapps.io'
+
+const resolveApiBaseUrl = () => {
+  const envUrl = (import.meta.env.VITE_API_BASE_URL || '').trim()
+  if (envUrl) {
+    return envUrl.replace(/\/+$/, '')
+  }
+
+  // Automatic production fallback for client-side environments not on localhost
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = (window.location.hostname || '').toLowerCase()
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '::1'
+    if (!isLocal && hostname) {
+      return PRODUCTION_API_URL
+    }
+  }
+
+  return 'http://localhost:8000'
+}
+
+export const API_BASE_URL = resolveApiBaseUrl()
 
 // Derive default WebSocket base URL from API_BASE_URL if not explicitly specified
 const deriveWsUrl = (apiUrl) => {
