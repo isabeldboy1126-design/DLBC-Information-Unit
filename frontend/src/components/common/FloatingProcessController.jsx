@@ -10,7 +10,7 @@ export function FloatingProcessController({
 }) {
   const typeLabel = jobType === 'verification' ? 'Verification' : 'Report Processing'
   const displayStage = isCompleted
-    ? (jobType === 'verification' ? 'Verification complete' : 'Report ready')
+    ? (jobType === 'verification' ? 'Verification complete' : 'Draft ready for review')
     : stageLabel
 
   return (
@@ -43,7 +43,7 @@ export function FloatingProcessController({
             }}
             title={isCompleted ? `Open ${typeLabel}` : `Expand ${typeLabel}`}
           >
-            <span className="btn-icon">{isCompleted ? '→' : '🗖'}</span>
+            <span className="btn-icon">{isCompleted ? '→' : ''}</span>
             <span>{isCompleted ? 'Open' : 'Expand'}</span>
           </button>
           {onDismiss && (

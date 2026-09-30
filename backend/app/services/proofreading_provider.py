@@ -285,7 +285,10 @@ TASK INSTRUCTIONS FOR THE PROOFREADER:
                 raise last_err or RuntimeError("All Gemini models failed.")
 
             response_text = response.text or "{}"
-            parsed_json = json.loads(response_text)
+            parsed_json = ProofreadingOutputSchema.model_validate_json(response_text, strict=True).model_dump()
+            from app.report_processing.output_schema import validate_report_text
+            if not validate_report_text(parsed_json["proofread_text"])["is_valid"]:
+                raise ValueError("AI output rejected: empty text or report quality checks failed")
 
             title = parsed_json.get("proofread_title", "").strip() or edited_report_title
             proofread_text = parsed_json.get("proofread_text", "").strip()

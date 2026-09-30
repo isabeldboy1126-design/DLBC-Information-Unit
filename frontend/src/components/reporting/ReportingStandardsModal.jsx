@@ -130,7 +130,7 @@ export function ReportingStandardsModal({ isOpen, onClose, onStandardUpdated }) 
         </div>
 
         <div className="protected-rules-banner">
-          <span className="banner-icon">🛡️</span>
+          <span className="banner-icon"></span>
           <div>
             <strong>Protected Backend Rules:</strong> Core accuracy, non-fabrication, and strict transcript fidelity guardrails are enforced on the backend and cannot be overridden.
           </div>
@@ -165,42 +165,42 @@ export function ReportingStandardsModal({ isOpen, onClose, onStandardUpdated }) 
                 className={`nav-item ${activeTab === 'general' ? 'nav-item--active' : ''}`}
                 onClick={() => setActiveTab('general')}
               >
-                📄 General Guidelines
+                 General Guidelines
               </button>
               <button
                 type="button"
                 className={`nav-item ${activeTab === 'reporter_a' ? 'nav-item--active' : ''}`}
                 onClick={() => setActiveTab('reporter_a')}
               >
-                👤 Reporter A (Structure)
+                 Reporter A (Structure)
               </button>
               <button
                 type="button"
                 className={`nav-item ${activeTab === 'reporter_b' ? 'nav-item--active' : ''}`}
                 onClick={() => setActiveTab('reporter_b')}
               >
-                🔍 Reporter B (Details)
+                 Reporter B (Details)
               </button>
               <button
                 type="button"
                 className={`nav-item ${activeTab === 'terminology' ? 'nav-item--active' : ''}`}
                 onClick={() => setActiveTab('terminology')}
               >
-                📖 Church Terminology
+                 Church Terminology
               </button>
               <button
                 type="button"
                 className={`nav-item ${activeTab === 'examples' ? 'nav-item--active' : ''}`}
                 onClick={() => setActiveTab('examples')}
               >
-                🌟 Approved Examples
+                 Approved Examples
               </button>
               <button
                 type="button"
                 className={`nav-item ${activeTab === 'history' ? 'nav-item--active' : ''}`}
                 onClick={() => setActiveTab('history')}
               >
-                🕒 Version History ({standardsList.length})
+                 Version History ({standardsList.length})
               </button>
             </nav>
 
@@ -351,7 +351,7 @@ export function ReportingStandardsModal({ isOpen, onClose, onStandardUpdated }) 
                   disabled={saving}
                   id="btn-modal-save-reporting-standards"
                 >
-                  {saving ? 'Saving...' : '💾 Save & Apply Instructions'}
+                  {saving ? 'Saving...' : ' Save & Apply Instructions'}
                 </button>
               </div>
             )}

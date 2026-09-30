@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { getApiUrl } from '../config'
 
 const API_BASE = getApiUrl('/api/sessions')
@@ -8,24 +8,33 @@ export function useSessions() {
   const [activeSession, setActiveSession] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [isListLoading, setIsListLoading] = useState(true)
+  const [sessionsLoaded, setSessionsLoaded] = useState(false)
+  const [listError, setListError] = useState(null)
+  const listRequest = useRef(0)
 
   // Phase 5: Verification state
   const [verificationState, setVerificationState] = useState(null)
 
   // Fetch all saved sessions
   const fetchSessions = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
+    const request = ++listRequest.current
+    setIsListLoading(true)
+    setListError(null)
     try {
-      const res = await fetch(API_BASE)
+      const res = await fetch(`${API_BASE}?include_archived=true`)
       if (!res.ok) throw new Error(`Failed to load sessions: ${res.status}`)
       const data = await res.json()
-      setSessions(data.sessions || [])
+      if (!Array.isArray(data.sessions)) throw new Error('Invalid session list response')
+      if (request !== listRequest.current) return
+      setSessions(data.sessions)
+      setSessionsLoaded(true)
     } catch (err) {
+      if (request !== listRequest.current) return
       console.error('Error fetching sessions:', err)
-      setError(err.message)
+      setListError(err.message)
     } finally {
-      setIsLoading(false)
+      if (request === listRequest.current) setIsListLoading(false)
     }
   }, [])
 
@@ -102,22 +111,32 @@ export function useSessions() {
     }
   }, [])
 
-  // Explicitly delete a session
+  // Archive preserves protected source files and revisions.
   const deleteSession = useCallback(async (sessionId) => {
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}`, {
-        method: 'DELETE',
+      const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}/archive`, {
+        method: 'POST',
       })
-      if (!res.ok) throw new Error(`Failed to delete session: ${res.status}`)
-      setSessions((prev) => prev.filter((s) => s.session_id !== sessionId))
+      if (!res.ok) throw new Error(`Failed to archive session: ${res.status}`)
+      setSessions((prev) => prev.map(s => s.session_id === sessionId ? { ...s, is_archived: true } : s))
       setActiveSession((prev) => (prev && prev.session_id === sessionId ? null : prev))
       return true
     } catch (err) {
-      console.error('Error deleting session:', err)
+      console.error('Error archiving session:', err)
       setError(err.message)
       return false
     }
+  }, [])
+
+  const restoreSession = useCallback(async (sessionId) => {
+    setError(null)
+    try {
+      const res = await fetch(`${API_BASE}/${encodeURIComponent(sessionId)}/restore`, { method: 'POST' })
+      if (!res.ok) throw new Error(`Failed to restore session: ${res.status}`)
+      setSessions(prev => prev.map(s => s.session_id === sessionId ? { ...s, is_archived: false } : s))
+      return true
+    } catch (err) { setError(err.message); return false }
   }, [])
 
   const closeActiveSession = useCallback(() => {
@@ -348,12 +367,16 @@ export function useSessions() {
     activeSession,
     isLoading,
     error,
+    isListLoading,
+    sessionsLoaded,
+    listError,
     clearError: () => setError(null),
     fetchSessions,
     loadSession,
     updateSessionTitle,
     updateSessionDetails,
     deleteSession,
+    restoreSession,
     closeActiveSession,
     // Phase 5: Verification
     verificationState,

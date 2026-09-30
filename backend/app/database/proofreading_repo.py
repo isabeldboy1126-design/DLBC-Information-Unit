@@ -298,6 +298,10 @@ class ProofreadingRepository:
         now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
         async with get_db_connection() as conn:
+            if edited_report_revision_id is None:
+                cur = await conn.execute("SELECT revision_id FROM edited_reports WHERE session_id=? AND is_active=1", (session_id,))
+                editor = await cur.fetchone()
+                edited_report_revision_id = editor[0] if editor else None
             # 1. Calculate next revision number
             cursor = await conn.execute(
                 "SELECT MAX(revision_number) FROM proofread_reports WHERE session_id = ?",
@@ -344,6 +348,8 @@ class ProofreadingRepository:
                 ),
             )
 
+            await conn.execute("UPDATE sessions SET accepted_proofread_revision_id=NULL, proofreading_completed_at=NULL WHERE session_id=?", (session_id,))
+
             # 4. Update session proofreading_status
             new_status = "ready_for_review" if not is_accepted else "complete"
             await conn.execute(
@@ -356,6 +362,8 @@ class ProofreadingRepository:
                 (new_status, standard_version, session_id),
             )
 
+            from app.database.review_integrity import invalidate_approval
+            await invalidate_approval(conn, session_id)
             await conn.commit()
 
         return await self.get_revision_by_id(revision_id)
@@ -450,6 +458,8 @@ class ProofreadingRepository:
 
             await conn.execute("UPDATE proofread_reports SET is_active = 0 WHERE session_id = ?", (session_id,))
             await conn.execute("UPDATE proofread_reports SET is_active = 1 WHERE revision_id = ?", (revision_id,))
+            from app.database.review_integrity import invalidate_approval
+            await invalidate_approval(conn, session_id)
             await conn.commit()
 
         return await self.get_revision_by_id(revision_id)
@@ -461,13 +471,22 @@ class ProofreadingRepository:
 
         async with get_db_connection() as conn:
             cursor = await conn.execute(
-                "SELECT revision_id FROM proofread_reports WHERE session_id = ? AND revision_id = ?",
+                "SELECT * FROM proofread_reports WHERE session_id = ? AND revision_id = ?",
                 (session_id, revision_id),
             )
             row = await cursor.fetchone()
             if not row:
                 return None
 
+            if row["edited_report_revision_id"]:
+                cur = await conn.execute("SELECT revision_id FROM edited_reports WHERE session_id=? AND is_active=1", (session_id,))
+                editor = await cur.fetchone()
+                if not editor or editor[0] != row["edited_report_revision_id"]:
+                    raise ValueError("Editor source has changed. Proofread the current editor revision before acceptance.")
+            cur = await conn.execute("SELECT accepted_proofread_revision_id FROM sessions WHERE session_id=?", (session_id,))
+            session = await cur.fetchone()
+            if row["is_active"] and row["is_accepted"] and session and session[0] == revision_id:
+                return self._row_to_revision(row)
             # Mark all revisions for this session unaccepted, then set the chosen one as accepted and active
             await conn.execute("UPDATE proofread_reports SET is_active = 0, is_accepted = 0 WHERE session_id = ?", (session_id,))
             await conn.execute(
@@ -486,6 +505,8 @@ class ProofreadingRepository:
                 """,
                 (now_iso, revision_id, session_id),
             )
+            from app.database.review_integrity import invalidate_approval
+            await invalidate_approval(conn, session_id)
             await conn.commit()
 
         return await self.get_revision_by_id(revision_id)

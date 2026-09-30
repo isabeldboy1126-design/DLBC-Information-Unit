@@ -1,3 +1,4 @@
+import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useCallback } from 'react'
 import { getApiUrl } from '../../config'
 import { ReportCard } from './ReportCard'
@@ -133,7 +134,7 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
         </div>
 
         <div className="reporting-hero-title-group">
-          <h1 className="reporting-hero-title">{session?.title || 'Sunday Morning Worship & Sermon'}</h1>
+          <h1 className="reporting-hero-title">{session?.title || 'Untitled session'}</h1>
           <div className="reporting-lifecycle-stepper-line">
             <span className="lifecycle-inline-item lifecycle-inline-item--done">Recording ✓</span>
             <span className="lifecycle-inline-item lifecycle-inline-item--done">Raw Transcript ✓</span>
@@ -149,11 +150,11 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
       {errorBanner && (
         <div className="error-banner" role="alert">
           <div className="error-content">
-            <span className="error-icon">⚠️</span>
+            <span className="error-icon"><Icon name="alert" /></span>
             <div className="error-text">{errorBanner}</div>
           </div>
           <button type="button" className="error-dismiss" onClick={() => setErrorBanner(null)}>
-            ✕
+            <Icon name="close" />
           </button>
         </div>
       )}
@@ -176,7 +177,7 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
               disabled={generatingRole !== null}
               title="Regenerate both drafts"
             >
-              ↻ Regenerate
+              <Icon name="refresh" /> Regenerate
             </button>
             <button
               type="button"
@@ -222,7 +223,7 @@ export function ReportingView({ session, onBack, onNavigateToEditing }) {
       {!aiStatus.configured && (
         <div className="card notice-card">
           <div className="notice-content">
-            <h4>🔑 AI Reporting Setup Note</h4>
+            <h4> AI Reporting Setup Note</h4>
             <p>
               The AI Reporting engine is ready and waiting for your Gemini API credentials.
               Once you add <code>GEMINI_API_KEY=your_key</code> to <code>backend/.env</code>, click <strong>Generate Reports</strong> to produce drafts.

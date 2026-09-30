@@ -1,3 +1,4 @@
+import { Icon } from '../common/Icon'
 import React, { useState, useEffect } from 'react'
 import { getApiUrl } from '../../config'
 
@@ -125,7 +126,7 @@ export function NewLiveSessionView({
 
       {(validationError || liveAudio.error) && (
         <div className="new-session-alert">
-          <span>⚠️ {validationError || liveAudio.error}</span>
+          <span>⚠ {validationError || liveAudio.error}</span>
         </div>
       )}
 
@@ -135,7 +136,7 @@ export function NewLiveSessionView({
         <div className="card new-session-card">
           <div className="card-header new-session-card-header">
             <div className="card-header-icon-title">
-              <span className="card-icon">📄</span>
+              <span className="card-icon"><Icon name="document" /></span>
               <h3>Session Metadata</h3>
             </div>
           </div>
@@ -232,7 +233,7 @@ export function NewLiveSessionView({
           <div className="card new-session-card">
             <div className="card-header new-session-card-header">
               <div className="card-header-icon-title">
-                <span className="card-icon">🎙️</span>
+                <span className="card-icon"><Icon name="mic" /></span>
                 <h3>Audio Input</h3>
               </div>
             </div>
@@ -250,7 +251,7 @@ export function NewLiveSessionView({
                     onClick={liveAudio.updateDeviceList}
                     title="Refresh connected audio devices"
                   >
-                    ↻ Refresh
+                    <Icon name="refresh" /> Refresh
                   </button>
                 </div>
 
@@ -320,7 +321,7 @@ export function NewLiveSessionView({
           {/* Start Recording Card */}
           <div className="card start-recording-card">
             <div className="start-recording-info">
-              <span className="info-icon">ℹ️</span>
+              <span className="info-icon">ℹ</span>
               <span>Verify settings before starting. Master lossless audio will be captured.</span>
             </div>
 

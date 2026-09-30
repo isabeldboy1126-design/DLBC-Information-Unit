@@ -31,9 +31,9 @@ class UpdateSessionRequest(BaseModel):
 
 
 @router.get("")
-async def list_sessions():
+async def list_sessions(archived: bool = False, include_archived: bool = False):
     """Lists all saved sessions ordered by creation date descending."""
-    sessions = await session_repo.list_sessions()
+    sessions = await session_repo.list_sessions(archived=archived, include_archived=include_archived)
     return {"sessions": sessions}
 
 
@@ -89,8 +89,22 @@ async def update_session(session_id: str, payload: UpdateSessionRequest):
 
 @router.delete("/{session_id}")
 async def delete_session(session_id: str):
-    """Deletes a session record upon explicit user confirmation."""
+    """Archives a session, preserving every source and revision."""
     success = await session_repo.delete_session(session_id)
     if not success:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
-    return {"status": "deleted", "session_id": session_id}
+    return {"status": "archived", "session_id": session_id}
+
+
+@router.post("/{session_id}/archive")
+async def archive_session(session_id: str):
+    if not await session_repo.set_archived(session_id, True):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"status": "archived", "session_id": session_id}
+
+
+@router.post("/{session_id}/restore")
+async def restore_session(session_id: str):
+    if not await session_repo.set_archived(session_id, False):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"status": "restored", "session_id": session_id}

@@ -1,3 +1,4 @@
+import { isApproved, hasReviewableReport } from '../sessions/sessionWorkflow'
 import React from 'react'
 
 /**
@@ -23,7 +24,6 @@ export function LifecycleStepper({ session, activeStage, onSelectStage, compact 
   const reportingStatus = session.reporting_status || 'not_started'
   const editingStatus = session.editing_status || 'not_started'
   const proofreadingStatus = session.proofreading_status || 'not_started'
-  const finalReportStatus = session.final_report_status || 'not_started'
 
   const stages = [
     {
@@ -84,16 +84,15 @@ export function LifecycleStepper({ session, activeStage, onSelectStage, compact 
     },
     {
       id: 'final_report',
-      label: 'Final Report',
+      label: isApproved(session) ? 'Approved Report' : 'Final Review',
       shortLabel: 'Final',
-      isCompleted: finalReportStatus === 'complete',
+      isCompleted: isApproved(session),
       isActive: activeStage === 'final_report',
-      isLocked: proofreadingStatus !== 'complete',
+      isLocked: !hasReviewableReport(session) && proofreadingStatus !== 'complete',
     },
   ]
 
   // Calculate current active step index (1-based)
-  const completedCount = stages.filter((s) => s.isCompleted).length
   let currentStepNumber = 1
   for (let i = 0; i < stages.length; i++) {
     if (stages[i].isActive) {

@@ -237,7 +237,7 @@ export function ProgrammesSettingsSection() {
     <div className="card settings-card">
       <div className="card-header settings-card-header">
         <div className="settings-card-header-title">
-          <span className="settings-icon">📅</span>
+          <span className="settings-icon"></span>
           <h3>Programmes &amp; Sessions</h3>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -257,7 +257,7 @@ export function ProgrammesSettingsSection() {
       <div className="card-body">
         {error && (
           <div className="settings-alert settings-alert--error" style={{ margin: '0.75rem 0' }}>
-            <span>⚠️ {error}</span>
+            <span>⚠ {error}</span>
           </div>
         )}
 
@@ -403,7 +403,7 @@ export function ProgrammesSettingsSection() {
                           title="Rename programme"
                           style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }}
                         >
-                          ✏️ Rename
+                          ✏ Rename
                         </button>
                       )}
 
@@ -414,7 +414,7 @@ export function ProgrammesSettingsSection() {
                         title={prog.is_archived ? 'Restore programme' : 'Archive programme'}
                         style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }}
                       >
-                        {prog.is_archived ? '♻️ Restore' : '📁 Archive'}
+                        {prog.is_archived ? '♻ Restore' : ' Archive'}
                       </button>
 
                       <button

@@ -284,7 +284,10 @@ async def accept_proofread_report(session_id: str, payload: Optional[AcceptProof
             )
         rev_id = active_rev["revision_id"]
 
-    accepted = await proofreading_repo.accept_revision(session_id, rev_id)
+    try:
+        accepted = await proofreading_repo.accept_revision(session_id, rev_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not accepted:
         raise HTTPException(status_code=404, detail=f"Revision {rev_id} could not be accepted.")
 

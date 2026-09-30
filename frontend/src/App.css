@@ -3963,6 +3963,16 @@ textarea.form-control {
   transform: translateX(22px);
 }
 
+.settings-auto-process-row input:focus-visible + .toggle-slider {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 3px;
+}
+
+.settings-auto-process-row input:disabled + .toggle-slider {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 /* Unified Instructions Textarea */
 .unified-instructions-group {
   display: flex;
@@ -4514,12 +4524,30 @@ textarea.form-control {
 }
 
 .sidebar-brand {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   display: flex;
   align-items: center;
   gap: 0.85rem;
   cursor: pointer;
   padding: 0.25rem;
   user-select: none;
+}
+
+.session-list-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  color: var(--text-secondary);
+}
+
+.session-list-status p {
+  margin: 0;
 }
 
 .sidebar-brand-logo {
@@ -5018,7 +5046,7 @@ textarea.form-control {
       rgba(13, 28, 56, 0.25) 80%,
       rgba(13, 28, 56, 0.08) 100%
     ),
-    url('./assets/dashboard/start-live-background.png');
+    none;
   background-size: cover;
   background-repeat: no-repeat;
   background-position: right center;
@@ -5788,7 +5816,7 @@ textarea.form-control {
         rgba(11, 24, 48, 0.65) 80%,
         rgba(13, 28, 56, 0.30) 100%
       ),
-      url('./assets/dashboard/start-live-background.png');
+      none;
   }
 
   .creation-card--youtube {
@@ -14199,7 +14227,7 @@ textarea.form-control {
       rgba(20, 25, 33, 0.25) 80%,
       rgba(20, 25, 33, 0.08) 100%
     ),
-    url('./assets/dashboard/start-live-background.png') !important;
+    none !important;
   background-size: cover !important;
   background-repeat: no-repeat !important;
   background-position: right center !important;

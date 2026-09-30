@@ -1,3 +1,4 @@
+import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useCallback } from 'react'
 import { getApiUrl } from '../../config'
 import { ProofreadingStandardsModal } from './ProofreadingStandardsModal'
@@ -234,11 +235,11 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
           </button>
           <div className="proofreading-header-text-block">
             <h2 className="proofreading-header-title">
-              {session?.title || 'Sunday Morning Worship & Sermon'}
+              {session?.title || 'Untitled session'}
             </h2>
             <div className="proofreading-header-meta-row">
-              <span>👤 Minister: <strong>{session?.minister_name || session?.speaker || 'Pst. Williams'}</strong></span>
-              <span>📅 {session?.date_created ? new Date(session.date_created).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Oct 24, 2023'}</span>
+              <span> Minister: <strong>{session?.minister || session?.minister_name || session?.speaker || 'Minister not recorded'}</strong></span>
+              <span> {session?.date_created ? new Date(session.date_created).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date not recorded'}</span>
             </div>
           </div>
         </div>
@@ -250,7 +251,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
             onClick={() => setIsStandardsOpen(true)}
             id="btn-manage-proofreading-standards"
           >
-            ⚙️ Proofreading Standard ({aiStatus.active_standard_version})
+            <Icon name="settings" /> Proofreading Standard ({aiStatus.active_standard_version})
           </button>
         </div>
       </div>
@@ -259,11 +260,11 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
       {errorBanner && (
         <div className="error-banner" role="alert">
           <div className="error-content">
-            <span className="error-icon">⚠️</span>
+            <span className="error-icon"><Icon name="alert" /></span>
             <div className="error-text">{errorBanner}</div>
           </div>
-          <button type="button" className="error-dismiss" onClick={() => setErrorBanner(null)}>
-            ✕
+          <button type="button" className="error-dismiss" aria-label="Dismiss proofreading error" onClick={() => setErrorBanner(null)}>
+            <Icon name="close" />
           </button>
         </div>
       )}
@@ -277,7 +278,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
       {/* STATE 1: PRE-RUN STATE (proofreading-workspace.png) */}
       {!activeRev && !isGenerating && (
         <div className="proofreading-pre-run-box">
-          <div className="proofreading-magnifier-icon">🔍</div>
+          <div className="proofreading-magnifier-icon"><Icon name="search" /></div>
           <h3 className="proofreading-pre-run-title">Run Automated Proofread</h3>
           <p className="proofreading-pre-run-desc">
             The AI Proofreader checks spelling, grammar, punctuation, and scripture citations according to DLBC Standard {aiStatus.active_standard_version || 'v1.4'} without altering theological meaning.
@@ -286,7 +287,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
           {!canProofread && (
             <div className="notice-card" style={{ margin: '0.5rem 0', maxWidth: '480px' }}>
               <p className="text-warning" style={{ margin: 0, fontSize: '0.88rem' }}>
-                ⚠️ An approved Edited Report is required before Proofreading can begin.
+                ⚠ An approved Edited Report is required before Proofreading can begin.
               </p>
             </div>
           )}
@@ -324,8 +325,8 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
               <div className="ready-card-left">
                 <div className="ready-check-icon-circle" style={{ background: '#10b981', color: '#ffffff' }}>✓</div>
                 <div className="ready-card-text">
-                  <strong style={{ color: '#065f46' }}>Proofreading Finalized</strong>
-                  <p style={{ color: '#047857' }}>The report has been successfully proofread and locked. It is now ready for final publishing.</p>
+                  <strong style={{ color: '#065f46' }}>Proofreading accepted</strong>
+                  <p style={{ color: '#047857' }}>The proofread revision is accepted. Review and explicitly approve the final report before export.</p>
                 </div>
               </div>
               <div className="ready-card-actions">
@@ -345,7 +346,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
               <div className="review-banner-left">
                 <div className="review-check-badge">✓</div>
                 <div>
-                  <h4 className="review-banner-title">Proofreading Complete</h4>
+                  <h4 className="review-banner-title">Proofread draft ready</h4>
                   <p className="review-banner-sub">
                     {activeRev.changes?.length || 0} suggestions made across the document.
                   </p>
@@ -359,7 +360,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
                   onClick={() => setShowRerunConfirm(true)}
                   title="Re-run AI proofreading"
                 >
-                  ↻ Re-run
+                  <Icon name="refresh" /> Re-run
                 </button>
 
                 <button
@@ -392,7 +393,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
               <div className="review-toolbar-row">
                 {isFinalized ? (
                   <div className="document-locked-bar">
-                    <span>🔒 DOCUMENT LOCKED</span>
+                    <span> DOCUMENT LOCKED</span>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -408,14 +409,14 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
                     onClick={handleCopyReport}
                     title="Copy full report"
                   >
-                    {copied ? '✓ Copied!' : '📋 Copy'}
+                    {copied ? '✓ Copied!' : ' Copy'}
                   </button>
                   <button
                     type="button"
                     className="btn btn--outline btn--small"
                     onClick={() => setShowRevisionsDrawer(!showRevisionsDrawer)}
                   >
-                    🕒 Revisions ({proofreadingData.revisions_count || 1})
+                     Revisions ({proofreadingData.revisions_count || 1})
                   </button>
                 </div>
               </div>
@@ -423,6 +424,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
               <div className="editing-paper-surface">
                 <input
                   id="proofread-title-input"
+                  aria-label="Proofread report title"
                   type="text"
                   className="editing-paper-title-input"
                   value={reportTitle}
@@ -433,6 +435,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
 
                 <textarea
                   id="proofread-text-textarea"
+                  aria-label="Proofread report text"
                   className="editing-paper-textarea"
                   value={reportText}
                   onChange={handleTextChange}
@@ -478,7 +481,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
                       onClick={handleCopyReport}
                       style={{ width: '100%' }}
                     >
-                      📋 Copy Full Transcript
+                       Copy Full Transcript
                     </button>
                     <button
                       type="button"
@@ -486,7 +489,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
                       onClick={() => window.print()}
                       style={{ width: '100%' }}
                     >
-                      🖨 Print View
+                       Print View
                     </button>
                   </div>
                 </div>
@@ -531,9 +534,9 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
         <div className="modal-backdrop" onClick={() => setShowRevisionsDrawer(false)}>
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>🕒 Proofread Report Revisions History</h3>
-              <button type="button" className="btn-close" onClick={() => setShowRevisionsDrawer(false)}>
-                ✕
+              <h3> Proofread Report Revisions History</h3>
+              <button type="button" className="btn-close" aria-label="Close proofread report revisions" onClick={() => setShowRevisionsDrawer(false)}>
+                <Icon name="close" />
               </button>
             </div>
             <div className="modal-body">
@@ -546,7 +549,7 @@ export function ProofreadingView({ session, onBack, onNavigateToFinalReport }) {
                     <div className="history-info">
                       <strong>Revision {rev.revision_number}</strong>{' '}
                       <span className="badge badge--secondary">
-                        {rev.revision_source === 'human_reviewed' ? '👤 Human Adjusted' : '⚡ AI Proofread'}
+                        {rev.revision_source === 'human_reviewed' ? ' Human Adjusted' : '⚡ AI Proofread'}
                       </span>
                       {rev.is_accepted && <span className="badge badge--success">✓ Accepted</span>}
                       {rev.is_active && <span className="badge badge--primary">Active</span>}

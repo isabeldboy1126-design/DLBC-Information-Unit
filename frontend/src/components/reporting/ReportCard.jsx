@@ -1,3 +1,4 @@
+import { Icon } from '../common/Icon'
 import React, { useState } from 'react'
 
 export function ReportCard({
@@ -89,7 +90,7 @@ export function ReportCard({
               onClick={onRegenerate}
               disabled={disabled}
             >
-              ↻ Retry {roleTitle}
+              <Icon name="refresh" /> Retry {roleTitle}
             </button>
           </div>
         )}
@@ -107,7 +108,7 @@ export function ReportCard({
                 onClick={handleCopy}
                 title="Copy formatted draft"
               >
-                {copied ? '✓ Copied!' : '📋 Copy Draft'}
+                {copied ? '✓ Copied!' : ' Copy Draft'}
               </button>
             </div>
 
@@ -115,7 +116,7 @@ export function ReportCard({
             {role === 'reporter_b' && report.key_points && report.key_points.length > 0 && (
               <div className="reporter-key-details-box">
                 <div className="key-details-title-row">
-                  <span>📋</span>
+                  <span><Icon name="copy" /></span>
                   <span>Key Details Log</span>
                 </div>
                 <ul className="key-details-list">
@@ -131,7 +132,7 @@ export function ReportCard({
                 <span className="pill-label">Scriptures:</span>
                 {report.scriptures.map((sc, i) => (
                   <span key={i} className="scripture-pill">
-                    📖 {sc}
+                     {sc}
                   </span>
                 ))}
               </div>
@@ -154,7 +155,7 @@ export function ReportCard({
         {/* Compact & Clean Empty State */}
         {!isGenerating && !report && (
           <div className="report-empty-state-compact">
-            <div className="empty-state-icon">📄</div>
+            <div className="empty-state-icon"><Icon name="document" /></div>
             <p className="empty-state-heading">No draft generated yet for {roleTitle}</p>
             <p className="empty-state-hint">
               Click <strong>"Generate Reports"</strong> to produce this independent draft from the verified transcript.

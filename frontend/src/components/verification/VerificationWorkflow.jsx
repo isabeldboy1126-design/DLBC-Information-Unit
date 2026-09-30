@@ -1,3 +1,4 @@
+import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useRef } from 'react'
 import { getApiUrl } from '../../config'
 import { getSessionHierarchy } from '../sessions/SessionDetailView'
@@ -412,7 +413,7 @@ export function VerificationWorkflow({
                   disabled={isAiVerifying || pendingCount === 0}
                   title="Use AI to verify transcript against biblical context"
                 >
-                  <span className="action-btn-icon">{isAiVerifying ? '⏳' : '✦'}</span>
+                  <span className="action-btn-icon"><Icon name={isAiVerifying ? 'clock' : 'document'} /></span>
                   <span>{isAiVerifying ? 'Verifying with AI...' : 'Use AI to Verify'}</span>
                 </button>
               </div>
@@ -421,7 +422,7 @@ export function VerificationWorkflow({
             {/* Live AI Verification Status Banner / Top-level notice */}
             {aiFeedback && (
               <div className={`ai-verify-notice-banner ai-verify-notice-banner--${aiFeedback?.type || 'warning'}`}>
-                <span className="notice-spark">✦</span>
+                <span className="notice-spark"><Icon name="document" /></span>
                 <span className="notice-text">
                   {aiFeedback?.message || 'Automated verification is currently unavailable. Manual review is available.'}
                 </span>
@@ -432,7 +433,7 @@ export function VerificationWorkflow({
                     onClick={() => setAiFeedback(null)}
                     aria-label="Dismiss feedback"
                   >
-                    ✕
+                    <Icon name="close" />
                   </button>
                 )}
               </div>
@@ -515,34 +516,13 @@ export function VerificationWorkflow({
                 title={isPlaying && !isPlayingSegment ? 'Pause' : 'Play'}
                 aria-label={isPlaying && !isPlayingSegment ? 'Pause' : 'Play'}
               >
-                {isPlaying && !isPlayingSegment ? '⏸' : '▶'}
+                <Icon name={isPlaying && !isPlayingSegment ? 'pause' : 'play'} />
               </button>
 
-              <div
-                className="master-audio-waveform-track"
-                onClick={(e) => {
-                  if (audioRef.current && audioRef.current.duration) {
-                    const rect = e.currentTarget.getBoundingClientRect()
-                    const clickPos = (e.clientX - rect.left) / rect.width
-                    const seekTo = clickPos * audioRef.current.duration
-                    handleMasterSeek(seekTo)
-                  }
-                }}
-              >
-                <div
-                  className="master-audio-waveform-fill"
-                  style={{
-                    width: `${
-                      audioRef.current?.duration
-                        ? (currentTime / audioRef.current.duration) * 100
-                        : 0
-                    }%`,
-                  }}
-                />
-              </div>
+              <input type="range" className="source-audio-seek" aria-label="Source playback position" min="0" max={Number.isFinite(audioRef.current?.duration) ? audioRef.current.duration : session?.duration_seconds || 0} step="1" value={currentTime} onChange={e => { const time = Number(e.target.value); setCurrentTime(time); handleMasterSeek(time) }} />
 
               <span className="master-time-display">
-                {formatSeconds(currentTime)} / {formatSeconds(audioRef.current?.duration || session?.duration_seconds || 1541)}
+                {formatSeconds(currentTime)} / {formatSeconds(audioRef.current?.duration || session?.duration_seconds || 0)}
               </span>
             </div>
           </div>
@@ -560,7 +540,7 @@ export function VerificationWorkflow({
                   onClick={() => handleReplaySegment(activeItem.start_time || 0, activeItem.end_time)}
                   title="Replay this segment audio"
                 >
-                  <span className="replay-icon">↻</span>
+                  <span className="replay-icon"><Icon name="refresh" /></span>
                   <span>{isPlayingSegment ? 'Playing...' : 'Replay'}</span>
                 </button>
               </div>
@@ -588,7 +568,7 @@ export function VerificationWorkflow({
               {/* Only show AI suggestion when a verified or corrected proposal is available */}
               {activeItem?.ai_decision && ['VERIFIED', 'CORRECTED'].includes(activeItem.ai_decision.toUpperCase()) ? (
                 <div className={`ai-hint-box ai-hint-box--${activeItem.ai_decision.toLowerCase()}`}>
-                  <span className="sparkle-icon" aria-hidden="true">✦</span>
+                  <span className="sparkle-icon" aria-hidden="true"><Icon name="document" /></span>
                   <div className="ai-hint-details">
                     <div className="ai-hint-title-row">
                       <strong className="ai-hint-title">
@@ -658,7 +638,7 @@ export function VerificationWorkflow({
       {showBulkConfirmModal && (
         <div className="verification-modal-backdrop">
           <div className="card verification-modal-card">
-            <h3>⚠️ Confirm All Remaining Flagged Sections</h3>
+            <h3>⚠ Confirm All Remaining Flagged Sections</h3>
             <p>
               You are about to accept original machine wording for all {pendingCount} remaining flagged sections without modifying their text.
             </p>

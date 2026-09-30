@@ -1,44 +1,18 @@
+import { sessionWorkflow, isApproved, hasReviewableReport } from './sessionWorkflow'
+import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useRef } from 'react'
 import { getApiUrl } from '../../config'
 import { getSessionHierarchy } from './SessionDetailView'
 import { ConfirmationModal } from '../common/ConfirmationModal'
+import { SessionListStatus } from './SessionListStatus'
 
-function ClockIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  )
-}
+function ClockIcon() { return <Icon name="clock" /> }
 
-function FilterIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-    </svg>
-  )
-}
+function FilterIcon() { return <Icon name="filter" /> }
 
-function SearchIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  )
-}
+function SearchIcon() { return <Icon name="search" /> }
 
-function TrashIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      <line x1="10" y1="11" x2="10" y2="17" />
-      <line x1="14" y1="11" x2="14" y2="17" />
-    </svg>
-  )
-}
+function TrashIcon() { return <Icon name="archive" /> }
 
 /**
  * SessionHistoryList — High-end productivity workspace matching the linear/vercel design standard.
@@ -47,11 +21,17 @@ export function SessionHistoryList({
   sessions = [],
   onOpenSession,
   onDeleteSession,
+  onRestoreSession,
   onRefresh,
   onStartNewSession,
   isLoading,
+  sessionsLoaded,
+  sessionsError,
   initialStatusFilter = 'all',
 }) {
+  const [showArchived, setShowArchived] = useState(false)
+  const [archiveError, setArchiveError] = useState(null)
+  const [restoreBusy, setRestoreBusy] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [isFilterOpen, setIsFilterOpen] = useState(() => {
     try {
@@ -203,6 +183,7 @@ export function SessionHistoryList({
 
   // Filter sessions
   const filteredSessions = sortedSessions.filter((s) => {
+    if (!!s.is_archived !== showArchived) return false
     const query = searchTerm.toLowerCase().trim()
     const matchesSearch =
       !query ||
@@ -233,7 +214,7 @@ export function SessionHistoryList({
     // Stage detection
     const isInterrupted = !!s.is_interrupted
     const isLive = s.status === 'recording'
-    const isFinalComplete = s.final_report_status === 'complete'
+    const isFinalComplete = isApproved(s)
     const isProofreadComplete = s.proofreading_status === 'complete'
     const isProofreadingReview = s.proofreading_status === 'ready_for_review' || s.proofreading_status === 'generating'
     const isEditingComplete = s.editing_status === 'complete'
@@ -245,10 +226,12 @@ export function SessionHistoryList({
     // Status Filter
     let matchesStatus = true
     if (statusFilter !== 'all') {
-      if (statusFilter === 'interrupted') matchesStatus = isInterrupted
+      if (statusFilter === 'attention') matchesStatus = sessionWorkflow(s).attention
+      else if (statusFilter === 'interrupted') matchesStatus = isInterrupted
       else if (statusFilter === 'needs_verification') matchesStatus = needsVerification
       else if (statusFilter === 'verified') matchesStatus = isVerified && !isReportsReady && !isEditingComplete && !isProofreadComplete && !isFinalComplete
       else if (statusFilter === 'editing') matchesStatus = isEditingComplete || isEditingDraft || isReportsReady
+      else if (statusFilter === 'needs_review') matchesStatus = hasReviewableReport(s) && !isApproved(s)
       else if (statusFilter === 'completed') matchesStatus = isFinalComplete
       else if (statusFilter === 'live') matchesStatus = isLive
     }
@@ -267,7 +250,7 @@ export function SessionHistoryList({
     return matchesSearch && matchesProg && matchesSess && matchesStatus && matchesDate
   })
 
-  const activeSessionsCount = sessions.filter((s) => s.final_report_status !== 'complete').length
+  const activeSessionsCount = sessions.filter((s) => !isApproved(s) && !s.is_archived).length
 
   return (
     <div className="sessions-history-page-container">
@@ -278,7 +261,7 @@ export function SessionHistoryList({
         <div>
           <h1 className="sessions-history-title">Sessions History</h1>
           <p className="sessions-history-subtitle">
-            Active sessions: {activeSessionsCount}
+            Active sessions: {sessionsLoaded ? activeSessionsCount : 'Unknown'}
           </p>
         </div>
 
@@ -291,7 +274,7 @@ export function SessionHistoryList({
               disabled={isLoading}
               title="Refresh session list from database"
             >
-              ↻ Refresh
+              {isLoading ? 'Loading…' : sessionsError ? 'Retry' : '↻ Refresh'}
             </button>
           )}
 
@@ -308,6 +291,8 @@ export function SessionHistoryList({
         </div>
       </div>
 
+      <div className="archive-switch" aria-label="Session collection"><button type="button" aria-pressed={!showArchived} onClick={() => setShowArchived(false)}>Active sessions</button><button type="button" aria-pressed={showArchived} onClick={() => setShowArchived(true)}>Archived sessions</button></div>
+      {archiveError && <div className="error-banner" role="alert">{archiveError}</div>}
       {/* ------------------------------------------------------------- */}
       {/* 2. FILTER & SEARCH TOOLBAR WITH ELEGANT POPOVER               */}
       {/* ------------------------------------------------------------- */}
@@ -443,7 +428,9 @@ export function SessionHistoryList({
                     <option value="needs_verification">Needs Verification</option>
                     <option value="verified">Verified</option>
                     <option value="editing">In Editing</option>
-                    <option value="completed">Completed</option>
+                    <option value="attention">Needs attention</option>
+                    <option value="needs_review">Needs review</option>
+                    <option value="completed">Approved</option>
                     <option value="interrupted">Interrupted</option>
                     <option value="live">Live</option>
                   </select>
@@ -475,7 +462,8 @@ export function SessionHistoryList({
       {/* ------------------------------------------------------------- */}
       {/* 3. 3-COLUMN RESTRAINED SESSION CARDS GRID                     */}
       {/* ------------------------------------------------------------- */}
-      {filteredSessions.length === 0 ? (
+      <SessionListStatus isLoading={isLoading} hasLoaded={sessionsLoaded} error={sessionsError} />
+      {!sessionsLoaded ? null : filteredSessions.length === 0 ? (
         <div className="sessions-empty-card">
           <h3>No Sessions Found</h3>
           <p>
@@ -501,7 +489,7 @@ export function SessionHistoryList({
 
             const isInterrupted = !!s.is_interrupted
             const isLive = s.status === 'recording'
-            const isFinalComplete = s.final_report_status === 'complete'
+            const isFinalComplete = isApproved(s)
             const isProofreadComplete = s.proofreading_status === 'complete'
             const isProofreadingReview = s.proofreading_status === 'ready_for_review' || s.proofreading_status === 'generating'
             const isEditingComplete = s.editing_status === 'complete'
@@ -571,19 +559,12 @@ export function SessionHistoryList({
             const formattedDate = formatCardDate(s.date_created)
             const humanDuration = formatHumanDuration(s.duration_seconds || s.audio_duration_seconds)
 
+            if (hasReviewableReport(s)) { const workflow = sessionWorkflow(s); statusLabel = workflow.label; actionText = workflow.action; targetWorkflowStage = workflow.stage }
             return (
               <div
                 key={s.session_id}
                 className="refined-session-card"
                 onClick={() => onOpenSession && onOpenSession(s.session_id, 'overview')}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    if (onOpenSession) onOpenSession(s.session_id, 'overview')
-                  }
-                }}
               >
                 {/* Top Row: Status Pill */}
                 <div className="session-card-top-row">
@@ -622,7 +603,8 @@ export function SessionHistoryList({
                     {actionText}
                   </button>
 
-                  {onDeleteSession && (
+                  {showArchived && onRestoreSession && <button type="button" className="btn btn--secondary" disabled={restoreBusy === s.session_id} onClick={async e => { e.stopPropagation(); setRestoreBusy(s.session_id); setArchiveError(null); const ok = await onRestoreSession(s.session_id); if (!ok) setArchiveError('Session could not be restored. Your archived source remains preserved. Try again.'); setRestoreBusy(null) }}>{restoreBusy === s.session_id ? 'Restoring…' : 'Restore session'}</button>}
+                  {onDeleteSession && !showArchived && (
                     <button
                       type="button"
                       className="session-card-delete-icon-btn"
@@ -630,8 +612,8 @@ export function SessionHistoryList({
                         e.stopPropagation()
                         setSessionToDelete({ id: s.session_id, name: sessionName })
                       }}
-                      title="Delete session record"
-                      aria-label="Delete session"
+                      title="Archive session"
+                      aria-label="Archive session"
                     >
                       <TrashIcon />
                     </button>
@@ -646,20 +628,22 @@ export function SessionHistoryList({
       {/* Reusable Confirmation Modal for Session Deletion */}
       <ConfirmationModal
         isOpen={!!sessionToDelete}
-        title="Delete session?"
-        message={`Permanently delete "${sessionToDelete?.name || 'this session'}"?`}
-        supportingText="This action cannot be undone."
-        confirmLabel="Delete Session"
+        title="Archive session?"
+        message={`Archive "${sessionToDelete?.name || 'this session'}" from active work?`}
+        supportingText="Original audio, transcripts and revisions remain preserved. You can restore this session from Archived sessions."
+        confirmLabel="Archive session"
         cancelLabel="Cancel"
-        variant="danger"
+        variant="primary"
         isLoading={isDeletingSession}
         onCancel={() => setSessionToDelete(null)}
         onConfirm={async () => {
           if (!sessionToDelete) return
+          setArchiveError(null)
           setIsDeletingSession(true)
           try {
-            await onDeleteSession(sessionToDelete.id)
+            const ok = await onDeleteSession(sessionToDelete.id)
             setSessionToDelete(null)
+            if (!ok) setArchiveError('Session could not be archived. It remains in active work. Try again.')
           } catch (err) {
             console.error('Failed to delete session:', err)
           } finally {

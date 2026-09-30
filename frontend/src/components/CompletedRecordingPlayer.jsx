@@ -87,7 +87,7 @@ export function CompletedRecordingPlayer({ latestRecording }) {
           <div className="current-player-box">
             <div className="player-meta-header">
               <span className="rec-title">
-                📁 <strong>{activeRec.filename}</strong>
+                 <strong>{activeRec.filename}</strong>
               </span>
               <span className="badge badge--success">✓ Lossless WAV Preserved</span>
             </div>
@@ -149,7 +149,7 @@ export function CompletedRecordingPlayer({ latestRecording }) {
                 className="btn btn--danger-outline btn--small"
                 onClick={() => handleDelete(activeRec.recording_id)}
               >
-                🗑 Delete
+                 Delete
               </button>
             </div>
           </div>

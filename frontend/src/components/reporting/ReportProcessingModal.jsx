@@ -1,66 +1,26 @@
+import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { getApiUrl } from '../../config'
 import { getCleanSessionName } from '../sessions/SessionDetailView'
-import { setActiveProcess, clearActiveProcess, minimizeActiveProcess } from '../common/activeProcessManager'
+import { getActiveProcess, setActiveProcess, clearActiveProcess, minimizeActiveProcess } from '../common/activeProcessManager'
 
-function DocumentIconLarge() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-      <polyline points="10 9 9 9 8 9" />
-    </svg>
-  )
-}
+function DocumentIconLarge() { return <Icon name="document" /> }
 
-function MinimizeIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  )
-}
+function MinimizeIcon() { return <Icon name="minimize" /> }
 
-function MaximizeIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="15 3 21 3 21 9" />
-      <polyline points="9 21 3 21 3 15" />
-      <line x1="21" y1="3" x2="14" y2="10" />
-      <line x1="3" y1="21" x2="10" y2="14" />
-    </svg>
-  )
-}
 
-function CheckIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  )
-}
+function CheckIcon() { return <Icon name="check" /> }
 
-function DownloadIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  )
-}
 
 function formatDuration(seconds) {
-  if (!seconds || seconds <= 0) return '25m 41s'
+  if (!seconds || seconds <= 0) return 'Not recorded'
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${m}m ${s < 10 ? '0' : ''}${s}s`
 }
 
 function formatDate(dateStr) {
-  if (!dateStr) return 'Aug 23, 2026'
+  if (!dateStr) return 'Not recorded'
   try {
     const d = new Date(dateStr)
     if (isNaN(d.getTime())) return dateStr
@@ -74,7 +34,7 @@ const STEPS = [
   { id: 1, key: 'preparing_transcript', label: 'Preparing Transcript' },
   { id: 2, key: 'ai_processing', label: 'AI Processing' },
   { id: 3, key: 'preparing_report', label: 'Preparing Report' },
-  { id: 4, key: 'completed', label: 'Completed' },
+  { id: 4, key: 'completed', label: 'Draft saved' },
 ]
 
 export function ReportProcessingModal({
@@ -88,8 +48,29 @@ export function ReportProcessingModal({
   const [runId, setRunId] = useState(null)
   const [runData, setRunData] = useState(null)
   const [isCancelling, setIsCancelling] = useState(false)
-  const [isDownloading, setIsDownloading] = useState(false)
   const [errorMsg, setErrorMsg] = useState(null)
+
+  const dialogRef = useRef(null)
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  useEffect(() => {
+    if (!isOpen || !dialogRef.current) return
+    const dialog = dialogRef.current
+    const priorFocus = document.activeElement
+    const affected = []
+    for (let branch = dialog; branch.parentElement && branch.parentElement !== document.body; branch = branch.parentElement) {
+      for (const sibling of branch.parentElement.children) if (sibling !== branch && !['SCRIPT', 'STYLE'].includes(sibling.tagName)) { affected.push([sibling, sibling.inert]); sibling.inert = true }
+    }
+    const controls = () => [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled), a[href], [tabindex="0"]')].filter(el => el.getClientRects().length)
+    controls()[0]?.focus()
+    const key = e => {
+      if (e.key === 'Escape') { e.preventDefault(); minimizeActiveProcess(); closeRef.current?.() }
+      if (e.key === 'Tab') { const list = controls(); const first = list[0]; const last = list.at(-1); if (e.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) { e.preventDefault(); last?.focus() } else if (!e.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) { e.preventDefault(); first?.focus() } }
+    }
+    const focus = e => { if (!dialog.contains(e.target)) controls()[0]?.focus() }
+    document.addEventListener('keydown', key); document.addEventListener('focusin', focus)
+    return () => { document.removeEventListener('keydown', key); document.removeEventListener('focusin', focus); for (const [el, inert] of affected) el.inert = inert; if (priorFocus?.isConnected) priorFocus.focus() }
+  }, [isOpen])
 
   const pollTimerRef = useRef(null)
   const isMountedRef = useRef(true)
@@ -107,6 +88,8 @@ export function ReportProcessingModal({
   }, [])
 
   const sessionId = session?.session_id
+  const activeContextRef = useRef({ isOpen, sessionId })
+  activeContextRef.current = { isOpen, sessionId }
 
   const getActiveStepNumber = () => {
     if (currentStage === 'preparing_transcript') return 1
@@ -118,12 +101,13 @@ export function ReportProcessingModal({
 
   // Poll status from backend
   const pollStatus = useCallback(async () => {
-    if (!sessionId) return
+    const isCurrent = () => isMountedRef.current && activeContextRef.current.isOpen && activeContextRef.current.sessionId === sessionId
+    if (!sessionId || !isCurrent()) return
     try {
       const res = await fetch(getApiUrl(`/api/report-processing/status/${sessionId}`))
-      if (!res.ok) return
+      if (!res.ok) throw new Error(`Processing status unavailable (${res.status}). Reopen or retry to check the saved session.`)
       const data = await res.json()
-      if (!isMountedRef.current) return
+      if (!isCurrent()) return
 
       setRunData(data)
       if (data.run_id) setRunId(data.run_id)
@@ -133,7 +117,7 @@ export function ReportProcessingModal({
         preparing_transcript: 'Preparing Transcript',
         ai_processing: 'AI Processing',
         preparing_report: 'Preparing Report',
-        completed: 'Report ready',
+        completed: 'Draft ready for review',
       }
 
       if (data.status === 'in_progress') {
@@ -153,7 +137,7 @@ export function ReportProcessingModal({
           jobType: 'report_processing',
           sessionId,
           sessionTitle: cleanTitle,
-          stageLabel: 'Report ready',
+          stageLabel: 'Draft ready for review',
           isCompleted: true,
           runId: data.run_id || runId,
         })
@@ -179,13 +163,17 @@ export function ReportProcessingModal({
         }
       }
     } catch (e) {
-      console.error('Error polling report processing status:', e)
+      if (!isCurrent()) return
+      setErrorMsg(e.message)
+      setCurrentStage('failed')
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
     }
   }, [sessionId, session, runId])
 
   // Trigger or resume processing
-  const startProcessing = useCallback(async () => {
-    if (!sessionId) return
+  const startProcessing = useCallback(async (forceNew = false) => {
+    const isCurrent = () => isMountedRef.current && activeContextRef.current.isOpen && activeContextRef.current.sessionId === sessionId
+    if (!sessionId || !isCurrent()) return
     setErrorMsg(null)
     setIsCancelling(false)
     setCurrentStage('preparing_transcript')
@@ -195,7 +183,8 @@ export function ReportProcessingModal({
       const statusRes = await fetch(getApiUrl(`/api/report-processing/status/${sessionId}`))
       if (statusRes.ok) {
         const statusData = await statusRes.json()
-        if (statusData.status === 'completed') {
+        if (!isCurrent()) return
+        if (statusData.status === 'completed' && forceNew !== true) {
           setRunData(statusData)
           setRunId(statusData.run_id)
           setCurrentStage('completed')
@@ -203,7 +192,7 @@ export function ReportProcessingModal({
             jobType: 'report_processing',
             sessionId,
             sessionTitle: cleanTitle,
-            stageLabel: 'Report ready',
+            stageLabel: 'Draft ready for review',
             isCompleted: true,
             runId: statusData.run_id,
           })
@@ -227,34 +216,43 @@ export function ReportProcessingModal({
         }
       }
 
+      if (!isCurrent()) return
       const res = await fetch(getApiUrl('/api/report-processing/start'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId }),
+        body: JSON.stringify({ session_id: sessionId, force_new: forceNew === true }),
       })
 
       if (res.ok) {
         const data = await res.json()
-        setRunId(data.run_id)
-        setCurrentStage(data.current_stage || 'preparing_transcript')
-        setActiveProcess({
+        const current = isCurrent()
+        const tracked = getActiveProcess()
+        // An accepted server job survives its dialog. Do not displace a newer
+        // session's tracked job when a delayed response arrives after navigation.
+        if (current || !tracked || tracked.sessionId === sessionId) setActiveProcess({
           jobType: 'report_processing',
           sessionId,
           sessionTitle: cleanTitle,
           stageLabel: 'Preparing Transcript',
           isCompleted: false,
           runId: data.run_id,
+          ...(!current ? { isMinimized: true } : {}),
         })
+        if (!current) return
+        setRunId(data.run_id)
+        setCurrentStage(data.current_stage || 'preparing_transcript')
 
         if (pollTimerRef.current) clearInterval(pollTimerRef.current)
         pollTimerRef.current = setInterval(pollStatus, 1200)
       } else {
         const err = await res.json()
+        if (!isCurrent()) return
         setErrorMsg(err.detail || 'Failed to start report processing')
         setCurrentStage('failed')
         clearActiveProcess()
       }
     } catch (e) {
+      if (!isCurrent()) return
       setErrorMsg(`Failed to connect: ${e.message}`)
       setCurrentStage('failed')
       clearActiveProcess()
@@ -284,7 +282,8 @@ export function ReportProcessingModal({
     try {
       setIsCancelling(true)
       if (runId) {
-        await fetch(getApiUrl(`/api/report-processing/cancel/${runId}`), { method: 'POST' })
+        const res = await fetch(getApiUrl(`/api/report-processing/cancel/${runId}`), { method: 'POST' })
+        if (!res.ok) throw new Error(`Cancellation could not be confirmed (${res.status}). Processing may still be running.`)
       }
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current)
@@ -295,41 +294,9 @@ export function ReportProcessingModal({
         if (isMountedRef.current) onClose()
       }, 500)
     } catch (e) {
-      console.error('Error cancelling run:', e)
-      onClose()
+      setErrorMsg(e.message)
     } finally {
       setIsCancelling(false)
-    }
-  }
-
-  const handleDownloadDocx = async () => {
-    if (!sessionId) return
-    try {
-      setIsDownloading(true)
-      const res = await fetch(getApiUrl(`/api/report-processing/download-docx/${sessionId}`))
-      if (res.ok) {
-        const blob = await res.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        const disposition = res.headers.get('content-disposition')
-        let filename = `${session?.title || 'Report'}.docx`
-        if (disposition && disposition.includes('filename=')) {
-          filename = disposition.split('filename=')[1].replace(/[\\"\\']/g, '').trim()
-        }
-        a.download = filename
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
-      } else {
-        alert('Document generation is in progress. Please try again in a few moments.')
-      }
-    } catch (e) {
-      console.error('Error downloading docx:', e)
-      alert(`Download failed: ${e.message}`)
-    } finally {
-      setIsDownloading(false)
     }
   }
 
@@ -338,7 +305,7 @@ export function ReportProcessingModal({
   const cleanTitle = getCleanSessionName(session)
   const sessionDate = formatDate(session?.date_created || session?.created_at)
   const sessionDuration = formatDuration(session?.duration_seconds || session?.duration)
-  const sessionMinister = session?.minister || 'Pastor (Dr) W.F. Kumuyi'
+  const sessionMinister = session?.minister || 'Minister not recorded'
   const activeStep = getActiveStepNumber()
 
   // -------------------------------------------------------------
@@ -347,6 +314,7 @@ export function ReportProcessingModal({
   return (
     <div
       className="report-processing-modal-backdrop"
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="report-processing-title"
@@ -389,7 +357,7 @@ export function ReportProcessingModal({
         </div>
 
         {/* 4-Stage Stepper Strip */}
-        <div className="report-processing-stepper" role="progressbar" aria-valuenow={activeStep} aria-valuemin="1" aria-valuemax="4">
+        <div className="report-processing-stepper" role="progressbar" aria-label="Report processing stage" aria-valuetext={currentStage === 'failed' ? 'Processing failed' : currentStage === 'cancelled' ? 'Cancelled' : STEPS[activeStep - 1].label} aria-valuenow={activeStep} aria-valuemin="1" aria-valuemax="4">
           {STEPS.map((step, idx) => {
             const isCompleted = activeStep > step.id || currentStage === 'completed'
             const isCurrent = activeStep === step.id && currentStage !== 'completed'
@@ -411,16 +379,18 @@ export function ReportProcessingModal({
           })}
         </div>
 
+        {errorMsg && currentStage !== 'failed' && <p className="error-banner" role="alert">{errorMsg}</p>}
+
         {/* Stage-Specific Content */}
         {currentStage === 'failed' ? (
-          <div className="report-processing-error-box">
+          <div className="report-processing-error-box" role="alert">
             <div className="error-title">Report Generation Failed</div>
             <div className="error-desc">{errorMsg || 'An unexpected error occurred during processing.'}</div>
             <div className="error-actions">
               <button
                 type="button"
                 className="btn btn--primary btn--sm"
-                onClick={startProcessing}
+                onClick={() => startProcessing(true)}
               >
                 Retry
               </button>
@@ -438,7 +408,7 @@ export function ReportProcessingModal({
             <div className="completed-badge-icon">
               <CheckIcon />
             </div>
-            <h3 className="completed-title">Report ready</h3>
+            <h3 className="completed-title">Draft ready for review</h3><p>Generation is complete. Human review and approval are required before export.</p>
             <div className="completed-actions-row">
               <button
                 type="button"
@@ -448,10 +418,12 @@ export function ReportProcessingModal({
                   if (onViewReport) onViewReport(runData)
                 }}
               >
-                View Report →
+                Review draft →
               </button>
             </div>
           </div>
+        ) : currentStage === 'cancelled' ? (
+          <p role="status">Cancellation confirmed. Saved source material remains preserved.</p>
         ) : currentStage === 'preparing_transcript' ? (
           /* Stage 1: Preparing Transcript — EXACTLY ONE status line with one indicator */
           <div className="report-processing-subtasks-card">
@@ -468,29 +440,17 @@ export function ReportProcessingModal({
             <div className="report-processing-task-row">
               <span className="report-processing-blue-spinner" />
               <span className="report-processing-task-label">
-                Preparing and saving your completed report…
+                Validating and saving the report draft…
               </span>
             </div>
           </div>
         ) : (
-          /* Stage 2: AI Processing — EXACTLY four simultaneous conceptual subtasks */
           <div className="report-processing-subtasks-card">
             <div className="report-processing-task-row">
               <span className="report-processing-blue-spinner" />
-              <span className="report-processing-task-label">Reporter Extraction</span>
+              <span className="report-processing-task-label">Preparing the draft from the verified transcript…</span>
             </div>
-            <div className="report-processing-task-row">
-              <span className="report-processing-blue-spinner" />
-              <span className="report-processing-task-label">Editorial Selection</span>
-            </div>
-            <div className="report-processing-task-row">
-              <span className="report-processing-blue-spinner" />
-              <span className="report-processing-task-label">Information Unit Writing</span>
-            </div>
-            <div className="report-processing-task-row">
-              <span className="report-processing-blue-spinner" />
-              <span className="report-processing-task-label">Proofreading</span>
-            </div>
+            <p className="card-subtitle">The saved draft will require human review and approval.</p>
           </div>
         )}
 

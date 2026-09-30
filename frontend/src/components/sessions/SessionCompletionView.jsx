@@ -27,9 +27,8 @@ export function SessionCompletionView({
   skipCompiling = false,
 }) {
   const sessionId = session?.session_id || latestRecording?.session_id
-  const serviceName = session?.title || latestRecording?.title || 'Sunday Worship'
-  const durationSec = session?.duration_seconds || session?.audio_duration_seconds || latestRecording?.duration_seconds || 0
-  const dateCreated = session?.date_created || latestRecording?.created_at || new Date().toISOString()
+  const durationSec = session?.duration_seconds ?? session?.audio_duration_seconds ?? latestRecording?.duration_seconds ?? null
+  const dateCreated = session?.date_created || latestRecording?.created_at || null
   const rawFlagCount = session?.flag_count || 0
 
   const [aiStatus, setAiStatus] = useState(skipCompiling ? 'verifying' : (session?.ai_verification_status || 'compiling'))
@@ -45,18 +44,17 @@ export function SessionCompletionView({
     let isMounted = true
     let pollInterval = null
 
-    const stepTimer = setTimeout(() => {
-      if (isMounted) setCompilingStep(2)
-    }, 2000)
+
 
     const checkStatus = async () => {
       try {
         const res = await fetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/ai-status`))
-        if (!res.ok) return
+        if (!res.ok) throw new Error(`Verification status unavailable (${res.status})`)
         const data = await res.json()
         if (isMounted && data) {
           const status = data.ai_verification_status || 'idle'
           setAiStatus(status)
+          setCompilingStep(status === 'idle' ? 1 : 2)
           if (data.summary && Object.keys(data.summary).length > 0) {
             setSummary(data.summary)
           }
@@ -69,6 +67,7 @@ export function SessionCompletionView({
           }
         }
       } catch (err) {
+        if (isMounted) setAiStatus('ai_unavailable')
         console.error('Error fetching AI verification status:', err)
       }
     }
@@ -78,27 +77,28 @@ export function SessionCompletionView({
 
     return () => {
       isMounted = false
-      clearTimeout(stepTimer)
+
       if (pollInterval) clearInterval(pollInterval)
     }
   }, [sessionId])
 
   const formatDateMeta = (isoStr) => {
     try {
+      if (!isoStr) return 'Date not recorded'
       const d = new Date(isoStr)
-      if (isNaN(d.getTime())) return 'Aug 23, 2026'
+      if (isNaN(d.getTime())) return 'Not recorded'
       return d.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
       })
     } catch {
-      return 'Aug 23, 2026'
+      return 'Not recorded'
     }
   }
 
   const formatDurationMeta = (totalSec) => {
-    if (!totalSec && totalSec !== 0) return '25m 41s'
+    if (totalSec === null || totalSec === undefined) return 'Duration not recorded'
     const hours = Math.floor(totalSec / 3600)
     const mins = Math.floor((totalSec % 3600) / 60)
     const secs = Math.floor(totalSec % 60)
@@ -112,11 +112,7 @@ export function SessionCompletionView({
   const isVerifying =
     (skipCompiling && (aiStatus === 'compiling' || aiStatus === 'verifying')) ||
     (!skipCompiling && aiStatus === 'verifying')
-  const isVerifiedSuccess =
-    aiStatus === 'completed_verified' || (aiStatus === 'idle' && itemsPending === 0 && rawFlagCount === 0)
-  const isNeedsReview =
-    aiStatus === 'completed_needs_review' || (aiStatus === 'idle' && itemsPending > 0)
-  const isAiUnavailable = aiStatus === 'ai_unavailable' || aiStatus === 'failed'
+  const isAiUnavailable = !['compiling', 'verifying', 'completed_verified', 'completed_needs_review'].includes(aiStatus)
 
   const remainingToReview = summary?.unresolved_count !== undefined ? summary.unresolved_count : itemsPending
   const verifiedCount = summary?.verified_count !== undefined ? summary.verified_count : Math.max(0, itemsTotal - remainingToReview)
@@ -199,8 +195,8 @@ export function SessionCompletionView({
                   className="floating-progress-fill"
                   style={{
                     width: isCompiling
-                      ? `${compilingStep >= 2 ? 65 : 30}%`
-                      : `${itemsTotal > 0 ? Math.max(10, Math.min(100, Math.round((resolvedCount / itemsTotal) * 100))) : 40}%`,
+                      ? '0%'
+                      : `${itemsTotal > 0 ? Math.min(100, Math.round((resolvedCount / itemsTotal) * 100)) : 0}%`,
                   }}
                 />
               </div>
@@ -267,7 +263,7 @@ export function SessionCompletionView({
               </div>
 
               <h2 className="floating-card-title floating-card-title--complete">
-                Verification complete
+                AI check finished — review the transcript
               </h2>
 
               {/* 2-Column Stats Box */}

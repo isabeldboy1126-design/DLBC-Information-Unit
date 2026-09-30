@@ -1,44 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { Icon } from '../common/Icon'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { getApiUrl } from '../../config'
 
-function SearchIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  )
-}
+function SearchIcon() { return <Icon name="search" /> }
 
-function DownloadIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  )
-}
+function DownloadIcon() { return <Icon name="download" /> }
 
-function DocumentIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-    </svg>
-  )
-}
+function DocumentIcon() { return <Icon name="document" /> }
 
-function EyeIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  )
-}
+function EyeIcon() { return <Icon name="eye" /> }
 
 function formatDate(dateStr) {
   if (!dateStr) return '—'
@@ -59,6 +29,8 @@ function formatDuration(sec) {
 }
 
 export function CompletedReportsView({ onNavigateSession }) {
+  const [error, setError] = useState(null)
+  const [loaded, setLoaded] = useState(false)
   const [reports, setReports] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -66,8 +38,12 @@ export function CompletedReportsView({ onNavigateSession }) {
   const [selectedMinister, setSelectedMinister] = useState('all')
   const [downloadingId, setDownloadingId] = useState(null)
 
+  const requestId = useRef(0)
+
   const fetchReports = useCallback(async () => {
+    const currentRequest = ++requestId.current
     setIsLoading(true)
+    setError(null)
     try {
       const params = new URLSearchParams()
       if (searchQuery.trim()) params.append('query', searchQuery.trim())
@@ -75,31 +51,35 @@ export function CompletedReportsView({ onNavigateSession }) {
       if (selectedMinister !== 'all') params.append('minister', selectedMinister)
 
       const res = await fetch(getApiUrl(`/api/report-processing/archive?${params.toString()}`))
-      if (res.ok) {
-        const data = await res.json()
-        setReports(data.reports || [])
-      }
+      if (!res.ok) throw new Error(`Report collection unavailable (${res.status})`)
+      const data = await res.json()
+      if (!Array.isArray(data.reports)) throw new Error('Invalid report collection response')
+      if (currentRequest !== requestId.current) return
+      setReports(data.reports)
+      setLoaded(true)
     } catch (e) {
-      console.error('Error fetching completed reports:', e)
+      if (currentRequest === requestId.current) setError(e.message)
     } finally {
-      setIsLoading(false)
+      if (currentRequest === requestId.current) setIsLoading(false)
     }
   }, [searchQuery, selectedProgramme, selectedMinister])
+
+  const invalidateRequests = useCallback(() => { requestId.current++ }, [])
 
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchReports()
     }, 250)
-    return () => clearTimeout(timer)
-  }, [fetchReports])
+    return () => { clearTimeout(timer); invalidateRequests() }
+  }, [fetchReports, invalidateRequests])
 
   const handleDownloadDocx = async (e, report) => {
     e.stopPropagation()
     const sessionId = report.session_id
-    if (!sessionId) return
+    if (!sessionId || report.can_export !== true) return
     try {
       setDownloadingId(sessionId)
-      const res = await fetch(getApiUrl(`/api/report-processing/download-docx/${sessionId}`))
+      const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/download`))
       if (res.ok) {
         const blob = await res.blob()
         const url = window.URL.createObjectURL(blob)
@@ -116,10 +96,11 @@ export function CompletedReportsView({ onNavigateSession }) {
         window.URL.revokeObjectURL(url)
         document.body.removeChild(a)
       } else {
-        alert('Could not download document. Final document might still be preparing.')
+        const result = await res.json()
+        setError(result.detail || 'Approved document could not be downloaded. Reload the report to check its current approval.')
       }
     } catch (err) {
-      alert(`Download failed: ${err.message}`)
+      setError(`Download failed: ${err.message}`)
     } finally {
       setDownloadingId(null)
     }
@@ -136,7 +117,7 @@ export function CompletedReportsView({ onNavigateSession }) {
         <div>
           <h1 className="completed-reports-title">Reports Archive</h1>
           <p className="completed-reports-subtitle">
-            All finalized DLBC Information Unit reports and downloadable Word (.docx) documents.
+            Saved reports for review. Word documents are available after human approval.
           </p>
         </div>
       </div>
@@ -148,6 +129,7 @@ export function CompletedReportsView({ onNavigateSession }) {
           <input
             type="text"
             className="reports-search-input"
+            aria-label="Search reports"
             placeholder="Search reports by title, keywords..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -156,9 +138,10 @@ export function CompletedReportsView({ onNavigateSession }) {
             <button
               type="button"
               className="reports-search-clear"
+              aria-label="Clear report search"
               onClick={() => setSearchQuery('')}
             >
-              ✕
+              <Icon name="close" />
             </button>
           )}
         </div>
@@ -166,6 +149,7 @@ export function CompletedReportsView({ onNavigateSession }) {
         <div className="reports-filters-group">
           <select
             className="reports-filter-select"
+            aria-label="Filter reports by programme"
             value={selectedProgramme}
             onChange={(e) => setSelectedProgramme(e.target.value)}
           >
@@ -177,6 +161,7 @@ export function CompletedReportsView({ onNavigateSession }) {
 
           <select
             className="reports-filter-select"
+            aria-label="Filter reports by minister"
             value={selectedMinister}
             onChange={(e) => setSelectedMinister(e.target.value)}
           >
@@ -188,28 +173,29 @@ export function CompletedReportsView({ onNavigateSession }) {
         </div>
       </div>
 
+      {error && <div className="error-banner" role="alert">{loaded ? 'Could not refresh. Showing previously loaded reports. ' : 'Reports are unavailable. '}{error}<button className="btn btn--secondary" onClick={fetchReports}>Retry reports</button></div>}
       {/* Reports List */}
       {isLoading ? (
         <div className="reports-loading-state">
           <div className="report-processing-blue-spinner" />
           <span>Loading reports archive...</span>
         </div>
-      ) : reports.length === 0 ? (
+      ) : !loaded ? null : reports.length === 0 ? (
         <div className="reports-empty-state">
           <DocumentIcon />
           <h3>No reports found</h3>
           <p>
             {searchQuery || selectedProgramme !== 'all' || selectedMinister !== 'all'
               ? 'Try changing or clearing your search filters.'
-              : 'Once sessions are processed with AI, finalized reports will appear here.'}
+              : 'Generated drafts await human review. Approved reports can be exported.'}
           </p>
         </div>
       ) : (
         <div className="reports-cards-grid">
           {reports.map((report) => {
             const title = report.report_title || report.session_title || 'Final Message Report'
-            const programme = report.programme || report.event_type || 'Sunday Worship Service'
-            const minister = report.minister || 'Pastor (Dr) W.F. Kumuyi'
+            const programme = report.programme || report.event_type || 'Programme not recorded'
+            const minister = report.minister || 'Minister not recorded'
             const date = formatDate(report.completed_at || report.date_created)
             const duration = formatDuration(report.duration_seconds)
             const wordCount = report.word_count || 0
@@ -252,8 +238,8 @@ export function CompletedReportsView({ onNavigateSession }) {
                 </div>
 
                 <div className="report-card-footer">
-                  <span className="report-status-badge report-status-badge--ready">
-                    ✓ Document Ready
+                  <span className={`report-status-badge ${report.can_export === true ? 'report-status-badge--ready' : 'report-status-badge--review'}`}>
+                    {report.can_export === true ? 'Approved' : report.approval_status === 'legacy_unreviewed' ? 'Legacy • needs review' : 'Needs review'}
                   </span>
                   <div className="report-card-actions">
                     <button
@@ -273,7 +259,7 @@ export function CompletedReportsView({ onNavigateSession }) {
                       type="button"
                       className="btn-archive-download"
                       onClick={(e) => handleDownloadDocx(e, report)}
-                      disabled={downloadingId === report.session_id}
+                      disabled={downloadingId === report.session_id || report.can_export !== true}
                       title="Download Microsoft Word .docx"
                     >
                       <DownloadIcon />

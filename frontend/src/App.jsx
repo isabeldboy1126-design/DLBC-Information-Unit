@@ -28,6 +28,7 @@ import { TranscriptsHistoryList } from './components/transcription/TranscriptsHi
 
 import { ErrorBanner } from './components/ErrorBanner'
 import './App.css'
+import './styles/editorial.css'
 
 function App() {
   const parseRoute = (rawHash) => {
@@ -498,7 +499,11 @@ function App() {
         /* VIEW 1: DASHBOARD                                           */
         /* ----------------------------------------------------------- */
         <DashboardView
-          sessions={sessionsHook.sessions}
+          sessions={sessionsHook.sessions.filter(s => !s.is_archived)}
+          isLoading={sessionsHook.isListLoading}
+          sessionsLoaded={sessionsHook.sessionsLoaded}
+          sessionsError={sessionsHook.listError}
+          onRefresh={sessionsHook.fetchSessions}
           onStartLiveSession={() => {
             if (liveAudio.isRecording) {
               setIsRecorderMinimized(false)
@@ -520,7 +525,7 @@ function App() {
             navigateTo('sessions')
           }}
           onViewNeedsVerification={() => {
-            setSessionsStatusFilter('needs_verification')
+            setSessionsStatusFilter('attention')
             navigateTo('sessions')
           }}
           onFileSelect={handleDashboardFileSelect}
@@ -564,6 +569,7 @@ function App() {
               navigateTo(`session/${sessionId}${initialStage && initialStage !== 'overview' ? `/${initialStage}` : ''}`)
             }}
             onDeleteSession={sessionsHook.deleteSession}
+            onRestoreSession={sessionsHook.restoreSession}
             onRefresh={sessionsHook.fetchSessions}
             onStartNewSession={() => {
               if (liveAudio.isRecording) {
@@ -572,7 +578,9 @@ function App() {
                 navigateTo('new_live')
               }
             }}
-            isLoading={sessionsHook.isLoading}
+            isLoading={sessionsHook.isListLoading}
+            sessionsLoaded={sessionsHook.sessionsLoaded}
+            sessionsError={sessionsHook.listError}
             initialStatusFilter={sessionsStatusFilter}
           />
         ) : (
@@ -580,6 +588,7 @@ function App() {
             session={sessionsHook.activeSession}
             initialStage={sessionInitialStage}
             onBack={handleInAppBack}
+            onRefreshSession={() => sessionsHook.loadSession(sessionsHook.activeSession.session_id)}
             onUpdateTitle={sessionsHook.updateSessionTitle}
             onUpdateDetails={sessionsHook.updateSessionDetails}
             onSubViewChange={setSessionSubViewInfo}
@@ -702,6 +711,11 @@ function App() {
         /* VIEW 8: EVENTS / PROGRAMMES SESSIONS                        */
         /* ----------------------------------------------------------- */
         <SessionHistoryList
+          sessions={sessionsHook.sessions}
+          isLoading={sessionsHook.isListLoading}
+          sessionsLoaded={sessionsHook.sessionsLoaded}
+          sessionsError={sessionsHook.listError}
+          onRefresh={sessionsHook.fetchSessions}
           onOpenSession={(sessionId) => navigateTo(`session/${sessionId}`)}
           onStartLiveSession={handleStartLiveRecording}
           onOpenTranscribe={() => navigateTo('transcribe')}

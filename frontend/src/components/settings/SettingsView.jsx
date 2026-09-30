@@ -1,31 +1,42 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { ReadinessSummary } from './ReadinessSummary'
+import { Icon } from '../common/Icon'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { getApiUrl, API_BASE_URL } from '../../config'
 import { ProgrammesSettingsSection } from './ProgrammesSettingsSection'
 
 export function SettingsView({ onBack }) {
   const [instruction, setInstruction] = useState('')
   const [instructionLoaded, setInstructionLoaded] = useState(false)
-  const [autoProcessAfterVerification, setAutoProcessAfterVerification] = useState(true)
+  const [autoProcessAfterVerification, setAutoProcessAfterVerification] = useState(null)
+  const [autoStatus, setAutoStatus] = useState('loading')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState(null)
   const [error, setError] = useState(null)
   const [lastRefreshed, setLastRefreshed] = useState(null)
+  const settingsRequest = useRef(0)
 
   const fetchSettingsData = useCallback(async () => {
+    const request = ++settingsRequest.current
     setIsLoading(true)
     setError(null)
+    setAutoProcessAfterVerification(null)
+    setAutoStatus('loading')
     try {
       // 1. Fetch settings (auto-process after verification)
       try {
         const setRes = await fetch(getApiUrl('/api/report-processing/settings'))
-        if (setRes.ok) {
-          const setData = await setRes.json()
-          const autoVal = setData.auto_process_after_verification
-          setAutoProcessAfterVerification(autoVal !== false && autoVal !== 'false')
-        }
+        if (!setRes.ok) throw new Error(`Settings request failed: ${setRes.status}`)
+        const setData = await setRes.json()
+        const autoVal = setData.auto_process_after_verification
+        if (![true, false, 'true', 'false'].includes(autoVal)) throw new Error('Automation value is missing or invalid')
+        if (request !== settingsRequest.current) return
+        setAutoProcessAfterVerification(autoVal === true || autoVal === 'true')
+        setAutoStatus('loaded')
       } catch (e) {
+        if (request !== settingsRequest.current) return
         console.warn('Failed to load settings:', e)
+        setAutoStatus('unavailable')
       }
 
       // 2. Fetch authoritative instruction with multi-endpoint fallback
@@ -97,6 +108,7 @@ export function SettingsView({ onBack }) {
         }
       }
 
+      if (request !== settingsRequest.current) return
       if (loadedInstruction && typeof loadedInstruction === 'string' && loadedInstruction.trim()) {
         setInstruction(loadedInstruction)
         setInstructionLoaded(true)
@@ -109,11 +121,12 @@ export function SettingsView({ onBack }) {
 
       setLastRefreshed(new Date().toLocaleTimeString())
     } catch (err) {
+      if (request !== settingsRequest.current) return
       console.error(`Error connecting to backend server at ${API_BASE_URL}:`, err)
       setInstructionLoaded(false)
       setError('AI Processing Instructions could not be loaded.')
     } finally {
-      setIsLoading(false)
+      if (request === settingsRequest.current) setIsLoading(false)
     }
   }, [])
 
@@ -162,21 +175,29 @@ export function SettingsView({ onBack }) {
   }
 
   const handleToggleAutoProcess = async () => {
+    if (autoProcessAfterVerification === null || isLoading || isSaving || autoStatus === 'saving') return
+    const previous = autoProcessAfterVerification
     const nextVal = !autoProcessAfterVerification
     setAutoProcessAfterVerification(nextVal)
+    setAutoStatus('saving')
     try {
-      await fetch(getApiUrl('/api/report-processing/settings'), {
+      const response = await fetch(getApiUrl('/api/report-processing/settings'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ auto_process_after_verification: nextVal }),
       })
+      if (!response.ok) throw new Error(`Automation save failed: ${response.status}`)
+      setAutoStatus('saved')
     } catch (err) {
       console.error('Failed to toggle auto_process_after_verification:', err)
+      setAutoProcessAfterVerification(previous)
+      setAutoStatus('failed')
     }
   }
 
   return (
     <div className="settings-page-container">
+      <ReadinessSummary />
       {/* Top Header */}
       <div className="settings-page-header">
         <div className="settings-header-left">
@@ -193,7 +214,7 @@ export function SettingsView({ onBack }) {
             type="button"
             className="btn btn--outline btn--small"
             onClick={fetchSettingsData}
-            disabled={isLoading || isSaving}
+            disabled={isLoading || isSaving || autoStatus === 'saving'}
           >
             {isLoading ? 'Checking...' : '↻ Refresh'}
           </button>
@@ -203,12 +224,12 @@ export function SettingsView({ onBack }) {
       {error && (
         <div className="settings-alert settings-alert--error" role="alert">
           <div className="settings-alert-content">
-            <span className="settings-alert-text">⚠️ {error}</span>
+            <span className="settings-alert-text">⚠ {error}</span>
             <button
               type="button"
               className="btn btn--small btn--outline btn-retry-load"
               onClick={fetchSettingsData}
-              disabled={isLoading}
+              disabled={isLoading || isSaving || autoStatus === 'saving'}
             >
               {isLoading ? 'Retrying...' : 'Retry'}
             </button>
@@ -226,7 +247,7 @@ export function SettingsView({ onBack }) {
       <div className="settings-card editorial-standards-card">
         <div className="settings-card-header">
           <div className="settings-card-title-group">
-            <span className="settings-card-icon">📋</span>
+            <span className="settings-card-icon"><Icon name="copy" /></span>
             <div>
               <h2 className="settings-card-title">Editorial Standards &amp; Instruction Management</h2>
             </div>
@@ -237,15 +258,33 @@ export function SettingsView({ onBack }) {
           {/* Simple Auto-Process Row */}
           <div className="settings-auto-process-row">
             <span className="settings-auto-process-label">Auto-Process After Verification</span>
-            <label className="toggle-switch" aria-label="Auto-Process After Verification">
+            {autoProcessAfterVerification === null ? (
+              <span>{autoStatus === 'loading' ? 'Loading…' : 'Unknown'}</span>
+            ) : <label className="toggle-switch">
               <input
                 type="checkbox"
                 checked={autoProcessAfterVerification}
                 onChange={handleToggleAutoProcess}
+                aria-label="Auto-Process After Verification"
+                aria-describedby="automation-status"
+                disabled={isLoading || isSaving || autoStatus === 'saving'}
               />
               <span className="toggle-slider"></span>
-            </label>
+            </label>}
           </div>
+          <p id="automation-status" role={autoStatus === 'unavailable' || autoStatus === 'failed' ? 'alert' : 'status'}>
+            {autoStatus === 'loading' ? 'Loading saved automation setting…'
+              : autoStatus === 'unavailable' ? 'Saved automation setting is unknown. Retry loading before making changes.'
+              : autoStatus === 'saving' ? 'Saving automation setting…'
+              : autoStatus === 'failed' ? 'Automation setting could not be saved. Restored the last confirmed value. Toggle again to retry.'
+              : autoStatus === 'saved' ? 'Automation setting saved.'
+              : 'Saved automation setting loaded.'}
+          </p>
+          {autoStatus === 'unavailable' && (
+            <button type="button" className="btn btn--outline btn--small" onClick={fetchSettingsData} disabled={isLoading || isSaving}>
+              Retry automation settings
+            </button>
+          )}
 
           {/* AI Processing Instructions Area */}
           <div className="unified-instructions-group">
@@ -276,7 +315,7 @@ export function SettingsView({ onBack }) {
                 type="button"
                 className="btn btn--primary btn-save-instructions"
                 onClick={handleSaveInstructions}
-                disabled={isSaving || isLoading || !instructionLoaded || !instruction.trim()}
+                disabled={isSaving || isLoading || autoStatus === 'saving' || !instructionLoaded || !instruction.trim()}
               >
                 {isSaving ? 'Saving Instructions...' : 'Save Instructions'}
               </button>

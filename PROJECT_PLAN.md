@@ -503,6 +503,18 @@ The prototype is currently being developed independently by the project owner be
 
 ---
 
+### Bounded frontend reliability repair — 30 September 2026
+
+Implemented within the existing interface: independent session-collection loading/error state, retry and retained data after failed refreshes; neutral audio setup wording; unknown automation values until a successful load, save feedback and rollback; mobile drawer focus containment/background inertness/focus restoration; native keyboard-operable brand home button. Persisted automation defaults, processing/approval semantics, YouTube scope, and visual redesign remain outside this repair. This does not accept Phase 10 or Phase 11 as complete.
+
+Verification on the local preview (`127.0.0.1:5173`): `npm run lint` exits 0 with existing warnings; `npm run build` passes; `git diff --check` passes. `frontend/tests/reliability.browser.mjs` passes in headless Chromium at 1440 × 900 and 390 × 844, with all backend requests intercepted by synthetic fixtures. Checks cover initial loading/offline/empty/populated states, HTTP and malformed collection responses, retained rows and retry, unknown automation values after network/HTTP/malformed loads, disabled saves while pending, HTTP/network rollback, retry and fixture reload, Enter/Space home activation, both Tab directions inside the drawer, inert background, Escape/close/navigation/backdrop focus restoration, and mobile-to-desktop resize cleanup. No microphone permission or recording was requested, and no backend/provider execution was used.
+
+To rerun from `frontend`, use `node tests/reliability.browser.mjs` with an already-installed Playwright runtime resolvable via `NODE_PATH` and the existing frontend preview running. This check adds no dependency. `FRONTEND_TEST_URL` optionally selects a local preview; `FRONTEND_TEST_SCREENSHOTS` optionally selects a screenshot directory. Local verification captures are in the existing ignored `ux-review-screenshots/` directory (`reliability-dashboard-desktop.png`, `reliability-dashboard-mobile.png`, `reliability-mobile-drawer.png`).
+
+Limits: fixture reload verifies frontend handling, not real backend persistence; real device/provider readiness, report generation/human approval, native assistive-technology behavior, and full workflow/export reliability remain unverified. Resolve the deferred product/approval contract before changing report completion rules.
+
+---
+
 ### Phase 11 — UI Integration and Polish
 
 **Objective:** Integrate the approved Google Stitch visual design system (aligned with DLBC brand direction) without breaking established functionality.
@@ -627,3 +639,64 @@ Scope additions after approval are recorded here:
 | Purpose | Delivery roadmap and rolling-wave project plan |
 | Authority | Changes require project-owner approval |
 | Related documents | PROJECT_SCOPE.md, AGENTS.md |
+
+---
+
+## 11. Proposed takeover and design upgrade sequence — 30 September 2026
+
+The owner subsequently authorised implementing the audited backend/frontend fixes, delegated visual selection, and requested GPT 6.1 chats at high effort on 30 September 2026. The selected direction is the calm editorial workspace with explicit operational recording controls. The two-direction comparison below records the earlier proposal; it is no longer an approval gate. The current executable scope, ownership and acceptance checks are in `tickets.md`. This authorisation does not accept the existing phase table as complete or approve a release. Preserve the existing working shell, audio-capture lifecycle, source assets and revisions. The bounded frontend repair is checked separately. See DLBC_UX_HANDOFF.md Section 19 for independent runtime findings and design research evidence.
+
+The outcome sought is a dependable reporting workspace with an intentional visual identity: capture/import a sermon, verify meaning against its source, prepare and review a report, and explicitly approve the downloadable result. Premium appearance should come from coherent composition and typography as well as reliable behaviour. Typography is not meaningfully classified as an 'AI-generated font'.
+
+| Order | Work and responsible judgement | Concrete deliverable | Gate before advancing |
+| --- | --- | --- | --- |
+| 1. Repair trust failures | Engineering, with owner resolution of workflow/retention policy | Missing provider creates no invented output; invalid output cannot finalise; generated and human-approved states are distinct; session removal preserves protected sources; reproducible KJV asset setup | Offline regression cases enforce each contract. Confirm consolidated processing versus separate review stages and any permanent-deletion exception. Do not claim provider accuracy from mocks. |
+| 2. Map the operator journey | Product and design | One state/action map for live capture and uploaded recordings through verification, draft, review, approval, export; resume/failure paths and an attention queue | Same session derives the same stage/action on desktop and mobile. Record live and Upload recording are discoverable. Resolve YouTube's documented deferred status before changing its prominence. |
+| 3. Compare two visual directions | Design with owner selection | Matching dashboard, recording-state, transcript-verification, and report-review compositions using the same synthetic sermon content; desktop and narrow-screen versions | Owner can compare type, density, icons, source context, and identity with identical content. No entire-app restyle before a direction is selected. This comparison may use the separate Stitch design route if the owner wishes. |
+| 4. Define and implement the selected system | Design and frontend engineering | Verified font loading and fallback, type scale, spacing, surface/colour tokens, one icon family, buttons/fields/statuses/panels; shared shell then core workspaces in small slices | Readable long prose, long titles, genuine error/empty/working states, consistent keyboard/focus behaviour, and original audio capture lifecycle preserved. Add no library solely for styling convenience. |
+| 5. Give motion a purpose and verify workflows | Design and assurance | State-transition feedback, bounded drawer/panel movement, clear save/process feedback, complete reduced-motion states; scenario checks from input through export | No animation obscures readings, creates fake progress, or delays an urgent recording action. Check keyboard, mobile/short windows, retries, unsaved-work recovery, source retention, and representative exports. Use real-service evidence only when explicitly authorised. |
+| 6. Evaluate a bounded Gemini improvement | Product and engineering | Compare one candidate with the current provider using approved samples: transcription annotations/vocabulary, schema-backed source-linked extraction, or later guideline retrieval | Measure meaning errors, names/scriptures, omissions, invented statements, review effort, latency and actual cost. Retain raw sources. Decide provider/data handling and budget before any external pilot. No new AI feature is assumed necessary. |
+
+### The two visual directions to compare
+
+**Recommended starting hypothesis: calm editorial workspace.** Retain recognisable DLBC blue, use restrained neutral surfaces, prioritise the transcript/document reading column, and keep source audio and review context nearby. Dashboard centres sessions that need attention and two clear intake paths. Capture mode keeps device state, recording time, local saving, and processing readiness visible. Evidence: transcript/document references fit the primary reading and review work. The risk is making capture controls too quiet; they must stay clear in the prototype.
+
+**Alternative: compact operational workspace.** Stronger panels and visible transport/status information support capture and rapid triage, with a separate readable document area. Compare a dark capture treatment only if it aids the operator; do not inherit podcast multitrack controls or AI effects. Evidence: Sonet supplies operational hierarchy, not an accepted product model. The risk is excessive density and a technical tone that undermines report reading.
+
+These are coherent exploration directions, not a plan to combine every reference. The current source ledger contains eight distinct concepts and 19 screenshots; some are useful for one layout principle but weak as a visual identity. The research is strongest for verification/report review and needs more evidence for dashboard priorities, long recording, mobile behaviour, and motion.
+
+### What the design comparison must contain
+
+- **Realistic content:** a long sermon title, paragraphs and scripture references, a flagged quotation, source timestamp, revision status, pending review and failed save. Use labelled synthetic content until real material is authorised.
+- **Typography:** compare candidate type treatments on the same prose and controls; check actual loading, fallback, paragraph width, line spacing, heading weight, timer numerals, and narrow-screen legibility. A custom font alone cannot create a premium interface.
+- **Icons:** compare one consistent icon system at actual control sizes; retain text labels on critical actions and distinguish record, pause, stop, retry, approval, and export. Audit current SVG and emoji uses before replacing them. No icon family is selected yet.
+- **Motion:** demonstrate actual triggers and still/reduced-motion states for navigation, source context, recording state, and saves. Reference screenshots are not motion evidence. Avoid decorative movement around long reading tasks.
+- **Responsive behaviour:** source/review panels remain accessible without squeezing the document into a narrow column; focus order and active recording remain intact across layout changes.
+
+Selection should weigh task clarity, text readability, truthful/recoverable state, consistency, accessibility, and DLBC identity. Record the owner's preference and the reason for the selected direction. No numerical design score substitutes for that decision.
+
+### Product improvements worth evaluating
+
+The first candidate is statement-to-source inspection: select a claim in the generated report and see the supporting verified text and audio position, or a visible lack of support. This extends existing source/audio tools and addresses the scope's traceability problem. Start with one reviewed report and measure how easily a person can check it.
+
+Next candidates are a meaning-risk review queue and interruption recovery. The former should reuse existing flags, scripture context, revisions, and standards; the latter needs evidence from the current recording lifecycle before selecting a storage strategy. These are hypotheses, not a commitment to multi-user roles, cloud migration, or new analytics.
+
+The current Gemini gateway can remain the boundary for a future pilot. Official [transcription](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-transcribe), [structured-output](https://ai.google.dev/gemini-api/docs/structured-output), and [File Search](https://ai.google.dev/gemini-api/docs/file-search) capabilities were researched, but no external call, key setup, or data upload was performed. See the handoff for compatibility limits. Improving validation and approval is required before adding another AI capability.
+
+### Evidence status
+
+Frontend repair: independent fixture browser suite, lint, build, and diff check passed. Backend: 95 tests passed and 13 KJV fixture setups errored because the generated database is absent. Separate temporary-storage probes confirmed fabricated offline final output, ignored validation, approval bypass, and original-audio deletion. This is not full end-to-end acceptance. No application source was changed by the independent audit, and no commit, push, deployment, or scope approval was made.
+
+## 12. Selected editorial desk and corrective implementation — 30 September 2026
+
+The owner rejected the initial generic dashboard, chose the first/light editorial-desk image, and authorised re-dispatching the existing implementation chats. This section and tickets T10–T15 supersede the earlier visual hypothesis. Keep all work uncommitted on `codex/product-ux-audit` until the brother accepts it; publication and merge remain outside scope.
+
+Selected concept: [Editorial desk](design-research/2026-09-30/editorial-desk-selected.png). Alternative: [Recording desk](design-research/2026-09-30/recording-desk-alternative.png). Both were generated with the built-in image tool as visual proposals with synthetic content. They do not prove behavior, accessibility, motion, source linkage or provider readiness.
+
+The accepted composition replaces the desktop sidebar and promotional hero with a compact horizontal masthead and intake toolbar. A session work list occupies approximately 35–40% of the workspace; available document/source context gets the larger share. Use genuine stage/artifact data, explicit next actions, fine separators and strong reading hierarchy. No numbered intake cards, duplicated labels, invented documents/waveforms or unsupported claims. Preserve the actual church brand asset, existing routing/capture lifetime and all failure/recovery controls. On narrow screens, keep actions reachable and switch between list and selected content without compressing prose.
+
+Use Source Sans 3 for the functional UI and Source Serif 4 sparingly for document reading/title. Bundle a minimal official font subset and license locally; verify loading/fallback. Use one small Phosphor SVG set, consistent optical weight/size and clearly different settings/theme/source/navigation silhouettes, retaining its license and provenance. Official sources: [Source Sans](https://github.com/adobe-fonts/source-sans), [Source Serif](https://github.com/adobe-fonts/source-serif), [Phosphor SVG assets](https://github.com/phosphor-icons/core). These are asset choices, not new npm/global dependencies or a guarantee of premium appearance.
+
+Motion must be visible in a working demonstration: a moving navigation baseline, restrained session-preview transition, source-panel reveal and response-triggered save feedback. Normal transitions last about 160–200 ms and resolve to the latest input; essential actions remain immediate. Reduced motion snaps/cancels movement and preserves feedback. Retain a coherent dark theme; the darker recording concept may inform live capture without turning the dashboard into an audio-production tool.
+
+Execution order: Backend repairs atomic finalization (T10); Frontend repairs final/source/title/seek issues (T11/T12), then builds shell/dashboard (T13) and continues through existing workspaces/motion (T14). Final acceptance (T15) waits for both lanes, browser captures and a motion demonstration. Existing implementation chats keep backend/frontend ownership; the parent owns root documents and independent result review. Both agents must inspect the selected image, not infer it from a verbal label.

@@ -54,7 +54,7 @@ class DocumentService:
     def format_date_human(self, date_input: Optional[str]) -> str:
         """Converts ISO or timestamp string into '17 Aug 2026' or '17 August 2026'."""
         if not date_input:
-            return datetime.date.today().strftime("%d %b %Y")
+            return "Date not provided"
 
         try:
             # Handle float/int timestamp strings
@@ -359,7 +359,7 @@ class DocumentService:
             or session_metadata.get("metadata", {}).get("speaker")
             or session_metadata.get("minister")
             or session_metadata.get("speaker")
-            or "Pastor W.F. Kumuyi"
+            or "Minister not provided"
         )
         programme = (
             session_metadata.get("metadata", {}).get("programme")
@@ -405,7 +405,7 @@ class DocumentService:
             or session_metadata.get("metadata", {}).get("speaker")
             or session_metadata.get("minister")
             or session_metadata.get("speaker")
-            or "Pastor W.F. Kumuyi"
+            or "Minister not provided"
         )
         programme = (
             session_metadata.get("metadata", {}).get("programme")

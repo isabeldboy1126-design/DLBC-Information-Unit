@@ -37,8 +37,8 @@ export function RecordedFileUploader({
       <div className="card-header">
         <h3>Transcribe Recorded Message</h3>
         <div className="config-badge-group">
-          <span className="badge badge--success">
-            ⚙ Active: {activeProviderName}
+          <span className="badge badge--muted">
+            Selected engine: {activeProviderName}
           </span>
         </div>
       </div>
@@ -60,11 +60,11 @@ export function RecordedFileUploader({
                 disabled={isBusy || disabled}
               />
               <div className="provider-option-text">
-                <span className="provider-title">☁️ Azure Speech — English (Nigeria) [en-NG]</span>
+                <span className="provider-title">☁ Azure Speech — English (Nigeria) [en-NG]</span>
                 <span className="provider-desc">
                   {configStatus?.providers?.azure_speech?.is_configured
-                    ? '✓ Configured & Ready (southafricanorth)'
-                    : '⚠ Configure AZURE_SPEECH_KEY in backend/.env'}
+                    ? 'Configuration present • live access unverified'
+                    : 'Provider not configured • check Settings'}
                 </span>
               </div>
             </label>
@@ -81,8 +81,8 @@ export function RecordedFileUploader({
                 disabled={isBusy || disabled}
               />
               <div className="provider-option-text">
-                <span className="provider-title">💻 Local Faster-Whisper</span>
-                <span className="provider-desc">✓ Offline CPU (int8 small model — No API Key needed)</span>
+                <span className="provider-title"> Local Faster-Whisper</span>
+                <span className="provider-desc">Local processing • model availability unverified</span>
               </div>
             </label>
 
@@ -98,11 +98,11 @@ export function RecordedFileUploader({
                 disabled={isBusy || disabled}
               />
               <div className="provider-option-text">
-                <span className="provider-title">☁️ Google Cloud Speech-to-Text</span>
+                <span className="provider-title">☁ Google Cloud Speech-to-Text</span>
                 <span className="provider-desc">
                   {configStatus?.providers?.google_speech_to_text?.is_configured
-                    ? '✓ Cloud credentials configured'
-                    : '⚠ Credentials / billing pending'}
+                    ? 'Configuration present • live access unverified'
+                    : 'Provider configuration unavailable • check Settings'}
                 </span>
               </div>
             </label>
@@ -122,7 +122,7 @@ export function RecordedFileUploader({
               }}
               disabled={isBusy || disabled}
             >
-              🎵 Audio (WAV, MP3, M4A)
+               Audio (WAV, MP3, M4A)
             </button>
             <button
               type="button"
@@ -133,7 +133,7 @@ export function RecordedFileUploader({
               }}
               disabled={isBusy || disabled}
             >
-              🎬 Video (MP4)
+               Video (MP4)
             </button>
           </div>
         </div>
@@ -162,7 +162,7 @@ export function RecordedFileUploader({
               disabled={isBusy || disabled}
               id="btn-select-file"
             >
-              📁 {selectedFile ? 'Choose Different File' : 'Select File'}
+               {selectedFile ? 'Choose Different File' : 'Select File'}
             </button>
 
             <span className="file-formats-hint">
@@ -176,7 +176,7 @@ export function RecordedFileUploader({
           <div className="selected-file-card">
             <div className="file-card-header">
               <span className="file-name-icon">
-                {fileType === 'video' ? '🎬' : '🎵'} <strong>{fileMetadata.name}</strong>
+                {fileType === 'video' ? '' : ''} <strong>{fileMetadata.name}</strong>
               </span>
               <span className="badge badge--muted">{formatFileSize(fileMetadata.size)}</span>
             </div>
@@ -199,7 +199,7 @@ export function RecordedFileUploader({
             disabled={!selectedFile || isBusy || disabled}
             id="btn-start-transcribe"
           >
-            {isBusy ? 'Processing...' : '🚀 Transcribe Message'}
+            {isBusy ? 'Processing...' : ' Transcribe Message'}
           </button>
         </div>
       </div>

@@ -1,5 +1,7 @@
 # DLBC Information Unit — Current App UX Handoff
 
+> **Takeover baseline, 30 September 2026:** Read [Section 18](#18-takeover-audit-30-september-2026) before using the earlier audit as current implementation truth. Some earlier routing, dashboard, and workflow descriptions have been superseded. The new section distinguishes browser observations from source findings and proposals.
+
 > **Authoritative Technical & UX State Audit**  
 > **Target Audience:** UI/UX Product Designers, ChatGPT Redesign Prompts, Frontend Engineers  
 > **Application:** Deeper Life Bible Church (DLBC) Information Unit Reporting System  
@@ -2356,3 +2358,134 @@ In strict adherence to security non-negotiables, all sensitive credentials, secr
 ---
 
 *End of DLBC Information Unit UI/UX Comprehensive Handoff Document.*
+
+## 18. Takeover Audit, 30 September 2026
+
+### Baseline and evidence boundary
+
+- Repository: `https://github.com/isabeldboy1126-design/DLBC-Information-Unit.git`.
+- Working branch: `codex/product-ux-audit`, created from the remote default `master` at `b809f9a`.
+- At clone time, `origin/master`, `origin/main`, and `origin/experiment/neutral-dark-theme` point to the same commit. Their names do not represent different current implementations.
+- Frontend dependencies installed from the existing lockfile using `npm ci --ignore-scripts --no-audit --no-fund`. No dependencies were added or upgraded.
+- `npm run build`: passed. `npm run lint`: exit 0 with existing warnings, including hook dependency and unused-variable warnings. This is not a warning-free result.
+- Local frontend: `http://127.0.0.1:5173/`, with backend and AI providers kept offline.
+- Browser inspection: dashboard, session history, settings, and new-live-session setup at 1440 × 900; dashboard and new-live setup at 390 × 844; mobile navigation focus; browser Back and refresh on the setup route.
+- No source recordings, uploads, microphone grants, AI processing calls, backend tests, or live data were used. Successful populated-session workflows, save persistence, actual transcription, export, dark theme, contrast, and reduced motion remain unverified.
+- This pass changes this handoff only. No application code, product scope, milestone acceptance, commits, pushes, or deployments are changed.
+
+### Product reading and proposed direction
+
+The documented product is a church-internal, desktop-first reporting tool. Its core value is reducing manual reporting effort while keeping sermon sources traceable and human review explicit. The project documents identify the owner as the confirmed initial operator; broader stakeholder adoption remains unconfirmed.
+
+The design opportunity is a dependable operator workspace: make source availability, review obligations, saved work, and the next action clear for each session. Retain the recognisable shell, session-based organisation, audio permission explanation, source reference tools, and existing report-stage components. Keep the existing blue identity as a starting constraint; palette replacement and a new architecture are not needed for the first slice.
+
+This is a proposed direction grounded in the specification and inspected implementation. It is not evidence from operator interviews or real-service observation.
+
+### Findings and priorities
+
+**P1: Reconcile automatic generation with human approval before redesigning completion states.** The current processing engine describes reporter extraction, editorial selection, writing, and proofreading inside a single processing path. It then calls `finalize_report` with `proofread_report_revision_id=None`; the repository function sets `final_report_status='complete'`. This differs from the separate editor/proofreader stages and human review in `PROJECT_SCOPE.md` and `AGENTS.md`. The offline settings screen also shows Auto-Process After Verification enabled, and both frontend initial state and backend settings seeding default it to true. That toggle is distinct from the older auto-continue-to-proofreading setting, so their semantics must be reconciled explicitly. Evidence: [engine](backend/app/report_processing/engine.py), [final-report repository](backend/app/database/final_report_repo.py), [settings view](frontend/src/components/settings/SettingsView.jsx), [settings seeding](backend/app/database/report_processing_repo.py). Source finding; the processing path was not run. Proposed contract: distinguish AI-generated output awaiting review from a human-approved final report. Resolve whether the consolidated pipeline is an intentional product change before modifying stage logic or approval behaviour.
+
+**P1: Unavailable data is presented as an empty collection.** With the backend offline, the dashboard displays `Notice: Failed to fetch` together with `No recorded sessions found`; history displays `No Sessions Found` and says no sessions have been recorded. The request failure cannot establish that the collection is empty. `useSessions` begins with an empty array, and the dashboard is not given a collection load/error state. Evidence: [session hook](frontend/src/hooks/useSessions.js), [app wiring](frontend/src/App.jsx), and the local browser captures. Give the collection its own loading, loaded-empty, loaded-with-data, and unavailable states, with retry and truthful copy. When refreshing known data fails, retain it and label it as previously loaded.
+
+**P1: The dashboard asserts hardware readiness without checking it.** `Mic / USB Ready` is unconditional dashboard content. It appears even though the new-live screen says microphone permission is required and no permission was granted during this audit. Evidence: [dashboard](frontend/src/components/dashboard/DashboardView.jsx), browser comparison of dashboard and setup. Replace the claim with a neutral setup action until permission and device state are known. Distinguish audio input availability from backend connection and transcription-provider readiness.
+
+**P1: Automation settings can appear saved when they are not.** The offline settings screen renders an enabled, checked automation toggle despite not loading its persisted value. Its handler immediately changes local state, does not inspect `response.ok`, and only logs a fetch exception without reverting the value or showing a save error. Evidence: [SettingsView](frontend/src/components/settings/SettingsView.jsx), initial offline browser state. The handler finding is from source; no setting was submitted. Represent unknown persisted values explicitly, prevent edits until loaded, and show saving, saved, and failed states with rollback/retry.
+
+**P1: Mobile navigation leaves keyboard focus behind its overlay.** At 390 × 844, opening the drawer leaves focus on Open navigation. Pressing Tab focuses the Back button behind the drawer. The page content remains in the accessibility tree; there is no drawer focus containment or background inertness in the inspected implementation. Evidence: browser reproduction and [AppShell](frontend/src/components/common/AppShell.jsx). Move focus into the drawer on open, keep keyboard interaction within it while it overlays the page, make covered content inactive, and return focus to the opener on close. Escape dismissal already exists and should be retained.
+
+**P2: The brand home control lacks keyboard activation.** On the settings screen, focusing the DLBC brand control and pressing Enter leaves the route unchanged. The element is a `div` with `role="button"`, `tabIndex`, and a click handler, but no key handler. Evidence: browser reproduction and [AppShell](frontend/src/components/common/AppShell.jsx). Use a native actionable element with the same appearance and a clear accessible name.
+
+**P2: Desktop and mobile report completion rules differ.** Desktop recent-session rows treat either `final_report_status='complete'` or `report_processing_status='completed'` as final completion. Mobile rows only check `final_report_status`. This can produce different labels/actions for the same data when those fields differ. Evidence: [DashboardView](frontend/src/components/dashboard/DashboardView.jsx), source only; no populated session was available to reproduce the disagreement. Centralise presentation-state derivation after the approval contract is settled, and verify it with representative session fixtures.
+
+**P2: Dashboard action hierarchy does not match the documented V1 boundary.** The existing-file upload path is a small text action beneath two large live/YouTube cards. The scope describes live capture and existing recordings as V1 paths, while direct YouTube downloading is deferred. Source confirms a YouTube implementation exists; that alone does not establish whether a scope change was approved. Evidence: [scope](PROJECT_SCOPE.md), [dashboard](frontend/src/components/dashboard/DashboardView.jsx), [YouTube view](frontend/src/components/youtube/YouTubeSessionView.jsx). Give Record live and Upload recording comparable discoverability. Confirm the intended status of YouTube before moving, expanding, or removing it.
+
+**P2: The notification affordance implies functionality that is absent.** The bell has a persistent indicator dot and an accessible Notifications label, but no click handler or notification content in `AppShell`. Evidence: source inspection. Connect it to a real actionable notification state or remove the unsupported indicator/control in an approved interface slice.
+
+### What to keep and what earlier claims no longer establish
+
+- Browser history routing is now implemented. Navigating from setup to dashboard, using browser Back, and refreshing returned to/preserved `#new_live` in this pass. The earlier blanket claim that the app has no routing is superseded. This check does not prove recovery of unsaved drafts or active recordings.
+- Current dashboard has a five-column desktop table and a separate mobile session presentation. The inspected empty dashboard and setup measured document width 390 at viewport width 390. The earlier claim of universal dashboard table overflow should not be carried forward. Populated history, long titles, and the session stepper still need separate checks.
+- The shell uses several SVG icons and a shared confirmation component with focus handling. Earlier statements that all navigation relies on emojis or that no focus handling exists are too broad for the current source. Some secondary screens still use emojis, and the mobile drawer has a specific focus defect.
+- The phase plan still labels Complete Application UX and UI Integration and Polish as Not Started, while substantial implementation exists. Treat those labels as unverified delivery records, not a reason to rebuild the shell or declare the phases accepted.
+- Original-audio preservation, immutable raw transcript, and traceability remain product requirements. Their existence in documents or source is not proof of end-to-end reliability on this machine.
+
+### Recommended improvement slices
+
+1. **Truthful dashboard and session loading.** Show connection/load state, make Record live and Upload recording clear, separate unavailable from empty data, and provide retry. Preserve current navigation and data contracts. Acceptance: an offline backend never claims no sessions exist or that audio hardware is ready; a successful empty response gets first-session guidance; existing sessions remain usable after a failed refresh where feasible.
+2. **Reliable setup and accessible shell.** Make programme prerequisites and permission/device checks explicit, fix keyboard activation and drawer focus, and remove unsupported notification signals. Acceptance: a keyboard user can enter/exit navigation and complete available setup steps; covered page controls cannot receive focus through the open drawer; backend failure is not described as missing programme configuration.
+3. **Review workspace and final approval.** After the pipeline decision, align attention queues, progress indicators, editable drafts, source/audio references, and final-review language around one agreed contract. Acceptance: users can distinguish processing success from human approval, identify what requires review, and recover work. This slice requires backend-backed representative sessions and project-native regression evidence before any completion claim.
+
+Do the first bounded slice before a broad visual rewrite. Reuse existing tokens and components, then improve typography, spacing, density, and responsive behaviour where the task needs it. Do not add multi-user roles, analytics, new AI capabilities, cloud infrastructure, or integrations merely to make the transformation feel larger.
+
+### Local evidence and next verification
+
+Screenshots are saved in the existing ignored `ux-review-screenshots/` directory. They are local evidence and will not accompany a normal Git commit unless separately included intentionally:
+
+- `dashboard-desktop.png`, `dashboard-mobile.png`
+- `sessions-offline-desktop.png`, `settings-offline-desktop.png`
+- `new-live-offline-desktop.png`, `new-live-mobile.png`
+- `mobile-drawer-focus.png`
+
+Next engineering evidence should use an isolated local backend/test environment with representative sessions in each stage, without real church audio or provider spending. Verify collection load states, setting persistence failures, review/approval transitions, populated responsive layouts, export, and source retention. Backend dependency installation and service execution are outside this pass's frontend-only setup approval.
+
+---
+
+## 19. Independent repair review and offline backend audit — 30 September 2026
+
+This section updates the evidence in Section 18. The owner subsequently approved installing backend dependencies in an isolated Python environment and running offline tests against temporary storage. This audit changes documentation only; it does not implement the proposed backend repairs or accept a visual direction.
+
+### Review of the separate repair chat
+
+The GPT 6.1 repair chat made its bounded changes but ended with a model-capacity error rather than a final handoff. Its files and tests were reviewed directly. No blocking regression was identified within the five assigned frontend fixes: collection loading/error/retry and retained data; neutral audio setup wording; unknown/saving/failed automation settings with rollback; mobile drawer focus/inertness/restoration; native keyboard-operable brand navigation.
+
+Independently reran `frontend/tests/reliability.browser.mjs` against the local preview, at desktop and mobile sizes, with backend requests intercepted by synthetic fixtures. All checks passed. The test prevents microphone use and unhandled page errors. Also reran frontend lint, production build, and `git diff --check`: all exit successfully; lint still reports existing warnings. The desktop capture was visually inspected. Fixture reload establishes frontend state handling, not server persistence or provider readiness. Browser focus checks do not establish screen-reader compatibility.
+
+Sections 18's collection, readiness-copy, settings-feedback, drawer-focus, and brand-keyboard defects are repaired within that scope. Backend approval semantics, responsive completion-label consistency, dashboard action hierarchy/YouTube scope, the unsupported notification indicator, and the broader redesign remain open. The repair is a reliability improvement, not an acceptance of the whole product.
+
+### Backend execution and limits
+
+Installed the existing backend requirements plus the test runner in a disposable Python 3.12 environment outside the repository. Requirements use lower bounds, so this verifies a fresh dependency resolution rather than a pinned production environment. All storage/database paths used by the audit are temporary. Provider credentials were blanked and outbound socket connections blocked; only Windows' internal socketpair connection was allowed to create event loops. No backend service, real church recording, external AI call, model download, cloud database, or deployment was used.
+
+The first attempt blocked Windows' internal event-loop connection and produced harness errors; it was corrected before drawing application conclusions. The corrected existing suite reports **95 passed, 13 setup errors, one dependency deprecation warning**, with **zero outbound connection attempts**. All 13 setup errors are in the KJV-context tests: `backend/data/kjv/kjv_context.sqlite` is absent in this checkout, so the singleton is not ready. The service hardcodes this generated asset path; this is not caused by the temporary DATA_ROOT. The SQLite file is ignored by Git. Its builder fetches upstream data; it was not run during the offline audit. The local JSON corpus exists, but that alone is not the indexed database. Record an explicit reproducible provisioning step and readiness check before claiming the KJV subsystem is functioning here.
+
+Also parsed 70 backend application/test Python files successfully. Syntax parsing is separate from the runtime results above.
+
+Three additional probes exercised actual repositories and the processing engine against synthetic sessions in temporary SQLite storage. They expose requirements that the current passing tests do not enforce:
+
+| Priority | Confirmed finding | Reproduction and consequence | Required repair contract |
+| --- | --- | --- | --- |
+| P1 | Unconfigured Gemini creates invented report content | A verified synthetic transcript about kindness produced a report about holiness/consecration, assigned a minister absent from the transcript, used `offline_simulated`, and ended `completed` / final `complete`. [Engine](backend/app/report_processing/engine.py), lines 381–408 and 514–516. | Without a configured provider, return an unavailable/retry state and create no successful report. Any demo fixture must be explicitly isolated from real sessions and final output. |
+| P1 | Failed validation does not prevent finalisation | A mocked provider returned the single word `tapestry`. Stored validation says `is_valid=false`, one word, forbidden cliché detected; the run still completed and the final report was `complete`. [Engine](backend/app/report_processing/engine.py), lines 511–516. | Validate schema, required content, and quality constraints before advancing. Failed output must remain rejected/reviewable and must not masquerade as approved final content. |
+| P1 | AI completion bypasses the documented approval boundary | Both generation probes produced a final record with no proofread revision and no human approval action. [Final repository](backend/app/database/final_report_repo.py), and [scope](PROJECT_SCOPE.md), principles and finalisation requirements. | Distinguish generation success from human approval. Confirm whether consolidated AI processing supersedes separate editor/proofreader stages; preserve explicit final human review either way. This is a product-contract decision, not a cosmetic label change. |
+| P1 | Session deletion removes original source audio | Created a disposable synthetic WAV only inside the temporary audit directory; `delete_session` returned true and removed it. Source also cascades related records and removes transcript files. [Session repository](backend/app/database/session_repo.py), lines 627–740. | Ordinary archive/removal must preserve protected source material under the current rule. If permanent deletion is intended, document the explicit retention exception and safeguards before implementing it. No real source file was deleted by this audit. |
+| P2 | Fresh checkout cannot run the KJV-context tests | Missing generated SQLite asset causes 13 fixture setup errors. [Bible context service](backend/app/services/bible_context_service.py), lines 28–29 and 137–147; [builder](backend/scripts/build_kjv_database.py). | Provision the complete verified asset reproducibly and expose its availability. Do not silently treat missing domain context as ready. |
+
+These backend defects predate the frontend repair; they are not regressions introduced by that chat. Existing tests contain a consolidated, one-call generation contract and expect completion. Passing those tests does not reconcile the older product specification or establish approval safety. Live recording recovery, provider accuracy/latency, production authentication, real exports, cloud operation, and real-service end-to-end success remain unverified.
+
+Audit scripts, probe output, and the corrected suite log are saved with the independent frontend captures in the ignored `ux-review-screenshots/independent-audit/` directory. Scripts intentionally refuse outbound connections and use temporary storage; they are audit evidence, not newly committed product regression tests.
+
+One suite screenshot caught the mobile drawer partway through its 180 ms transition. A targeted fixture check waited for the transform to settle: the drawer begins at x=0, is 280 px wide, retains focus inside, and leaves the main column inert. The settled capture is `mobile-drawer-settled.png`; the transition frame is not evidence of a clipped final layout.
+
+### Design research: selection, judgement, and gaps
+
+The research collected 19 screenshots covering five Dribbble shots and four Pinterest pins, representing **eight distinct designs** because one concept appears on both sites. The parent inspected the saved references and compared them with the local dashboard, setup, and settings. This was a comparison, not selection of a finished design. See [director review](design-research/2026-09-30/director-review.md) for the visual shortlist and source-by-source fit assessment, and [source ledger](design-research/2026-09-30/index.md) for the complete inventory.
+
+The strongest fit is functional: Happyscribe/WIP for readable transcript plus nearby source audio; document editing and newsroom concepts for central prose and secondary review context. Sonet is a contrasting technical audio direction but overcomplicated for this product if copied wholesale. The recording-notes concept is restrained but does not demonstrate long sermon capture or recovery. Some references are cropped, dated explorations, or presentation frames with tiny text. None proves a premium DLBC identity, accessibility, mobile usability, or production motion.
+
+Selection criteria are workflow relevance, realistic reading density, source/review proximity, clear state and action hierarchy, and consistency across stages. Brand fit, operator preference, small-screen behaviour, accessibility, and motion remain comparison gates. Exact fonts and icon libraries were not identified from screenshots. Recommending a calm editorial direction was a proposal made before those gates were resolved; it must not be treated as owner approval.
+
+The next comparison should show two original directions on the same realistic DLBC session: a calm editorial workspace and a compact operational workspace. The purpose is to compare useful composition, typography, icons, and interaction together. The owner should not have to do all the reference filtering; the designer must explain why each choice serves the task. Additional research should target actionable dashboards, recording readiness/recovery, narrow-screen review, and actual interaction states, where the current set is weaker.
+
+### Product opportunities and Gemini fit
+
+Highest-value improvement hypothesis: let a reviewer select a report statement and inspect its supporting verified transcript segment and timestamped source audio. Existing source drawers and transcript/audio tools are a foundation; statement-level support across the generated report is not established by this audit. Evaluate whether this saves verification time and exposes unsupported claims before expanding it across the product.
+
+Other useful hypotheses are a review queue ordered by unresolved meaning risks, explicit saved/unsaved/approved revisions, and recovery after recording or connection interruption. Revision history, standards, approved examples, scripture context, and verification already exist; the proposal is to connect and validate them, not claim they are absent. Multi-user collaboration, persistent AI chat, generic analytics, and voice generation have no established V1 need.
+
+The app already has a Gemini gateway. A key does not by itself validate a model migration or new transcription endpoint. Official documentation was checked on 30 September 2026; no Gemini call was made.
+
+- **Transcription pilot:** Gemini 3.5 Transcribe offers timestamps, speaker separation, and vocabulary hints, but vocabulary cannot be combined with timestamps or diarization. Files are limited to one hour, or 30 minutes with those annotation features; live sessions are limited to ten minutes and lack word timestamps/diarization. Long sermons therefore need a deliberate segmentation/reconnection strategy. Smart formatting must not replace preserved raw output. Accuracy for this church's speech remains untested. [Official model documentation](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-transcribe).
+- **Safer report structure:** Explicit JSON schemas can make extraction fields predictable. The current consolidated engine requests JSON MIME output without a response schema, while some older providers already use schemas. Add source references and application validation to a bounded pilot; valid JSON does not establish factual correctness. [Official structured-output documentation](https://ai.google.dev/gemini-api/docs/structured-output).
+- **Optional guideline retrieval:** File Search can retrieve provider-hosted documents with citations. Consider it only if the approved local example/guideline library becomes difficult to select reliably. It would require an explicit data-upload decision; existing local few-shot examples may remain sufficient. [Official File Search documentation](https://ai.google.dev/gemini-api/docs/file-search).
+
+The concrete proposed sequence, deliverables, and acceptance gates are recorded in [PROJECT_PLAN.md](PROJECT_PLAN.md), Section 11. It does not mark any existing phase complete or approve new scope.

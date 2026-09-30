@@ -127,7 +127,7 @@ export function EditorStandardsModal({ isOpen, onClose, onStandardUpdated }) {
         </div>
 
         <div className="protected-rules-banner">
-          <span className="banner-icon">🛡️</span>
+          <span className="banner-icon"></span>
           <div>
             <strong>Protected Backend Rules:</strong> Strict Verified Transcript authority, non-fabrication, and factual reconciliation guardrails are immutable backend rules.
           </div>
@@ -162,35 +162,35 @@ export function EditorStandardsModal({ isOpen, onClose, onStandardUpdated }) {
                 className={`nav-item ${activeTab === 'general' ? 'nav-item--active' : ''}`}
                 onClick={() => setActiveTab('general')}
               >
-                📄 General Guidelines
+                 General Guidelines
               </button>
               <button
                 type="button"
                 className={`nav-item ${activeTab === 'compilation' ? 'nav-item--active' : ''}`}
                 onClick={() => setActiveTab('compilation')}
               >
-                🔀 Compilation & Reconciliation
+                 Compilation & Reconciliation
               </button>
               <button
                 type="button"
                 className={`nav-item ${activeTab === 'terminology' ? 'nav-item--active' : ''}`}
                 onClick={() => setActiveTab('terminology')}
               >
-                📖 Church Terminology
+                 Church Terminology
               </button>
               <button
                 type="button"
                 className={`nav-item ${activeTab === 'examples' ? 'nav-item--active' : ''}`}
                 onClick={() => setActiveTab('examples')}
               >
-                🌟 Approved Examples
+                 Approved Examples
               </button>
               <button
                 type="button"
                 className={`nav-item ${activeTab === 'history' ? 'nav-item--active' : ''}`}
                 onClick={() => setActiveTab('history')}
               >
-                🕒 Version History ({standardsList.length})
+                 Version History ({standardsList.length})
               </button>
             </nav>
 
@@ -326,7 +326,7 @@ export function EditorStandardsModal({ isOpen, onClose, onStandardUpdated }) {
                   disabled={saving}
                   id="btn-modal-save-editor-standards"
                 >
-                  {saving ? 'Saving...' : '💾 Save & Apply Instructions'}
+                  {saving ? 'Saving...' : ' Save & Apply Instructions'}
                 </button>
               </div>
             )}

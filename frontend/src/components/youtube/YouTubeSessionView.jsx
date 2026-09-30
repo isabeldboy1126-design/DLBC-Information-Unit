@@ -1,3 +1,4 @@
+import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useRef } from 'react'
 import { getApiUrl } from '../../config'
 
@@ -251,7 +252,7 @@ export function YouTubeSessionView({
 
         {analysisError && (
           <div className="youtube-error-banner">
-            <span>⚠️ {analysisError}</span>
+            <span>⚠ {analysisError}</span>
           </div>
         )}
       </div>
@@ -410,7 +411,7 @@ export function YouTubeSessionView({
                             className="btn btn--primary btn--large"
                             onClick={handleStartTabCapture}
                           >
-                            <span>🎙️ Capture YouTube Tab Audio</span>
+                            <span> Capture YouTube Tab Audio</span>
                           </button>
                         </div>
                       </div>
@@ -446,7 +447,7 @@ export function YouTubeSessionView({
                       {/* Option 2: Browser Tab Playback Capture */}
                       <div className="recorded-option-card">
                         <div className="recorded-opt-header">
-                          <h3 className="recorded-opt-title">🎙️ Transcribe Through Playback</h3>
+                          <h3 className="recorded-opt-title"> Transcribe Through Playback</h3>
                           <span className="opt-tag opt-tag--secondary">100% Reliable</span>
                         </div>
                         <p className="recorded-opt-desc">
@@ -471,7 +472,7 @@ export function YouTubeSessionView({
 
               {jobError && (
                 <div className="youtube-error-banner" style={{ marginTop: '1rem' }}>
-                  <span>⚠️ {jobError}</span>
+                  <span>⚠ {jobError}</span>
                 </div>
               )}
             </div>
@@ -516,7 +517,7 @@ export function YouTubeSessionView({
               {activeJob.status === 'failed' && (
                 <div className="youtube-bot-fallback-box" style={{ marginTop: '1.25rem' }}>
                   <div className="bot-fallback-header">
-                    <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+                    <span style={{ fontSize: '1.4rem' }}><Icon name="alert" /></span>
                     <div>
                       <h4 style={{ margin: 0, color: 'var(--color-warning, #f59e0b)' }}>
                         YouTube Server Access Restricted
@@ -537,7 +538,7 @@ export function YouTubeSessionView({
                         handleStartTabCapture()
                       }}
                     >
-                      <span>🎙️ Transcribe Through Browser Playback</span>
+                      <span> Transcribe Through Browser Playback</span>
                     </button>
                     <button
                       type="button"

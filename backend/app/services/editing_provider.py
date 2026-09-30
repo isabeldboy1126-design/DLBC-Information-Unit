@@ -307,7 +307,10 @@ INSTRUCTIONS FOR FINAL EDITED REPORT:
                 raise last_err or RuntimeError("All Gemini models failed.")
 
             response_text = response.text or "{}"
-            parsed_json = json.loads(response_text)
+            parsed_json = EditingOutputSchema.model_validate_json(response_text, strict=True).model_dump()
+            from app.report_processing.output_schema import validate_report_text
+            if not validate_report_text(parsed_json["report_text"])["is_valid"]:
+                raise ValueError("AI output rejected: empty text or report quality checks failed")
 
             title = parsed_json.get("report_title", "").strip() or session_metadata.get("title", "Edited Message Report")
             report_text = parsed_json.get("report_text", "").strip()

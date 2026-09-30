@@ -110,6 +110,9 @@ async def start_report_processing(payload: StartProcessingRequest):
             detail=f"Session {payload.session_id} not found",
         )
 
+    if session.get("is_archived"):
+        raise HTTPException(status_code=409, detail="Restore the archived session before processing.")
+
     run = await report_processing_engine.start_processing(
         session_id=payload.session_id,
         force_new=payload.force_new,
@@ -192,16 +195,16 @@ async def generate_report_docx(session_id: str):
             detail="No finalized report exists for this session yet. Complete report processing first.",
         )
 
+    if not active_final.get("can_export"):
+        raise HTTPException(status_code=409, detail="Review and approve the current saved revision before export.")
+
     title = active_final.get("report_title") or session.get("title") or "DLBC Information Unit Report"
-    programme = active_final.get("programme") or "Sunday Worship Service"
-    minister = active_final.get("minister") or session.get("minister") or "Pastor (Dr) W.F. Kumuyi"
-    service_date = active_final.get("service_date") or session.get("date_created", "")[:10]
+    programme = active_final.get("programme") or ""
+    minister = active_final.get("minister") or ""
+    service_date = active_final.get("service_date") or ""
     report_text = active_final.get("report_text") or ""
 
     filename = document_service.generate_filename(title, programme, service_date)
-    os.makedirs(STORAGE_DOCUMENTS_DIR, exist_ok=True)
-    file_path = os.path.join(STORAGE_DOCUMENTS_DIR, filename)
-
     docx_stream = document_service.generate_final_report_docx(
         report_title=title,
         report_text=report_text,
@@ -214,31 +217,10 @@ async def generate_report_docx(session_id: str):
     )
     file_bytes = docx_stream.getvalue()
 
-    with open(file_path, "wb") as f:
-        f.write(file_bytes)
-
     file_size = len(file_bytes)
-
-    # Update final_reports record with filename and size
-    from app.database.connection import get_db_connection
-    async with get_db_connection() as conn:
-        await conn.execute(
-            """
-            UPDATE final_reports
-            SET docx_filename = ?, docx_file_size = ?
-            WHERE id = ?
-            """,
-            (filename, file_size, active_final["id"]),
-        )
-        await conn.commit()
-
-    return {
-        "status": "success",
-        "session_id": session_id,
-        "filename": filename,
-        "file_size": file_size,
-        "download_url": f"/api/report-processing/download-docx/{session_id}",
-    }
+    await final_report_repo.update_docx_metadata(active_final["id"], filename, file_size)
+    return {"status": "success", "session_id": session_id, "filename": filename,
+            "file_size": file_size, "download_url": f"/api/report-processing/download-docx/{session_id}"}
 
 
 @router.get("/download-docx/{session_id}")
@@ -251,33 +233,23 @@ async def download_report_docx(session_id: str):
             detail="No finalized report exists for this session.",
         )
 
+    if not active_final.get("can_export"):
+        raise HTTPException(status_code=409, detail="Review and approve the current saved revision before export.")
+
     title = active_final.get("report_title") or "DLBC Information Unit Report"
-    programme = active_final.get("programme") or "Sunday Worship Service"
+    programme = active_final.get("programme") or ""
     service_date = active_final.get("service_date") or ""
     filename = active_final.get("docx_filename") or document_service.generate_filename(
         title, programme, service_date
     )
     filename = document_service.sanitize_filename(filename.replace(".docx", "")) + ".docx"
 
-    file_path = os.path.join(STORAGE_DOCUMENTS_DIR, filename)
-    if os.path.isfile(file_path):
-        with open(file_path, "rb") as f:
-            content = f.read()
-    else:
-        # Generate on the fly
-        report_text = active_final.get("report_text") or ""
-        minister = active_final.get("minister") or "Pastor (Dr) W.F. Kumuyi"
-        stream = document_service.generate_final_report_docx(
-            report_title=title,
-            report_text=report_text,
-            session_metadata={
-                "title": title,
-                "programme": programme,
-                "minister": minister,
-                "date_created": service_date,
-            },
-        )
-        content = stream.getvalue()
+    stream = document_service.generate_final_report_docx(
+        report_title=title, report_text=active_final["report_text"],
+        session_metadata={"title": title, "programme": programme,
+                          "minister": active_final.get("minister"), "date_created": service_date},
+    )
+    content = stream.getvalue()
 
     encoded_filename = urllib.parse.quote(filename)
     headers = {

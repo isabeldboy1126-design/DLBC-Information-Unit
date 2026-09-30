@@ -1,3 +1,4 @@
+import { Icon } from '../common/Icon'
 import React from 'react'
 
 /**
@@ -87,7 +88,7 @@ export function FloatingRecordingController({
             id="btn-maximize-live-recorder"
             title="Open full live recording workspace"
           >
-            <span className="btn-icon">🗖</span>
+            <span className="btn-icon"></span>
             <span>Open Recorder</span>
           </button>
 
@@ -107,12 +108,12 @@ export function FloatingRecordingController({
       {/* Middle Body: Session Title & Active Transcript Ticker */}
       <div className="floating-recorder-body">
         <div className="floating-session-title" title={sessionTitle}>
-          <span className="floating-meta-icon">🏛️</span>
+          <span className="floating-meta-icon"><Icon name="home" /></span>
           <span className="floating-meta-name">{sessionTitle}</span>
         </div>
 
         <div className="floating-ticker-row" title="Live speech transcript ticker">
-          <span className="floating-ticker-icon">{interimText ? '💬' : '🎙️'}</span>
+          <span className="floating-ticker-icon">{interimText ? '' : ''}</span>
           <p className="floating-ticker-text">
             {tickerText}
             {interimText && <span className="floating-typing-cursor">|</span>}

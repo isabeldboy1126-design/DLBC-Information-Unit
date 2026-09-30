@@ -7,11 +7,12 @@ human edit diff learning, idempotency tracking, and completed report archives.
 
 import json
 import os
+from datetime import datetime, timezone
 import time
 import uuid
 from typing import Any, Dict, List, Optional
 
-from app.database.connection import get_db_connection
+from app.database.connection import connection_scope, get_db_connection
 from app.database.session_repo import session_repo
 
 
@@ -348,6 +349,11 @@ class ReportProcessingRepository:
     # RUNS TRACKING & IDEMPOTENCY
     # -------------------------------------------------------------------------
 
+    def _decorate_run(self, run):
+        run["draft_report_id"] = run.get("final_report_id")
+        run["review_status"] = "needs_review" if run.get("status") == "completed" else None
+        return run
+
     async def get_active_run(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
         Returns an active, non-terminal run for the session if one is currently in progress.
@@ -365,7 +371,7 @@ class ReportProcessingRepository:
                 (session_id,),
             )
             row = await cur.fetchone()
-            return dict(row) if row else None
+            return self._decorate_run(dict(row)) if row else None
 
     async def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
         await self.init_db()
@@ -375,7 +381,7 @@ class ReportProcessingRepository:
                 (run_id,),
             )
             row = await cur.fetchone()
-            return dict(row) if row else None
+            return self._decorate_run(dict(row)) if row else None
 
     async def get_latest_run_for_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         await self.init_db()
@@ -390,12 +396,12 @@ class ReportProcessingRepository:
                 (session_id,),
             )
             row = await cur.fetchone()
-            return dict(row) if row else None
+            return self._decorate_run(dict(row)) if row else None
 
     async def create_run(self, session_id: str, run_id: Optional[str] = None) -> Dict[str, Any]:
         """Creates a new durable report processing run record in state preparing_transcript."""
         await self.init_db()
-        now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        now_iso = datetime.now(timezone.utc).isoformat(timespec="microseconds")
         rid = run_id or f"run_{session_id}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
 
         async with get_db_connection() as conn:
@@ -424,6 +430,7 @@ class ReportProcessingRepository:
         model_name: Optional[str] = None,
         tokens_used: Optional[int] = None,
         reused_existing_material: Optional[bool] = None,
+        error_code: Optional[str] = None,
     ):
         await self.init_db()
         now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -440,6 +447,7 @@ class ReportProcessingRepository:
                 SET status = ?,
                     current_step = COALESCE(?, current_step),
                     error_message = COALESCE(?, error_message),
+                    error_code = COALESCE(?, error_code),
                     model_name = COALESCE(?, model_name),
                     tokens_used = COALESCE(?, tokens_used),
                     reused_existing_material = COALESCE(?, reused_existing_material),
@@ -451,6 +459,7 @@ class ReportProcessingRepository:
                     status,
                     current_step,
                     error_message,
+                    error_code,
                     model_name,
                     tokens_used,
                     (1 if reused_existing_material else 0) if reused_existing_material is not None else None,
@@ -466,6 +475,17 @@ class ReportProcessingRepository:
             run["session_id"], status, run_id=run_id
         )
 
+    async def save_run_input(self, run_id, snapshot, compiled_prompt):
+        """Record the actual generation input before invoking the provider."""
+        from app.database.generation_source import digest
+        await self.init_db()
+        provenance = {**snapshot.provenance, 'prompt_hash': digest(compiled_prompt)}
+        async with get_db_connection() as conn:
+            await conn.execute("""UPDATE report_processing_runs SET generation_input_signature=?,
+                input_snapshot_json=? WHERE run_id=?""",
+                (snapshot.signature, json.dumps(provenance, sort_keys=True), run_id))
+            await conn.commit()
+
     async def save_run_result(
         self,
         run_id: str,
@@ -480,14 +500,17 @@ class ReportProcessingRepository:
         model_name: Optional[str] = None,
         tokens_used: int = 0,
         reused_existing_material: bool = False,
+        *, connection=None,
     ):
-        await self.init_db()
+        if connection is None:
+            await self.init_db()
         now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        run = await self.get_run(run_id)
-        if not run:
-            return
 
-        async with get_db_connection() as conn:
+        async with connection_scope(connection) as conn:
+            cur = await conn.execute('SELECT * FROM report_processing_runs WHERE run_id=?', (run_id,))
+            run = await cur.fetchone()
+            if not run:
+                raise ValueError('Report processing run no longer exists')
             await conn.execute(
                 """
                 UPDATE report_processing_runs
@@ -525,11 +548,11 @@ class ReportProcessingRepository:
                     run_id,
                 ),
             )
-            await conn.commit()
-
-        await session_repo.set_report_processing_status(
-            run["session_id"], 'completed', run_id=run_id
-        )
+            await conn.execute("""UPDATE sessions SET report_processing_status='completed',
+                report_processing_run_id=?, report_processing_completed_at=? WHERE session_id=?""",
+                (run_id, now_iso, run['session_id']))
+            if connection is None:
+                await conn.commit()
 
     async def cancel_run(self, run_id: str) -> bool:
         await self.init_db()
@@ -904,6 +927,8 @@ class ReportProcessingRepository:
                 return str(row["value"])
             if default is not None:
                 return default
+            if key == "auto_continue_to_proofreading":
+                return "false"
             if key == "auto_process_after_verification":
                 return "true"
             return ''
@@ -943,6 +968,7 @@ class ReportProcessingRepository:
             settings = {r["key"]: r["value"] for r in rows}
             if "auto_process_after_verification" not in settings:
                 settings["auto_process_after_verification"] = "true"
+            settings.setdefault("auto_continue_to_proofreading", "false")
             return settings
 
     # -------------------------------------------------------------------------
@@ -982,11 +1008,12 @@ class ReportProcessingRepository:
                     s.duration_seconds,
                     s.audio_duration_seconds,
                     rpr.run_id as report_processing_run_id,
-                    rpr.status as run_status
+                    rpr.status as run_status, fr.id, fr.is_active, fr.approval_status,
+                    fr.approved_at, fr.source_run_id, fr.source_signature, fr.proofread_report_revision_id, s.is_archived
                 FROM final_reports fr
                 JOIN sessions s ON fr.session_id = s.session_id
-                LEFT JOIN report_processing_runs rpr ON fr.session_id = rpr.session_id AND rpr.status = 'completed'
-                WHERE fr.is_active = 1
+                LEFT JOIN report_processing_runs rpr ON fr.source_run_id = rpr.run_id
+                WHERE fr.is_active = 1 AND s.is_archived = 0
             """
             params = []
 
@@ -1026,7 +1053,8 @@ class ReportProcessingRepository:
 
             cur = await conn.execute(query, params)
             rows = await cur.fetchall()
-            return [dict(r) for r in rows]
+            from app.database.final_report_repo import final_report_repo
+            return [await final_report_repo._decorate(conn, r) for r in rows]
 
 
 report_processing_repo = ReportProcessingRepository()

@@ -1,3 +1,8 @@
+import { ReportingView } from '../reporting/ReportingView'
+import { EditingView } from '../editing/EditingView'
+import { ProofreadingView } from '../proofreading/ProofreadingView'
+import { isApproved, hasReviewableReport } from './sessionWorkflow'
+import { Icon } from '../common/Icon'
 import React, { useState, useRef, useEffect } from 'react'
 import { getApiUrl } from '../../config'
 import { RawTranscriptViewer } from '../transcription/RawTranscriptViewer'
@@ -5,74 +10,18 @@ import { VerificationWorkflow } from '../verification/VerificationWorkflow'
 import { FinalReportView } from '../final_report/FinalReportView'
 import { ReportProcessingModal } from '../reporting/ReportProcessingModal'
 
-function MicIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d68f2" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-      <line x1="12" y1="19" x2="12" y2="22" />
-      <line x1="8" y1="22" x2="16" y2="22" />
-    </svg>
-  )
-}
+function MicIcon() { return <Icon name="mic" /> }
 
-function DocumentIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d68f2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-    </svg>
-  )
-}
+function DocumentIcon() { return <Icon name="document" /> }
 
-function CalendarIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  )
-}
+function CalendarIcon() { return <Icon name="calendar" /> }
 
-function UserIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  )
-}
+function UserIcon() { return <Icon name="user" /> }
 
-function ClockIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  )
-}
 
-function LockIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-  )
-}
+function LockIcon() { return <Icon name="lock" /> }
 
-function PencilIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-    </svg>
-  )
-}
+function PencilIcon() { return <Icon name="pencil" /> }
 
 export function getSessionHierarchy(session) {
   let programme = ''
@@ -109,20 +58,20 @@ export function getSessionHierarchy(session) {
   }
 
   if (!sessionTitle) {
-    sessionTitle = rawTitle || 'Sunday Morning Service'
+    sessionTitle = rawTitle || 'Untitled session'
   }
   if (!programme) {
-    programme = 'Sunday Worship Service'
+    programme = 'Programme not recorded'
   }
   if (!preacher) {
-    preacher = 'Pastor W.F. Kumuyi'
+    preacher = 'Minister not recorded'
   }
 
   return { programme, sessionTitle, preacher }
 }
 
 export function getCleanSessionName(session) {
-  if (!session) return 'Sunday Worship Service'
+  if (!session) return 'Untitled session'
 
   let raw = ''
   if (typeof session === 'string') {
@@ -185,6 +134,7 @@ export function SessionDetailView({
   initialStage = 'overview',
   onBack,
   onUpdateTitle,
+  onRefreshSession,
   onUpdateDetails,
   onSubViewChange,
   // Phase 5: Verification props
@@ -220,10 +170,9 @@ export function SessionDetailView({
       return initialStage
     }
 
-    const fStatus = session?.final_report_status || 'not_started'
-    const vStatus = session?.verification_status || 'not_started'
+      const vStatus = session?.verification_status || 'not_started'
 
-    if (fStatus === 'complete') return 'overview'
+    if (hasReviewableReport(session)) return 'overview'
     if (vStatus === 'in_progress') return 'verification'
     return 'overview'
   }
@@ -234,28 +183,6 @@ export function SessionDetailView({
     return initialStage === 'report_processing' || (typeof window !== 'undefined' && window.location.hash.includes('/report_processing'))
   })
   const mediaElementRef = useRef(null)
-
-  const handleDownloadDocx = async () => {
-    if (!session?.session_id) return
-    try {
-      const res = await fetch(getApiUrl(`/api/report-processing/download-docx/${session.session_id}`))
-      if (res.ok) {
-        const blob = await res.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${session?.title || 'Report'}.docx`
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
-      } else {
-        alert('Document is still being prepared. You can generate or download it via Report Processing.')
-      }
-    } catch (e) {
-      alert(`Download error: ${e.message}`)
-    }
-  }
 
   const changeStage = (newStage) => {
     setActiveView(newStage)
@@ -292,7 +219,10 @@ export function SessionDetailView({
       raw_transcript: 'Raw Transcript',
       verification: 'Verification',
       verified_transcript: 'Verified Transcript',
-      final_report: 'Final Report',
+      reporting: 'Reporter Drafts',
+      editing: 'Editing',
+      proofreading: 'Proofreading',
+      final_report: 'Final Review',
     }
     const title = titles[activeView] || 'Session Workspace'
     const backFn = activeView === 'overview' ? onBack : () => changeStage('overview')
@@ -314,10 +244,14 @@ export function SessionDetailView({
   // ---------------------------------------------------------------------------
   // CHILD STAGE ROUTING
   // ---------------------------------------------------------------------------
+  if (activeView === 'reporting') return <ReportingView session={session} onBack={() => changeStage('overview')} onNavigateToEditing={() => changeStage('editing')} />
+  if (activeView === 'editing') return <EditingView session={session} onBack={() => changeStage('overview')} onNavigateToProofreading={() => changeStage('proofreading')} />
+  if (activeView === 'proofreading') return <ProofreadingView session={session} onBack={() => changeStage('overview')} onNavigateToFinalReport={() => changeStage('final_report')} />
   if (activeView === 'final_report') {
     return (
       <FinalReportView
         session={session}
+        onReportUpdated={onRefreshSession}
         onBack={() => changeStage('overview')}
       />
     )
@@ -380,7 +314,6 @@ export function SessionDetailView({
 
   // Lifecycle stage statuses
   const vStatus = session?.verification_status || 'not_started'
-  const hasAudio = !!(session?.audio_filename || session?.recording_id)
   const hasTranscript = !!(session?.transcript_id || (session?.segment_count && session.segment_count > 0))
   const flagCount = session?.flag_count || session?.verification_items_total || 0
   const resolvedCount = session?.verification_items_resolved ?? verificationState?.resolved_count ?? 0
@@ -394,7 +327,6 @@ export function SessionDetailView({
   const rStatus = session?.reporting_status || 'not_started'
   const eStatus = session?.editing_status || 'not_started'
   const pStatus = session?.proofreading_status || 'not_started'
-  const fStatus = session?.final_report_status || 'not_started'
 
   // ---------------------------------------------------------------------------
   // VIEW: RAW TRANSCRIPT STANDALONE
@@ -463,7 +395,7 @@ export function SessionDetailView({
             <div>
               <h2 className="verified-view-title">{session.title || 'Sunday Morning Worship Service'}</h2>
               <p className="verified-view-sub">
-                Verified Transcript &bull; Created {formatDate(session.verified_at || session.date_created)} &bull; Verified by Operator Admin
+                Verified Transcript &bull; Created {formatDate(session.verified_at || session.date_created)} &bull; Human verification recorded
               </p>
             </div>
             <div className="verified-top-actions">
@@ -491,7 +423,7 @@ export function SessionDetailView({
                 className="btn-link-small"
                 onClick={() => setActiveView('raw_transcript')}
               >
-                📜 View Raw Transcript
+                 View Raw Transcript
               </button>
               <button
                 type="button"
@@ -501,7 +433,7 @@ export function SessionDetailView({
                   alert('✓ Copied verified transcript text to clipboard!')
                 }}
               >
-                📋 Copy Full Transcript
+                 Copy Full Transcript
               </button>
             </div>
 
@@ -519,7 +451,7 @@ export function SessionDetailView({
   // Extract clean hierarchy and metadata
   const { programme: progDisplay, sessionTitle: sessionDisplay, preacher: preacherDisplay } = getSessionHierarchy(session)
   const durationSec = session.duration_seconds || session.audio_duration_seconds || 0
-  const durationDisplay = durationSec > 0 ? formatSeconds(durationSec) : '25m 41s'
+  const durationDisplay = durationSec > 0 ? formatSeconds(durationSec) : 'Not recorded'
   const dateDisplay = formatDate(session.date_created)
 
   // ---------------------------------------------------------------------------
@@ -562,7 +494,7 @@ export function SessionDetailView({
       {/* 2. Verification Action Strip (floating white card matching reference design) */}
       {(() => {
         const isSessionVerified = isVerified
-        const hasFinalDoc = (fStatus === 'complete') || session?.final_report_id || session?.docx_file_path || session?.report_processing_status === 'completed'
+        const hasFinalDoc = (hasReviewableReport(session)) || session?.final_report_id || session?.docx_file_path || session?.report_processing_status === 'completed'
 
         if (!isSessionVerified && flagCount > 0) {
           const remaining = Math.max(0, flagCount - resolvedCount)
@@ -600,16 +532,16 @@ export function SessionDetailView({
                     <DocumentIcon />
                   </div>
                   <span className="verification-strip-text">
-                    Document ready
+                    {isApproved(session) ? 'Approved report' : 'Draft needs human review'}
                   </span>
                 </div>
                 <button
                   type="button"
                   className="btn-verify-cta"
-                  onClick={handleDownloadDocx}
+                  onClick={() => changeStage('final_report')}
                   id="btn-workspace-download-doc"
                 >
-                  Download
+                  Review report
                 </button>
               </div>
             )
@@ -640,6 +572,13 @@ export function SessionDetailView({
         return null
       })()}
 
+      <nav className="stage-review-navigation" aria-label="Report review stages">
+        <span className="editorial-eyebrow">REVIEW TOOLS</span>
+        <button className="btn btn--secondary" disabled={!isVerified} onClick={() => changeStage('reporting')}>Reporter drafts</button>
+        <button className="btn btn--secondary" disabled={eStatus === 'not_started' && rStatus !== 'reports_ready'} onClick={() => changeStage('editing')}>Editing</button>
+        <button className="btn btn--secondary" disabled={eStatus !== 'complete' && pStatus === 'not_started'} onClick={() => changeStage('proofreading')}>Proofreading</button>
+        <button className="btn btn--secondary" disabled={!hasReviewableReport(session) && pStatus !== 'complete'} onClick={() => changeStage('final_report')}>Final review</button>
+      </nav>
       {/* 4. Session Materials Section (6 Artifact Cards) */}
       <section className="session-materials-section" aria-label="Session Materials">
         <h2 className="session-materials-heading">Session Materials</h2>
@@ -731,7 +670,7 @@ export function SessionDetailView({
               <div className="artifact-tile-icon-box">
                 <DocumentIcon />
               </div>
-              {rStatus === 'reports_ready' || fStatus === 'complete' ? (
+              {rStatus === 'reports_ready' ? (
                 <span className="badge badge--success-pill">✓ Ready</span>
               ) : (
                 <span className="badge badge--locked-pill">
@@ -742,16 +681,16 @@ export function SessionDetailView({
             <div className="artifact-tile-body">
               <h3 className="artifact-tile-title">Reporter Drafts</h3>
               <p className="artifact-tile-desc">
-                {rStatus === 'reports_ready' || fStatus === 'complete' ? 'Reporter A & B Complete' : 'Not yet available'}
+                {rStatus === 'reports_ready' ? 'Reporter A & B drafts saved' : 'Not yet available'}
               </p>
             </div>
-            {rStatus === 'reports_ready' || fStatus === 'complete' ? (
+            {rStatus === 'reports_ready' ? (
               <button
                 type="button"
                 className="btn-tile-action btn-tile-action--active"
-                onClick={() => changeStage('final_report')}
+                onClick={() => changeStage('reporting')}
               >
-                View in Report
+                Review drafts
               </button>
             ) : (
               <button
@@ -771,8 +710,8 @@ export function SessionDetailView({
               <div className="artifact-tile-icon-box">
                 <DocumentIcon />
               </div>
-              {eStatus === 'complete' || fStatus === 'complete' ? (
-                <span className="badge badge--success-pill">✓ Complete</span>
+              {['draft_ready', 'complete', 'completed'].includes(eStatus) ? (
+                <span className="badge badge--success-pill">Draft saved</span>
               ) : (
                 <span className="badge badge--locked-pill">
                   <LockIcon /> Locked
@@ -782,16 +721,16 @@ export function SessionDetailView({
             <div className="artifact-tile-body">
               <h3 className="artifact-tile-title">Edited Report</h3>
               <p className="artifact-tile-desc">
-                {eStatus === 'complete' || fStatus === 'complete' ? 'Theological Review' : 'Not yet available'}
+                {['draft_ready', 'complete', 'completed'].includes(eStatus) ? 'Saved edited revision' : 'Not yet available'}
               </p>
             </div>
-            {eStatus === 'complete' || fStatus === 'complete' ? (
+            {['draft_ready', 'complete', 'completed'].includes(eStatus) ? (
               <button
                 type="button"
                 className="btn-tile-action btn-tile-action--active"
-                onClick={() => changeStage('final_report')}
+                onClick={() => changeStage('editing')}
               >
-                View in Report
+                Review edited draft
               </button>
             ) : (
               <button
@@ -811,8 +750,8 @@ export function SessionDetailView({
               <div className="artifact-tile-icon-box">
                 <DocumentIcon />
               </div>
-              {fStatus === 'complete' ? (
-                <span className="badge badge--success-pill">✓ Final</span>
+              {hasReviewableReport(session) ? (
+                <span className="badge badge--success-pill">{isApproved(session) ? 'Approved' : 'Needs review'}</span>
               ) : (
                 <span className="badge badge--locked-pill">
                   <LockIcon /> Locked
@@ -822,16 +761,16 @@ export function SessionDetailView({
             <div className="artifact-tile-body">
               <h3 className="artifact-tile-title">Final Report</h3>
               <p className="artifact-tile-desc">
-                {fStatus === 'complete' ? 'Archival & Word (.docx)' : 'Not yet available'}
+                {hasReviewableReport(session) ? (isApproved(session) ? 'Approved • Word (.docx)' : 'Draft • human review required') : 'Not yet available'}
               </p>
             </div>
-            {fStatus === 'complete' ? (
+            {hasReviewableReport(session) ? (
               <button
                 type="button"
                 className="btn-tile-action btn-tile-action--active"
                 onClick={() => changeStage('final_report')}
               >
-                Download .docx
+                Review report
               </button>
             ) : (
               <button
@@ -850,7 +789,7 @@ export function SessionDetailView({
       {/* Operational Notice (if interrupted) */}
       {session.is_interrupted ? (
         <div className="workspace-operational-notice">
-          <div className="notice-icon">ℹ️</div>
+          <div className="notice-icon">ℹ</div>
           <div className="notice-body">
             <strong>Operational Notice</strong>
             <p>{session.recovery_notes || 'Brief interruption recorded. Master lossless recording safely preserved.'}</p>
@@ -873,7 +812,7 @@ export function SessionDetailView({
         onClose={() => setShowReportProcessingModal(false)}
         onViewReport={() => changeStage('final_report')}
         onProcessingComplete={() => {
-          if (onFinaliseVerification) onFinaliseVerification()
+          onRefreshSession?.()
         }}
       />
     </div>

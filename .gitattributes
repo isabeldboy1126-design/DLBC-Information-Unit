@@ -1,0 +1,4 @@
+*.pdf binary
+frontend/src/assets/fonts/*.woff2 binary
+# Keep upstream license bytes intact, including intentional trailing spaces.
+frontend/src/assets/licenses/* -text -whitespace
