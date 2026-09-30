@@ -499,6 +499,9 @@ function App() {
         /* ----------------------------------------------------------- */
         <DashboardView
           sessions={sessionsHook.sessions}
+          isLoading={sessionsHook.isLoading}
+          error={sessionsHook.error}
+          onRetry={sessionsHook.fetchSessions}
           onStartLiveSession={() => {
             if (liveAudio.isRecording) {
               setIsRecorderMinimized(false)
@@ -565,6 +568,7 @@ function App() {
             }}
             onDeleteSession={sessionsHook.deleteSession}
             onRefresh={sessionsHook.fetchSessions}
+            onRetry={sessionsHook.fetchSessions}
             onStartNewSession={() => {
               if (liveAudio.isRecording) {
                 setIsRecorderMinimized(false)
@@ -573,6 +577,7 @@ function App() {
               }
             }}
             isLoading={sessionsHook.isLoading}
+            error={sessionsHook.error}
             initialStatusFilter={sessionsStatusFilter}
           />
         ) : (

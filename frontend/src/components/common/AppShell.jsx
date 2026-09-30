@@ -96,6 +96,11 @@ export function AppShell({
 }) {
   const { isDark, toggleTheme } = useTheme()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const mobileToggleRef = useRef(null)
+  const sidebarRef = useRef(null)
+  const notificationsRef = useRef(null)
+
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
       const stored = localStorage.getItem('dlbc_sidebar_collapsed')
@@ -123,21 +128,90 @@ export function AppShell({
 
   const isEffectivelyExpanded = !isCollapsed
 
+  // Mobile drawer focus trap & keyboard management
   useEffect(() => {
     if (!mobileNavOpen) return
 
+    const previousActiveElement = document.activeElement
+
+    // Move focus to first interactive element in drawer
+    const timer = setTimeout(() => {
+      if (sidebarRef.current) {
+        const focusable = sidebarRef.current.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+        if (focusable) focusable.focus()
+      }
+    }, 50)
+
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
+        event.preventDefault()
         closeMobileNav()
+        return
+      }
+
+      if (event.key === 'Tab' && sidebarRef.current) {
+        const focusables = Array.from(
+          sidebarRef.current.querySelectorAll(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter(el => el.offsetParent !== null)
+
+        if (focusables.length === 0) return
+
+        const firstElement = focusables[0]
+        const lastElement = focusables[focusables.length - 1]
+
+        if (event.shiftKey) {
+          if (document.activeElement === firstElement) {
+            event.preventDefault()
+            lastElement.focus()
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            event.preventDefault()
+            firstElement.focus()
+          }
+        }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
 
     return () => {
+      clearTimeout(timer)
       window.removeEventListener('keydown', handleKeyDown)
+      if (mobileToggleRef.current) {
+        mobileToggleRef.current.focus()
+      } else if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
+        previousActiveElement.focus()
+      }
     }
   }, [mobileNavOpen])
+
+  // Notifications popover outside click and escape listener
+  useEffect(() => {
+    if (!isNotificationsOpen) return
+
+    const handleClickOutside = (e) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target)) {
+        setIsNotificationsOpen(false)
+      }
+    }
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsNotificationsOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isNotificationsOpen])
 
   return (
     <div className="app-shell-container">
@@ -145,20 +219,23 @@ export function AppShell({
       {/* LEFT SIDEBAR                                                  */}
       {/* ------------------------------------------------------------- */}
       <aside
+        ref={sidebarRef}
         className={`app-sidebar ${isCollapsed ? 'app-sidebar--collapsed' : ''} ${mobileNavOpen ? 'app-sidebar--mobile-open' : ''}`}
+        aria-label="Sidebar Navigation"
+        {...(mobileNavOpen ? { role: 'dialog', 'aria-modal': 'true' } : {})}
       >
         <div className="sidebar-top">
           {/* Brand Logo & Collapse Toggle */}
           <div className="sidebar-brand-row">
-            <div
+            <button
+              type="button"
               className="sidebar-brand"
               onClick={() => {
                 onNavigate('dashboard')
                 closeMobileNav()
               }}
-              role="button"
-              tabIndex={0}
               title={!isEffectivelyExpanded ? 'DLBC Information Unit' : undefined}
+              aria-label="DLBC Information Unit - Go to Dashboard"
             >
               <img
                 src="/dlbc-logo.png"
@@ -171,7 +248,7 @@ export function AppShell({
                   <span className="brand-sub">INFORMATION UNIT</span>
                 </div>
               )}
-            </div>
+            </button>
 
             {/* Desktop Collapse / Expand Toggle */}
             <button
@@ -299,6 +376,7 @@ export function AppShell({
           <div className="topbar-left">
             {/* Hamburger Button (Mobile / Tablet only) */}
             <button
+              ref={mobileToggleRef}
               type="button"
               className="mobile-nav-toggle"
               onClick={openMobileNav}
@@ -336,16 +414,32 @@ export function AppShell({
 
           {/* Right: Notification Bell & User Avatar */}
           <div className="topbar-right">
-            <button
-              type="button"
-              className="topbar-notification"
-              title="Notifications"
-              id="topbar-notification-bell"
-              aria-label="Notifications"
-            >
-              <span className="notification-bell"><BellIcon /></span>
-              <span className="notification-dot" />
-            </button>
+            <div className="topbar-notification-anchor" ref={notificationsRef}>
+              <button
+                type="button"
+                className="topbar-notification"
+                title="Notifications"
+                id="topbar-notification-bell"
+                aria-label="Notifications (none)"
+                aria-expanded={isNotificationsOpen}
+                onClick={() => setIsNotificationsOpen(prev => !prev)}
+              >
+                <span className="notification-bell"><BellIcon /></span>
+              </button>
+
+              {isNotificationsOpen && (
+                <div className="notifications-popover" role="dialog" aria-label="Notifications">
+                  <div className="notifications-popover-header">
+                    <span className="notifications-popover-title">Notifications</span>
+                  </div>
+                  <div className="notifications-popover-body">
+                    <p className="notifications-empty-title">No notifications</p>
+                    <p className="notifications-empty-text">You are all caught up.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="topbar-avatar" title="Account">
               <span>D</span>
             </div>

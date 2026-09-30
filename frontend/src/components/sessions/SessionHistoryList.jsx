@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { getApiUrl } from '../../config'
-import { getSessionHierarchy } from './SessionDetailView'
+import { getSessionHierarchy, deriveSessionDisplayStatus } from './SessionDetailView'
 import { ConfirmationModal } from '../common/ConfirmationModal'
 
 function ClockIcon() {
@@ -50,6 +50,8 @@ export function SessionHistoryList({
   onRefresh,
   onStartNewSession,
   isLoading,
+  error,
+  onRetry,
   initialStatusFilter = 'all',
 }) {
   const [searchTerm, setSearchTerm] = useState('')
@@ -231,26 +233,17 @@ export function SessionHistoryList({
     }
 
     // Stage detection
-    const isInterrupted = !!s.is_interrupted
-    const isLive = s.status === 'recording'
-    const isFinalComplete = s.final_report_status === 'complete'
-    const isProofreadComplete = s.proofreading_status === 'complete'
-    const isProofreadingReview = s.proofreading_status === 'ready_for_review' || s.proofreading_status === 'generating'
-    const isEditingComplete = s.editing_status === 'complete'
-    const isEditingDraft = s.editing_status === 'draft_ready' || s.editing_status === 'in_review' || s.editing_status === 'generating'
-    const isReportsReady = s.reporting_status === 'reports_ready'
-    const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
-    const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress') && !isReportsReady && !isEditingComplete && !isEditingDraft && !isProofreadComplete && !isProofreadingReview && !isFinalComplete
+    const { statusKey } = deriveSessionDisplayStatus(s)
 
     // Status Filter
     let matchesStatus = true
     if (statusFilter !== 'all') {
-      if (statusFilter === 'interrupted') matchesStatus = isInterrupted
-      else if (statusFilter === 'needs_verification') matchesStatus = needsVerification
-      else if (statusFilter === 'verified') matchesStatus = isVerified && !isReportsReady && !isEditingComplete && !isProofreadComplete && !isFinalComplete
-      else if (statusFilter === 'editing') matchesStatus = isEditingComplete || isEditingDraft || isReportsReady
-      else if (statusFilter === 'completed') matchesStatus = isFinalComplete
-      else if (statusFilter === 'live') matchesStatus = isLive
+      if (statusFilter === 'interrupted') matchesStatus = statusKey === 'interrupted'
+      else if (statusFilter === 'needs_verification') matchesStatus = statusKey === 'needs_verification'
+      else if (statusFilter === 'verified') matchesStatus = statusKey === 'verified'
+      else if (statusFilter === 'editing') matchesStatus = statusKey === 'in_progress'
+      else if (statusFilter === 'completed') matchesStatus = statusKey === 'completed'
+      else if (statusFilter === 'live') matchesStatus = statusKey === 'live'
     }
 
     // Date Filter
@@ -475,7 +468,29 @@ export function SessionHistoryList({
       {/* ------------------------------------------------------------- */}
       {/* 3. 3-COLUMN RESTRAINED SESSION CARDS GRID                     */}
       {/* ------------------------------------------------------------- */}
-      {filteredSessions.length === 0 ? (
+      {isLoading && (!sessions || sessions.length === 0) ? (
+        <div className="sessions-state-box">
+          <div className="sessions-state-spinner" aria-hidden="true" />
+          <p className="sessions-state-text">Loading recorded sessions...</p>
+        </div>
+      ) : error && (!sessions || sessions.length === 0) ? (
+        <div className="sessions-state-box sessions-state-box--error" role="alert">
+          <div className="sessions-state-icon">⚠️</div>
+          <h3 className="sessions-state-title">Unable to Load Sessions</h3>
+          <p className="sessions-state-text">
+            {error || 'We could not connect to the server to load your recorded sessions.'}
+          </p>
+          {onRetry && (
+            <button
+              type="button"
+              className="btn btn--outline btn--small btn-retry-load"
+              onClick={onRetry}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      ) : filteredSessions.length === 0 ? (
         <div className="sessions-empty-card">
           <h3>No Sessions Found</h3>
           <p>
@@ -497,76 +512,13 @@ export function SessionHistoryList({
       ) : (
         <div className="sessions-cards-grid">
           {filteredSessions.map((s) => {
-            const { programmeName, sessionName } = getSessionDisplayNames(s)
-
-            const isInterrupted = !!s.is_interrupted
-            const isLive = s.status === 'recording'
-            const isFinalComplete = s.final_report_status === 'complete'
-            const isProofreadComplete = s.proofreading_status === 'complete'
-            const isProofreadingReview = s.proofreading_status === 'ready_for_review' || s.proofreading_status === 'generating'
-            const isEditingComplete = s.editing_status === 'complete'
-            const isEditingDraft = s.editing_status === 'draft_ready' || s.editing_status === 'in_review' || s.editing_status === 'generating'
-            const isReportsReady = s.reporting_status === 'reports_ready'
-            const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
-            const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress') && !isReportsReady && !isEditingComplete && !isEditingDraft && !isProofreadComplete && !isProofreadingReview && !isFinalComplete
-
-            // Status label, pill color scheme, and target workflow stage
-            let statusLabel = 'In Progress'
-            let statusPillClass = 'session-card-pill--neutral'
-            let actionText = 'View →'
-            let targetWorkflowStage = 'overview'
-
-            if (isInterrupted) {
-              statusLabel = 'Interrupted'
-              statusPillClass = 'session-card-pill--danger'
-              actionText = 'Review Log →'
-              targetWorkflowStage = 'overview'
-            } else if (isLive) {
-              statusLabel = 'Live'
-              statusPillClass = 'session-card-pill--brand'
-              actionText = 'Open Monitor →'
-              targetWorkflowStage = 'overview'
-            } else if (isFinalComplete) {
-              statusLabel = 'Completed'
-              statusPillClass = 'session-card-pill--neutral'
-              actionText = 'Download Document →'
-              targetWorkflowStage = 'final_report'
-            } else if (isProofreadComplete) {
-              statusLabel = 'Proofread'
-              statusPillClass = 'session-card-pill--neutral'
-              actionText = 'Final Report →'
-              targetWorkflowStage = 'final_report'
-            } else if (isProofreadingReview) {
-              statusLabel = 'Proofreading'
-              statusPillClass = 'session-card-pill--neutral'
-              actionText = 'Continue →'
-              targetWorkflowStage = 'proofreading'
-            } else if (isEditingComplete) {
-              statusLabel = 'Editing Done'
-              statusPillClass = 'session-card-pill--neutral'
-              actionText = 'Proofreading →'
-              targetWorkflowStage = 'proofreading'
-            } else if (isEditingDraft) {
-              statusLabel = 'Editing'
-              statusPillClass = 'session-card-pill--neutral'
-              actionText = 'Continue →'
-              targetWorkflowStage = 'editing'
-            } else if (isReportsReady) {
-              statusLabel = 'Reports Ready'
-              statusPillClass = 'session-card-pill--neutral'
-              actionText = 'Process with AI →'
-              targetWorkflowStage = 'report_processing'
-            } else if (isVerified) {
-              statusLabel = 'Verified'
-              statusPillClass = 'session-card-pill--neutral'
-              actionText = 'Process with AI →'
-              targetWorkflowStage = 'report_processing'
-            } else if (needsVerification) {
-              statusLabel = `${s.flag_count || 1} to verify`
-              statusPillClass = 'session-card-pill--warning'
-              actionText = 'Review →'
-              targetWorkflowStage = 'verification'
-            }
+            const { sessionName } = getSessionDisplayNames(s)
+            const {
+              statusLabel,
+              cardPillClass,
+              actionText,
+              targetStage,
+            } = deriveSessionDisplayStatus(s)
 
             const formattedDate = formatCardDate(s.date_created)
             const humanDuration = formatHumanDuration(s.duration_seconds || s.audio_duration_seconds)
@@ -587,7 +539,7 @@ export function SessionHistoryList({
               >
                 {/* Top Row: Status Pill */}
                 <div className="session-card-top-row">
-                  <span className={`session-card-pill ${statusPillClass}`}>
+                  <span className={`session-card-pill ${cardPillClass}`}>
                     <span className="pill-dot">●</span>
                     <span className="pill-label">{statusLabel}</span>
                   </span>
@@ -616,7 +568,7 @@ export function SessionHistoryList({
                     className="session-card-action-btn"
                     onClick={(e) => {
                       e.stopPropagation()
-                      if (onOpenSession) onOpenSession(s.session_id, targetWorkflowStage)
+                      if (onOpenSession) onOpenSession(s.session_id, targetStage)
                     }}
                   >
                     {actionText}

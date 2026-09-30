@@ -1,5 +1,5 @@
 import React, { useRef } from 'react'
-import { getSessionHierarchy } from '../sessions/SessionDetailView'
+import { getSessionHierarchy, deriveSessionDisplayStatus } from '../sessions/SessionDetailView'
 
 /* =========================================================================
    SVG Icons (Clean, crisp vectors matching reference design)
@@ -115,6 +115,9 @@ export const calculateTotalAttentionItems = calculateTotalAttentionSessions
  */
 export function DashboardView({
   sessions = [],
+  isLoading = false,
+  error = null,
+  onRetry = null,
   onStartLiveSession,
   onStartYouTubeSession,
   onOpenSession,
@@ -225,11 +228,6 @@ export function DashboardView({
                 <p className="creation-card-desc">
                   Record and transcribe live audio via microphone or USB input.
                 </p>
-              </div>
-
-              <div className="creation-card-status">
-                <span className="creation-status-dot" />
-                <span className="creation-status-label">Mic / USB Ready</span>
               </div>
             </div>
 
@@ -443,54 +441,42 @@ export function DashboardView({
               </tr>
             </thead>
             <tbody>
-              {recentSessions.length === 0 ? (
+              {isLoading && (!sessions || sessions.length === 0) ? (
+                <tr>
+                  <td colSpan={5} className="empty-sessions-cell">
+                    <div className="sessions-state-box">
+                      <span className="sessions-state-spinner" aria-hidden="true" />
+                      <span>Loading sessions...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : error && (!sessions || sessions.length === 0) ? (
+                <tr>
+                  <td colSpan={5} className="empty-sessions-cell empty-sessions-cell--error">
+                    <div className="sessions-state-box">
+                      <span className="sessions-state-text">⚠️ Sessions could not be loaded.</span>
+                      {onRetry && (
+                        <button
+                          type="button"
+                          className="btn btn--small btn--outline btn-retry-load"
+                          onClick={onRetry}
+                        >
+                          Retry
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ) : recentSessions.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="empty-sessions-cell">
                     No recorded sessions found. Click <strong>Start Live Session</strong> above to begin your first service recording.
                   </td>
                 </tr>
               ) : (
-                  recentSessions.map((sess) => {
-                  const isInterrupted = !!sess.is_interrupted
-                  const isFinalComplete = sess.final_report_status === 'complete' || sess.report_processing_status === 'completed'
-                  const isVerified = sess.verification_status === 'completed' || !!sess.verified_text || !!sess.verified_at
-                  const needsVerification = !isVerified && (sess.flag_count > 0 || sess.verification_status === 'in_progress')
-
+                recentSessions.map((sess) => {
+                  const { statusText, statusPillClass, actionText, targetStage } = deriveSessionDisplayStatus(sess)
                   const { programme: progName, sessionTitle: sessName } = getSessionHierarchy(sess)
-
-                  let statusText = 'IN PROGRESS'
-                  let statusClass = 'status-pill--progress'
-
-                  if (isInterrupted) {
-                    statusText = 'INTERRUPTED'
-                    statusClass = 'status-pill--interrupted'
-                  } else if (isFinalComplete) {
-                    statusText = 'COMPLETED'
-                    statusClass = 'status-pill--completed'
-                  } else if (isVerified) {
-                    statusText = 'VERIFIED'
-                    statusClass = 'status-pill--verified'
-                  } else if (needsVerification) {
-                    statusText = 'NEEDS VERIFICATION'
-                    statusClass = 'status-pill--warning'
-                  }
-
-                  let actionBtnText = 'View →'
-                  let targetStage = 'overview'
-
-                  if (isInterrupted) {
-                    actionBtnText = 'Review →'
-                    targetStage = 'overview'
-                  } else if (needsVerification) {
-                    actionBtnText = 'Review →'
-                    targetStage = 'verification'
-                  } else if (isFinalComplete) {
-                    actionBtnText = 'View Report →'
-                    targetStage = 'final_report'
-                  } else if (isVerified) {
-                    actionBtnText = 'Process with AI →'
-                    targetStage = 'report_processing'
-                  }
 
                   return (
                     <tr
@@ -524,7 +510,7 @@ export function DashboardView({
                       </td>
 
                       <td className="cell-session-status">
-                        <span className={`recent-status-pill ${statusClass}`}>
+                        <span className={`recent-status-pill ${statusPillClass}`}>
                           <span className="status-dot">●</span>
                           <span className="status-label">{statusText}</span>
                         </span>
@@ -540,7 +526,7 @@ export function DashboardView({
                               onOpenSession(sess.session_id, targetStage)
                             }}
                           >
-                            {actionBtnText}
+                            {actionText}
                           </button>
                         </div>
                       </td>
@@ -553,93 +539,82 @@ export function DashboardView({
 
           {/* Mobile Clean Compact Cards (Displayed only under 768px to prevent horizontal blowout) */}
           <div className="recent-sessions-mobile-list" aria-hidden="true">
-            {recentSessions.map((sess) => {
-              const isInterrupted = !!sess.is_interrupted
-              const isFinalComplete = sess.final_report_status === 'complete'
-              const isVerified = sess.verification_status === 'completed' || !!sess.verified_text || !!sess.verified_at
-              const needsVerification = !isVerified && (sess.flag_count > 0 || sess.verification_status === 'in_progress')
+            {isLoading && (!sessions || sessions.length === 0) ? (
+              <div className="sessions-state-box">
+                <span className="sessions-state-spinner" aria-hidden="true" />
+                <span>Loading sessions...</span>
+              </div>
+            ) : error && (!sessions || sessions.length === 0) ? (
+              <div className="sessions-state-box">
+                <span className="sessions-state-text">⚠️ Sessions could not be loaded.</span>
+                {onRetry && (
+                  <button
+                    type="button"
+                    className="btn btn--small btn--outline btn-retry-load"
+                    onClick={onRetry}
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
+            ) : recentSessions.length === 0 ? (
+              <div className="sessions-empty-card">
+                <p>No recorded sessions found. Click Start Live Session to begin.</p>
+              </div>
+            ) : (
+              recentSessions.map((sess) => {
+                const { statusText, statusPillClass, actionText: mobileActionBtnText, targetStage: mobileTargetStage } = deriveSessionDisplayStatus(sess)
+                const { programme: progName, sessionTitle: sessName } = getSessionHierarchy(sess)
 
-              const { programme: progName, sessionTitle: sessName } = getSessionHierarchy(sess)
-
-              let statusText = 'IN PROGRESS'
-              let statusClass = 'status-pill--progress'
-
-              if (isInterrupted) {
-                statusText = 'INTERRUPTED'
-                statusClass = 'status-pill--interrupted'
-              } else if (isFinalComplete) {
-                statusText = 'COMPLETED'
-                statusClass = 'status-pill--completed'
-              } else if (isVerified) {
-                statusText = 'VERIFIED'
-                statusClass = 'status-pill--verified'
-              } else if (needsVerification) {
-                statusText = 'NEEDS VERIFICATION'
-                statusClass = 'status-pill--warning'
-              }
-
-              let mobileActionBtnText = 'View →'
-              let mobileTargetStage = 'overview'
-
-              if (isInterrupted) {
-                mobileActionBtnText = 'Review →'
-                mobileTargetStage = 'overview'
-              } else if (needsVerification) {
-                mobileActionBtnText = 'Review →'
-                mobileTargetStage = 'verification'
-              } else if (isFinalComplete) {
-                mobileActionBtnText = 'View Report →'
-                mobileTargetStage = 'final_report'
-              }
-
-              return (
-                <div
-                  key={sess.session_id}
-                  className="recent-mobile-item"
-                  onClick={() => onOpenSession(sess.session_id, 'overview')}
-                >
-                  <div className="mobile-item-top">
-                    <div className="mobile-item-title-flex">
-                      <div className="table-doc-icon">
-                        <DocumentItemIcon />
+                return (
+                  <div
+                    key={sess.session_id}
+                    className="recent-mobile-item"
+                    onClick={() => onOpenSession(sess.session_id, 'overview')}
+                  >
+                    <div className="mobile-item-top">
+                      <div className="mobile-item-title-flex">
+                        <div className="table-doc-icon">
+                          <DocumentItemIcon />
+                        </div>
+                        <div className="session-hierarchy-stack">
+                          {progName && (
+                            <span className="session-event-eyebrow">{progName}</span>
+                          )}
+                          <span className="session-dominant-name">
+                            {sessName || sess.title || 'Untitled Session'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="session-hierarchy-stack">
-                        {progName && (
-                          <span className="session-event-eyebrow">{progName}</span>
-                        )}
-                        <span className="session-dominant-name">
-                          {sessName || sess.title || 'Untitled Session'}
-                        </span>
-                      </div>
+
+                      <span className={`recent-status-pill ${statusPillClass}`}>
+                        <span className="status-dot">●</span>
+                        <span className="status-label">{statusText}</span>
+                      </span>
                     </div>
 
-                    <span className={`recent-status-pill ${statusClass}`}>
-                      <span className="status-dot">●</span>
-                      <span className="status-label">{statusText}</span>
-                    </span>
-                  </div>
+                    <div className="mobile-item-bottom">
+                      <div className="mobile-item-meta">
+                        <span>{formatRecentDate(sess.date_created)}</span>
+                        <span>•</span>
+                        <span>{formatDuration(sess.duration_seconds || sess.audio_duration_seconds)}</span>
+                      </div>
 
-                  <div className="mobile-item-bottom">
-                    <div className="mobile-item-meta">
-                      <span>{formatRecentDate(sess.date_created)}</span>
-                      <span>•</span>
-                      <span>{formatDuration(sess.duration_seconds || sess.audio_duration_seconds)}</span>
+                      <button
+                        type="button"
+                        className="table-view-btn"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onOpenSession(sess.session_id, mobileTargetStage)
+                        }}
+                      >
+                        {mobileActionBtnText}
+                      </button>
                     </div>
-
-                    <button
-                      type="button"
-                      className="table-view-btn"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onOpenSession(sess.session_id, mobileTargetStage)
-                      }}
-                    >
-                      {mobileActionBtnText}
-                    </button>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
         </div>
       </section>

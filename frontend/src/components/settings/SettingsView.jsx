@@ -5,7 +5,9 @@ import { ProgrammesSettingsSection } from './ProgrammesSettingsSection'
 export function SettingsView({ onBack }) {
   const [instruction, setInstruction] = useState('')
   const [instructionLoaded, setInstructionLoaded] = useState(false)
-  const [autoProcessAfterVerification, setAutoProcessAfterVerification] = useState(true)
+  const [autoProcessAfterVerification, setAutoProcessAfterVerification] = useState(false)
+  const [isAutoProcessLoaded, setIsAutoProcessLoaded] = useState(false)
+  const [isSavingAutoProcess, setIsSavingAutoProcess] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState(null)
@@ -23,9 +25,13 @@ export function SettingsView({ onBack }) {
           const setData = await setRes.json()
           const autoVal = setData.auto_process_after_verification
           setAutoProcessAfterVerification(autoVal !== false && autoVal !== 'false')
+          setIsAutoProcessLoaded(true)
+        } else {
+          setIsAutoProcessLoaded(false)
         }
       } catch (e) {
         console.warn('Failed to load settings:', e)
+        setIsAutoProcessLoaded(false)
       }
 
       // 2. Fetch authoritative instruction with multi-endpoint fallback
@@ -162,16 +168,31 @@ export function SettingsView({ onBack }) {
   }
 
   const handleToggleAutoProcess = async () => {
-    const nextVal = !autoProcessAfterVerification
+    if (!isAutoProcessLoaded || isSavingAutoProcess) return
+    const prevVal = autoProcessAfterVerification
+    const nextVal = !prevVal
     setAutoProcessAfterVerification(nextVal)
+    setIsSavingAutoProcess(true)
+    setError(null)
     try {
-      await fetch(getApiUrl('/api/report-processing/settings'), {
+      const res = await fetch(getApiUrl('/api/report-processing/settings'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ auto_process_after_verification: nextVal }),
       })
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`)
+      }
+      const data = await res.json().catch(() => ({}))
+      if (typeof data.auto_process_after_verification === 'boolean') {
+        setAutoProcessAfterVerification(data.auto_process_after_verification)
+      }
     } catch (err) {
       console.error('Failed to toggle auto_process_after_verification:', err)
+      setAutoProcessAfterVerification(prevVal)
+      setError('Settings could not be saved.')
+    } finally {
+      setIsSavingAutoProcess(false)
     }
   }
 
@@ -193,7 +214,7 @@ export function SettingsView({ onBack }) {
             type="button"
             className="btn btn--outline btn--small"
             onClick={fetchSettingsData}
-            disabled={isLoading || isSaving}
+            disabled={isLoading || isSaving || isSavingAutoProcess}
           >
             {isLoading ? 'Checking...' : '↻ Refresh'}
           </button>
@@ -236,12 +257,23 @@ export function SettingsView({ onBack }) {
         <div className="settings-card-body">
           {/* Simple Auto-Process Row */}
           <div className="settings-auto-process-row">
-            <span className="settings-auto-process-label">Auto-Process After Verification</span>
-            <label className="toggle-switch" aria-label="Auto-Process After Verification">
+            <div className="settings-auto-process-label-group">
+              <span className="settings-auto-process-label">Auto-Process After Verification</span>
+              {!isAutoProcessLoaded && !isLoading && (
+                <span className="settings-field-unavailable-hint" style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #888)', marginLeft: '0.5rem' }}>
+                  (unavailable)
+                </span>
+              )}
+            </div>
+            <label
+              className={`toggle-switch ${(!isAutoProcessLoaded || isLoading || isSavingAutoProcess) ? 'toggle-switch--disabled' : ''}`}
+              aria-label="Auto-Process After Verification"
+            >
               <input
                 type="checkbox"
                 checked={autoProcessAfterVerification}
                 onChange={handleToggleAutoProcess}
+                disabled={!isAutoProcessLoaded || isLoading || isSavingAutoProcess}
               />
               <span className="toggle-slider"></span>
             </label>

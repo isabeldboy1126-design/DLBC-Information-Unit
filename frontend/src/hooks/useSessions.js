@@ -6,8 +6,10 @@ const API_BASE = getApiUrl('/api/sessions')
 export function useSessions() {
   const [sessions, setSessions] = useState([])
   const [activeSession, setActiveSession] = useState(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [hasLoadedInitially, setHasLoadedInitially] = useState(false)
   const [error, setError] = useState(null)
+  const [refreshWarning, setRefreshWarning] = useState(null)
 
   // Phase 5: Verification state
   const [verificationState, setVerificationState] = useState(null)
@@ -15,15 +17,26 @@ export function useSessions() {
   // Fetch all saved sessions
   const fetchSessions = useCallback(async () => {
     setIsLoading(true)
-    setError(null)
+    setRefreshWarning(null)
     try {
       const res = await fetch(API_BASE)
-      if (!res.ok) throw new Error(`Failed to load sessions: ${res.status}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setSessions(data.sessions || [])
+      setHasLoadedInitially(true)
+      setError(null)
     } catch (err) {
       console.error('Error fetching sessions:', err)
-      setError(err.message)
+      // Check if we already have loaded sessions in memory
+      setSessions((currentSessions) => {
+        if (currentSessions && currentSessions.length > 0) {
+          setRefreshWarning('Could not refresh sessions.')
+          setError(null)
+        } else {
+          setError('Sessions could not be loaded.')
+        }
+        return currentSessions
+      })
     } finally {
       setIsLoading(false)
     }
@@ -347,8 +360,13 @@ export function useSessions() {
     sessions,
     activeSession,
     isLoading,
+    hasLoadedInitially,
     error,
-    clearError: () => setError(null),
+    refreshWarning,
+    clearError: () => {
+      setError(null)
+      setRefreshWarning(null)
+    },
     fetchSessions,
     loadSession,
     updateSessionTitle,
