@@ -5572,12 +5572,16 @@ textarea.form-control {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  height: calc(100vh - 100px);
+  height: calc(100vh - 120px);
+  max-height: calc(100vh - 120px);
   min-height: 0;
 }
 
 /* 1. Compact Top Recording Control Bar */
 .live-top-recording-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   padding: 0.75rem 1.25rem;
   display: flex;
   align-items: center;
@@ -8120,6 +8124,69 @@ textarea.form-control {
 .btn-segment-save-next:hover {
   background: #1558d6;
   box-shadow: 0 4px 12px rgba(29, 104, 242, 0.25);
+}
+
+/* Completed State Card */
+.active-segment-completed-card {
+  padding: 3.5rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.completed-state-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  max-width: 380px;
+}
+
+.completed-check-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #ecfdf5;
+  color: #10b981;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+
+.completed-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0b1329;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.btn--proceed-action {
+  background: #1d68f2;
+  color: #ffffff;
+  border: none;
+  padding: 0.75rem 1.75rem;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 12px rgba(29, 104, 242, 0.25);
+}
+
+.btn--proceed-action:hover {
+  background: #1558d6;
+  transform: translateY(-1px);
 }
 
 /* Finalize Banner */
@@ -14755,10 +14822,23 @@ textarea.form-control {
 
 /* Active Segment Card */
 [data-theme="dark"] .active-segment-card,
-.dark .active-segment-card {
+[data-theme="dark"] .active-segment-completed-card,
+.dark .active-segment-card,
+.dark .active-segment-completed-card {
   background: #0b1528 !important;
   border: 1px solid #1c2b48 !important;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+[data-theme="dark"] .completed-title,
+.dark .completed-title {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .completed-check-icon,
+.dark .completed-check-icon {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
 }
 
 [data-theme="dark"] .active-segment-title,
@@ -15831,4 +15911,366 @@ textarea.form-control {
   background: rgba(190, 18, 60, 0.15) !important;
   border: 1px solid #881337 !important;
   color: #fda4af !important;
+}
+
+/* =========================================================================
+   DARK MODE COMPLETION PASS: Verification Processing, Report Modal & Final Report
+   ========================================================================= */
+
+/* 1. Verification Processing / Session Completion View */
+[data-theme="dark"] .session-completion-page,
+.dark .session-completion-page {
+  background: var(--color-bg) !important;
+}
+
+[data-theme="dark"] .completion-ambient-bg,
+.dark .completion-ambient-bg {
+  opacity: 0.12;
+}
+
+[data-theme="dark"] .completion-meta-above-card,
+.dark .completion-meta-above-card {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .completion-floating-card,
+.dark .completion-floating-card {
+  background: #0d1b32 !important;
+  border: 1px solid #1e2d4d !important;
+  box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.6) !important;
+}
+
+[data-theme="dark"] .floating-card-title,
+.dark .floating-card-title {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .floating-card-title--complete,
+.dark .floating-card-title--complete {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .floating-card-subtitle,
+[data-theme="dark"] .floating-card-desc,
+.dark .floating-card-subtitle,
+.dark .floating-card-desc {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .floating-progress-track,
+.dark .floating-progress-track {
+  background: #1e293b !important;
+}
+
+[data-theme="dark"] .floating-progress-fill,
+.dark .floating-progress-fill {
+  background: #1d68f2 !important;
+}
+
+[data-theme="dark"] .completion-spinner-svg circle,
+.dark .completion-spinner-svg circle {
+  stroke: #1e293b !important;
+}
+
+[data-theme="dark"] .timeline-bullet--active,
+[data-theme="dark"] .timeline-bullet--pending,
+.dark .timeline-bullet--active,
+.dark .timeline-bullet--pending {
+  background: #0d1b32 !important;
+}
+
+[data-theme="dark"] .timeline-bullet--pending,
+.dark .timeline-bullet--pending {
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .timeline-text,
+.dark .timeline-text {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .timeline-text--active,
+.dark .timeline-text--active {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .timeline-text--pending,
+.dark .timeline-text--pending {
+  color: #64748b !important;
+}
+
+[data-theme="dark"] .timeline-line,
+.dark .timeline-line {
+  background: #1e293b !important;
+}
+
+[data-theme="dark"] .timeline-line--done,
+.dark .timeline-line--done {
+  background: #1d68f2 !important;
+}
+
+[data-theme="dark"] .floating-stats-container,
+.dark .floating-stats-container {
+  background: #091322 !important;
+  border-color: #1e2d4d !important;
+}
+
+[data-theme="dark"] .floating-stat-num,
+.dark .floating-stat-num {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .floating-stat-label,
+.dark .floating-stat-label {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .floating-stat-divider,
+.dark .floating-stat-divider {
+  background: #1e2d4d !important;
+}
+
+[data-theme="dark"] .completion-success-badge,
+.dark .completion-success-badge {
+  background: rgba(16, 185, 129, 0.12) !important;
+  box-shadow: 0 0 24px rgba(16, 185, 129, 0.18) !important;
+}
+
+[data-theme="dark"] .completion-unavailable-badge,
+.dark .completion-unavailable-badge {
+  background: rgba(245, 158, 11, 0.12) !important;
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.18) !important;
+}
+
+[data-theme="dark"] .btn-floating-secondary,
+.dark .btn-floating-secondary {
+  background: #152238 !important;
+  border: 1px solid #1e2d4d !important;
+  color: #cbd5e1 !important;
+}
+
+/* 2. Report Processing Modal / View */
+[data-theme="dark"] .report-processing-modal-backdrop,
+.dark .report-processing-modal-backdrop {
+  background: rgba(4, 9, 20, 0.85) !important;
+}
+
+[data-theme="dark"] .report-processing-modal-card,
+.dark .report-processing-modal-card {
+  background: #0d1b32 !important;
+  border: 1px solid #1e2d4d !important;
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.6) !important;
+}
+
+[data-theme="dark"] .report-processing-badge-icon,
+.dark .report-processing-badge-icon {
+  background: #152238 !important;
+}
+
+[data-theme="dark"] .modal-minimize-btn,
+.dark .modal-minimize-btn {
+  background: #152238 !important;
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .modal-minimize-btn:hover,
+.dark .modal-minimize-btn:hover {
+  background: #1e2d4d !important;
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .report-processing-title,
+.dark .report-processing-title {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .report-processing-session-title,
+.dark .report-processing-session-title {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .report-processing-metadata-row,
+.dark .report-processing-metadata-row {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .meta-separator,
+.dark .meta-separator {
+  color: #334155 !important;
+}
+
+[data-theme="dark"] .stepper-circle,
+.dark .stepper-circle {
+  background: #1e293b !important;
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .stepper-step--active .stepper-circle,
+[data-theme="dark"] .stepper-step--completed .stepper-circle,
+.dark .stepper-step--active .stepper-circle,
+.dark .stepper-step--completed .stepper-circle {
+  background: #1d68f2 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .stepper-label,
+.dark .stepper-label {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .stepper-step--active .stepper-label,
+.dark .stepper-step--active .stepper-label {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .stepper-connector,
+.dark .stepper-connector {
+  background: #1e293b !important;
+}
+
+[data-theme="dark"] .stepper-connector--active,
+.dark .stepper-connector--active {
+  background: #1d68f2 !important;
+}
+
+[data-theme="dark"] .report-processing-subtasks-card,
+.dark .report-processing-subtasks-card {
+  background: #091322 !important;
+  border: 1px solid #1e2d4d !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+[data-theme="dark"] .report-processing-task-row,
+.dark .report-processing-task-row {
+  border-bottom: 1px solid #152238 !important;
+}
+
+[data-theme="dark"] .report-processing-blue-spinner,
+.dark .report-processing-blue-spinner {
+  border-color: #1e293b !important;
+  border-top-color: #38bdf8 !important;
+}
+
+[data-theme="dark"] .report-processing-task-label,
+.dark .report-processing-task-label {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .btn-cancel-report-process,
+.dark .btn-cancel-report-process {
+  background: #152238 !important;
+  color: #94a3b8 !important;
+  border: 1px solid #1e2d4d !important;
+}
+
+[data-theme="dark"] .btn-cancel-report-process:hover,
+.dark .btn-cancel-report-process:hover {
+  background: #1e2d4d !important;
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .report-processing-completed-box,
+.dark .report-processing-completed-box {
+  background: #091322 !important;
+  border: 1px solid #1e2d4d !important;
+}
+
+/* 3. Final Report Surfaces & Typography */
+[data-theme="dark"] .reporting-ready-floating-card,
+.dark .reporting-ready-floating-card {
+  background: #0d1b32 !important;
+  border: 1px solid #1e2d4d !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .ready-card-title,
+[data-theme="dark"] .ready-card-text strong,
+.dark .ready-card-title,
+.dark .ready-card-text strong {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .ready-card-text p,
+.dark .ready-card-text p {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .btn-continue-editing-primary,
+.dark .btn-continue-editing-primary {
+  background: #1d68f2 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 10px rgba(29, 104, 242, 0.35) !important;
+}
+
+[data-theme="dark"] .btn-continue-editing-primary:hover,
+.dark .btn-continue-editing-primary:hover {
+  background: #1558d6 !important;
+}
+
+[data-theme="dark"] .ready-card-actions .btn--secondary,
+.dark .ready-card-actions .btn--secondary {
+  background: #152238 !important;
+  border: 1px solid #1e2d4d !important;
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .ready-card-actions .btn--secondary:hover,
+.dark .ready-card-actions .btn--secondary:hover {
+  background: #1e2d4d !important;
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .post-final-box,
+.dark .post-final-box {
+  background: #0d1b32 !important;
+  border: 1px solid #1e2d4d !important;
+}
+
+[data-theme="dark"] .post-final-box h5,
+.dark .post-final-box h5 {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .post-final-box p,
+.dark .post-final-box p {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .post-final-box .btn--outline,
+.dark .post-final-box .btn--outline {
+  background: #152238 !important;
+  border: 1px solid #1e2d4d !important;
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .post-final-box .btn--outline:hover,
+.dark .post-final-box .btn--outline:hover {
+  background: #1e2d4d !important;
+  color: #93c5fd !important;
+}
+
+[data-theme="dark"] .archival-doc-main-title,
+.dark .archival-doc-main-title {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .archival-doc-supertitle,
+[data-theme="dark"] .archival-doc-delivery,
+[data-theme="dark"] .archival-doc-footer-centered,
+.dark .archival-doc-supertitle,
+.dark .archival-doc-delivery,
+.dark .archival-doc-footer-centered {
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .archival-doc-divider,
+.dark .archival-doc-divider {
+  border-top-color: #1e2d4d !important;
+}
+
+[data-theme="dark"] .archival-body-text,
+[data-theme="dark"] .archival-body-text pre,
+.dark .archival-body-text,
+.dark .archival-body-text pre {
+  color: #cbd5e1 !important;
 }

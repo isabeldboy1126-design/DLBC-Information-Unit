@@ -391,30 +391,32 @@ export function VerificationWorkflow({
             </div>
 
             {/* Action Buttons Row: Confirm All & Use AI to Verify */}
-            <div className="verification-action-buttons-row">
-              <button
-                type="button"
-                className="btn-confirm-all-action"
-                onClick={() => setShowBulkConfirmModal(true)}
-                disabled={pendingCount === 0}
-                title="Accept original machine text for all remaining flags"
-              >
-                <span className="action-btn-icon">✓</span>
-                <span>Confirm All</span>
-              </button>
+            {pendingCount > 0 && (
+              <div className="verification-action-buttons-row">
+                <button
+                  type="button"
+                  className="btn-confirm-all-action"
+                  onClick={() => setShowBulkConfirmModal(true)}
+                  disabled={pendingCount === 0}
+                  title="Accept original machine text for all remaining flags"
+                >
+                  <span className="action-btn-icon">✓</span>
+                  <span>Confirm All</span>
+                </button>
 
-              <button
-                type="button"
-                id="btn-trigger-ai-verify"
-                className={`btn-ai-verify-action ${isAiVerifying ? 'btn-ai-verify-action--loading' : ''}`}
-                onClick={handleTriggerAiVerification}
-                disabled={isAiVerifying || pendingCount === 0}
-                title="Use AI to verify transcript against biblical context"
-              >
-                <span className="action-btn-icon">{isAiVerifying ? '⏳' : '✦'}</span>
-                <span>{isAiVerifying ? 'Verifying with AI...' : 'Use AI to Verify'}</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  id="btn-trigger-ai-verify"
+                  className={`btn-ai-verify-action ${isAiVerifying ? 'btn-ai-verify-action--loading' : ''}`}
+                  onClick={handleTriggerAiVerification}
+                  disabled={isAiVerifying || pendingCount === 0}
+                  title="Use AI to verify transcript against biblical context"
+                >
+                  <span className="action-btn-icon">{isAiVerifying ? '⏳' : '✦'}</span>
+                  <span>{isAiVerifying ? 'Verifying with AI...' : 'Use AI to Verify'}</span>
+                </button>
+              </div>
+            )}
 
             {/* Live AI Verification Status Banner / Top-level notice */}
             {aiFeedback && (
@@ -442,11 +444,7 @@ export function VerificationWorkflow({
             {filteredItems.length === 0 ? (
               <div className="empty-flagged-card">
                 <span>✓</span>
-                <p>
-                  {filter === 'pending'
-                    ? 'All flagged items in this section have been resolved!'
-                    : 'No verification items found.'}
-                </p>
+                {filter !== 'pending' && <p>No verification items found.</p>}
               </div>
             ) : (
               filteredItems.map((item, idx) => {
@@ -632,30 +630,25 @@ export function VerificationWorkflow({
                 </button>
               </div>
             </div>
+          ) : (pendingCount === 0 && itemsTotal > 0) ? (
+            <div className="card active-segment-completed-card">
+              <div className="completed-state-content">
+                <div className="completed-check-icon">✓</div>
+                <h3 className="completed-title">All verification items resolved</h3>
+                <button
+                  type="button"
+                  className="btn btn--primary btn--proceed-action"
+                  onClick={handleFinalise}
+                  disabled={isFinalising}
+                  id="btn-finalize-verification"
+                >
+                  {isFinalising ? 'Processing...' : 'Proceed →'}
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="card active-segment-empty">
               <p>Select a flagged segment on the left to verify.</p>
-            </div>
-          )}
-
-
-          {/* Finalize Banner (When all items resolved) */}
-          {itemsTotal > 0 && itemsResolved === itemsTotal && (
-            <div className="verification-finalize-ready-box">
-              <div className="finalize-ready-text">
-                <strong>✓ All Verification Items Resolved!</strong>
-                <p>Ready to compile the final Verified Transcript and proceed to AI Report Processing.</p>
-              </div>
-
-              <button
-                type="button"
-                className="btn btn--success btn--finalize-action"
-                onClick={handleFinalise}
-                disabled={isFinalising}
-                id="btn-finalize-verification"
-              >
-                {isFinalising ? 'Finalizing...' : 'Finalise Verification →'}
-              </button>
             </div>
           )}
         </div>
@@ -701,7 +694,7 @@ export function VerificationWorkflow({
         title="Finalise Verification?"
         message={`All ${itemsTotal} verification items are resolved. Would you like to create the final Verified Transcript now?`}
         supportingText="This will combine all segments with your human corrections as the approved factual source for AI Report Processing."
-        confirmLabel="Create Verified Transcript"
+        confirmLabel="Proceed →"
         cancelLabel="Cancel"
         variant="primary"
         isLoading={isFinalising}

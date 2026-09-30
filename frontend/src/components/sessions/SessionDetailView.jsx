@@ -380,15 +380,21 @@ export function SessionDetailView({
 
   // Lifecycle stage statuses
   const vStatus = session?.verification_status || 'not_started'
-  const isVerified = vStatus === 'completed' || vStatus === 'complete' || !!session?.verified_at || !!session?.verified_text
-  const rStatus = session?.reporting_status || 'not_started'
-  const eStatus = session?.editing_status || 'not_started'
-  const pStatus = session?.proofreading_status || 'not_started'
-  const fStatus = session?.final_report_status || 'not_started'
   const hasAudio = !!(session?.audio_filename || session?.recording_id)
   const hasTranscript = !!(session?.transcript_id || (session?.segment_count && session.segment_count > 0))
   const flagCount = session?.flag_count || session?.verification_items_total || 0
   const resolvedCount = session?.verification_items_resolved ?? verificationState?.resolved_count ?? 0
+  const isVerified =
+    vStatus === 'completed' ||
+    vStatus === 'complete' ||
+    !!session?.verified_at ||
+    !!session?.verified_text ||
+    (flagCount === 0 && hasTranscript && session?.status !== 'recording') ||
+    (resolvedCount >= flagCount && flagCount > 0)
+  const rStatus = session?.reporting_status || 'not_started'
+  const eStatus = session?.editing_status || 'not_started'
+  const pStatus = session?.proofreading_status || 'not_started'
+  const fStatus = session?.final_report_status || 'not_started'
 
   // ---------------------------------------------------------------------------
   // VIEW: RAW TRANSCRIPT STANDALONE
@@ -555,7 +561,7 @@ export function SessionDetailView({
 
       {/* 2. Verification Action Strip (floating white card matching reference design) */}
       {(() => {
-        const isSessionVerified = isVerified || (flagCount === 0) || (resolvedCount >= flagCount && flagCount > 0)
+        const isSessionVerified = isVerified
         const hasFinalDoc = (fStatus === 'complete') || session?.final_report_id || session?.docx_file_path || session?.report_processing_status === 'completed'
 
         if (!isSessionVerified && flagCount > 0) {

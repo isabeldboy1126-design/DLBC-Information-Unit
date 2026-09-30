@@ -187,17 +187,17 @@ export function FinalReportView({ session, onBack }) {
   return (
     <div className="final-report-workspace">
       {/* Top Navigation & Action Banner */}
-      <div className="reporting-ready-floating-card" style={{ marginBottom: '1.5rem', background: '#ffffff' }}>
+      <div className="reporting-ready-floating-card" style={{ marginBottom: '1.5rem' }}>
         <div className="ready-card-left">
           <div className="ready-check-icon-circle" style={{ background: '#ecfdf5', color: '#10b981' }}>✓</div>
           <div className="ready-card-text">
             <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#10b981', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               REPORT READY
             </span>
-            <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f2947', margin: '0.15rem 0' }}>
+            <h3 className="ready-card-title" style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0.15rem 0' }}>
               {reportTitle || 'Message Report'}
             </h3>
-            <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b' }}>
+            <p style={{ margin: 0, fontSize: '0.88rem' }}>
               {session?.title || 'Sunday Morning Worship & Sermon'} • {wordCount} words
             </p>
           </div>
@@ -379,7 +379,7 @@ export function FinalReportView({ session, onBack }) {
                 <hr className="archival-doc-divider" />
 
                 <div className="archival-body-text">
-                  <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '1rem', lineHeight: '1.8', color: '#1e293b', margin: 0 }}>
+                  <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '1rem', lineHeight: '1.8', margin: 0 }}>
                     {reportText}
                   </pre>
                 </div>

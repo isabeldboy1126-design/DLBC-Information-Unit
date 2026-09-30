@@ -325,7 +325,7 @@ export function DashboardView({
               const needsVerify = !isVerified && (sess.flag_count > 0 || sess.verification_status === 'in_progress')
               const needsProcessing = isVerified && sess.final_report_status !== 'complete' && sess.report_processing_status !== 'completed'
 
-              let stageLabel = `Verification · ${sess.flag_count || 1}`
+              let stageLabel = `${sess.flag_count || 1} to verify`
               let stagePillClass = 'stage-pill--verification'
               let actionBtnText = 'Review'
               let targetStage = 'verification'

@@ -562,7 +562,7 @@ export function SessionHistoryList({
               actionText = 'Process with AI →'
               targetWorkflowStage = 'report_processing'
             } else if (needsVerification) {
-              statusLabel = 'Needs Verification'
+              statusLabel = `${s.flag_count || 1} to verify`
               statusPillClass = 'session-card-pill--warning'
               actionText = 'Review →'
               targetWorkflowStage = 'verification'

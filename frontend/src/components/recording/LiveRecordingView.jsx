@@ -21,15 +21,17 @@ export function LiveRecordingView({
   onStopRecording,
   onToggleManualFlag,
 }) {
-  const transcriptEndRef = useRef(null)
+  const transcriptContainerRef = useRef(null)
 
   const segments = Array.isArray(liveTranscript) ? liveTranscript : (liveTranscript?.segments || [])
   const interimText = liveTranscript?.interimText || ''
   const transcriptStatus = liveTranscript?.status || 'listening'
 
-  // Auto-scroll to bottom as new live segments or interim text arrive
+  // Auto-scroll container to bottom as new live segments or interim text arrive
   useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (transcriptContainerRef.current) {
+      transcriptContainerRef.current.scrollTop = transcriptContainerRef.current.scrollHeight
+    }
   }, [segments.length, interimText])
 
   const formatTimer = (totalSeconds) => {
@@ -140,7 +142,7 @@ export function LiveRecordingView({
       {/* 2. REAL-TIME DOMINANT TRANSCRIPT CANVAS (35px)                */}
       {/* ------------------------------------------------------------- */}
       <div className="card live-transcript-canvas-card">
-        <div className="transcript-stream-container">
+        <div className="transcript-stream-container" ref={transcriptContainerRef}>
           {segments.length === 0 && !interimText ? (
             <div className="transcript-waiting-placeholder">
               <span className="waiting-spinner">⏳</span>
@@ -209,8 +211,6 @@ export function LiveRecordingView({
               <span className="cursor-text">Listening for speech...</span>
             </div>
           )}
-
-          <div ref={transcriptEndRef} />
         </div>
 
         {/* ----------------------------------------------------------- */}
