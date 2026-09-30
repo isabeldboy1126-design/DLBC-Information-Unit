@@ -404,9 +404,13 @@ async def promote_diff_to_example(diff_id: str, payload: PromoteDiffRequest):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.get("/settings", response_model=Dict[str, str])
+@router.get("/settings", response_model=Dict[str, Any])
 async def get_settings():
-    return await report_processing_repo.get_all_settings()
+    settings = await report_processing_repo.get_all_settings()
+    active_inst = await report_processing_repo.get_active_unified_instruction()
+    settings["instruction"] = active_inst
+    settings["unified_instructions"] = active_inst
+    return settings
 
 
 @router.post("/settings", response_model=Dict[str, Any])
