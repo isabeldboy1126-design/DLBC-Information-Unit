@@ -50,7 +50,8 @@ class SettingUpdateRequest(BaseModel):
 
 
 class InstructionUpdateRequest(BaseModel):
-    instruction: str
+    instruction: Optional[str] = None
+    unified_instructions: Optional[str] = None
 
 
 class StandardCreateRequest(BaseModel):
@@ -413,26 +414,41 @@ async def update_setting(payload: Dict[str, Any]):
     if "key" in payload and "value" in payload:
         k = str(payload["key"])
         v = str(payload["value"])
-        await report_processing_repo.set_setting(k, v)
+        if k in ("unified_instructions", "instruction"):
+            await report_processing_repo.save_active_unified_instruction(v)
+        else:
+            await report_processing_repo.set_setting(k, v)
         return {"status": "success", "key": k, "value": v}
     for k, v in payload.items():
         val_str = "true" if v is True else "false" if v is False else str(v)
-        await report_processing_repo.set_setting(k, val_str)
+        if k in ("unified_instructions", "instruction"):
+            await report_processing_repo.save_active_unified_instruction(val_str)
+        else:
+            await report_processing_repo.set_setting(k, val_str)
     return {"status": "success", "settings": payload}
 
 
 @router.get("/instruction", response_model=Dict[str, Any])
 async def get_unified_instruction():
     instruction = await report_processing_repo.get_active_unified_instruction()
-    return {"instruction": instruction, "status": "success"}
+    return {
+        "instruction": instruction,
+        "unified_instructions": instruction,
+        "status": "success",
+    }
 
 
 @router.post("/instruction", response_model=Dict[str, Any])
 async def save_unified_instruction(payload: InstructionUpdateRequest):
-    if not payload.instruction.strip():
+    raw_inst = payload.instruction or payload.unified_instructions or ""
+    if not raw_inst.strip():
         raise HTTPException(status_code=400, detail="Instruction cannot be empty")
-    saved = await report_processing_repo.save_active_unified_instruction(payload.instruction.strip())
-    return {"instruction": saved, "status": "success"}
+    saved = await report_processing_repo.save_active_unified_instruction(raw_inst.strip())
+    return {
+        "instruction": saved,
+        "unified_instructions": saved,
+        "status": "success",
+    }
 
 
 @router.get("/prompt-preview/{session_id}", response_model=Dict[str, Any])

@@ -251,15 +251,10 @@ export function ProgrammesSettingsSection() {
               {showArchived ? 'Hide Archived' : `Show Archived (${archivedCount})`}
             </button>
           )}
-          <span className="badge badge--primary">User Configurable</span>
         </div>
       </div>
 
       <div className="card-body">
-        <p className="settings-card-desc">
-          Configure church programmes/events (e.g. <em>2026 Easter Retreat</em>, <em>Workers Meeting</em>) and their constituent sessions/sections (e.g. <em>Faith Clinic</em>, <em>Bible Teaching</em>). Configured programmes appear automatically when creating a New Live Session.
-        </p>
-
         {error && (
           <div className="settings-alert settings-alert--error" style={{ margin: '0.75rem 0' }}>
             <span>⚠️ {error}</span>

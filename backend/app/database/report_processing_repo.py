@@ -570,19 +570,23 @@ class ReportProcessingRepository:
     async def get_active_standard(self) -> Dict[str, Any]:
         res = await self.get_active_standard_raw()
         if res:
-            res["unified_instructions"] = await self.get_active_unified_instruction()
+            unified = await self.get_active_unified_instruction()
+            res["unified_instructions"] = unified
+            res["instruction"] = unified
         return res
 
     async def get_active_unified_instruction(self) -> str:
         """
         Returns the authoritative unified instruction for report processing.
         Priority:
-        1. Custom saved instruction in report_processing_settings table ('unified_instructions')
+        1. Custom saved instruction in report_processing_settings table ('unified_instructions' or 'instruction')
         2. Assembled instructions from the active report_processing_standards record
         3. Default unified instruction template
         """
         await self.init_db()
         saved = await self.get_setting("unified_instructions")
+        if not (saved and saved.strip()):
+            saved = await self.get_setting("instruction")
         if saved and saved.strip():
             return saved.strip()
 
@@ -625,6 +629,7 @@ class ReportProcessingRepository:
         await self.init_db()
         cleaned = instruction.strip()
         await self.set_setting("unified_instructions", cleaned)
+        await self.set_setting("instruction", cleaned)
         return cleaned
 
     async def get_standard_by_version(self, version: int) -> Optional[Dict[str, Any]]:
