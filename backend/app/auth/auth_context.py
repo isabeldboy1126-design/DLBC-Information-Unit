@@ -1,4 +1,4 @@
-﻿"""
+"""
 Authentication Context dataclass representing the verified caller.
 """
 
@@ -15,3 +15,4 @@ class AuthContext:
     account: Optional[Dict[str, Any]]
     is_onboarded: bool
     role: str
+    is_demo: bool = False

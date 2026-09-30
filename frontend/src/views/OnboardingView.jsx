@@ -3,7 +3,14 @@ import { useAuth } from '../context/AuthContext'
 
 const SECTORS = ['Adult', 'Youth', 'Campus', 'YPF', 'Children', 'Other']
 
-export function OnboardingView({ isReplay = false, onReplayCancel, onReplayComplete }) {
+export function OnboardingView({
+  isReplay = false,
+  onReplayCancel,
+  onReplayComplete,
+  isDemoTest = false,
+  onDemoTestCancel,
+  onDemoTestComplete,
+}) {
   const { account, saveOnboardingProgress, completeOnboarding, replayOnboardingFinish } = useAuth()
 
   // Form State
@@ -26,9 +33,60 @@ export function OnboardingView({ isReplay = false, onReplayCancel, onReplayCompl
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationError, setValidationError] = useState(null)
 
-  // Initialize from existing account profile if available (e.g. for resume or replay)
+  // Initialize from existing account profile or local demo draft
   useEffect(() => {
-    if (account) {
+    if (isDemoTest) {
+      try {
+        const rawDraft = localStorage.getItem('dlbc_demo_onboarding_draft')
+        if (rawDraft) {
+          const draft = JSON.parse(rawDraft)
+          if (draft.sector) {
+            if (SECTORS.includes(draft.sector)) {
+              setSector(draft.sector)
+            } else {
+              setSector('Other')
+              setCustomSector(draft.sector)
+            }
+          }
+          if (draft.custom_sector) setCustomSector(draft.custom_sector)
+          if (draft.church_state) setChurchState(draft.church_state)
+          if (draft.region) setRegion(draft.region)
+          if (draft.old_group) setOldGroup(draft.old_group)
+          if (draft.group_name) setGroupName(draft.group_name)
+          if (draft.district) setDistrict(draft.district)
+
+          const term = draft.terminal_level || 'state_headquarters'
+          if (term === 'state_headquarters') {
+            setStateBranch('state_headquarters')
+          } else {
+            setStateBranch('under_region')
+            if (term === 'region_headquarters') {
+              setRegionBranch('region_headquarters')
+            } else {
+              setRegionBranch('under_old_group')
+              if (term === 'old_group_headquarters') {
+                setOldGroupBranch('old_group_headquarters')
+              } else {
+                setOldGroupBranch('under_group')
+                if (term === 'group_headquarters') {
+                  setGroupBranch('group_headquarters')
+                } else {
+                  setGroupBranch('under_district')
+                }
+              }
+            }
+          }
+          if (draft.step && draft.step >= 1 && draft.step <= 7) {
+            setStep(draft.step)
+          }
+          return
+        }
+      } catch (e) {
+        console.warn('Error reading demo draft from localStorage:', e)
+      }
+    }
+
+    if (account && !isDemoTest) {
       if (account.sector) {
         if (SECTORS.includes(account.sector)) {
           setSector(account.sector)
@@ -71,7 +129,7 @@ export function OnboardingView({ isReplay = false, onReplayCancel, onReplayCompl
         setStep(Math.max(1, account.onboarding_step))
       }
     }
-  }, [account, isReplay])
+  }, [account, isReplay, isDemoTest])
 
   // Derive terminal level based on current selections
   const getResolvedTerminalLevel = () => {
@@ -222,6 +280,17 @@ export function OnboardingView({ isReplay = false, onReplayCancel, onReplayCompl
       setIsSubmitting(true)
       try {
         const payload = buildPayload()
+        if (isDemoTest) {
+          try {
+            localStorage.setItem('dlbc_demo_onboarding_draft', JSON.stringify({ ...payload, step: 7, completed: true }))
+          } catch (e) {
+            console.warn('Error saving completed demo draft:', e)
+          }
+          if (onDemoTestComplete) {
+            onDemoTestComplete()
+          }
+          return
+        }
         if (isReplay) {
           await replayOnboardingFinish(payload)
           if (onReplayComplete) onReplayComplete()
@@ -239,6 +308,16 @@ export function OnboardingView({ isReplay = false, onReplayCancel, onReplayCompl
   const navigateNext = (nextStep) => {
     setHistory((prev) => [...prev, nextStep])
     setStep(nextStep)
+
+    if (isDemoTest) {
+      try {
+        const payload = buildPayload()
+        localStorage.setItem('dlbc_demo_onboarding_draft', JSON.stringify({ ...payload, step: nextStep }))
+      } catch (e) {
+        // Non-blocking localStorage save
+      }
+      return
+    }
 
     // Save progress to backend if in initial onboarding mode
     if (!isReplay && nextStep < 7) {
@@ -274,6 +353,7 @@ export function OnboardingView({ isReplay = false, onReplayCancel, onReplayCompl
             <div className="onboarding-brand-text">
               <span className="onboarding-brand-title">Information Unit</span>
               {isReplay && <span className="onboarding-replay-badge">Replay Mode</span>}
+              {isDemoTest && <span className="onboarding-replay-badge" style={{ background: 'rgba(148, 163, 184, 0.15)', color: '#94A3B8' }}>Demo Test Mode</span>}
             </div>
           </div>
           <div className="onboarding-progress-badge">
@@ -286,6 +366,16 @@ export function OnboardingView({ isReplay = false, onReplayCancel, onReplayCompl
                 title="Cancel replay and return to settings"
               >
                 Exit Replay
+              </button>
+            )}
+            {isDemoTest && onDemoTestCancel && (
+              <button
+                type="button"
+                className="onboarding-cancel-btn"
+                onClick={onDemoTestCancel}
+                title="Exit demo test onboarding"
+              >
+                Exit Test
               </button>
             )}
           </div>
@@ -598,7 +688,7 @@ export function OnboardingView({ isReplay = false, onReplayCancel, onReplayCompl
               {isSubmitting
                 ? 'Saving...'
                 : step === 7
-                ? (isReplay ? 'Save changes →' : 'Finish setup →')
+                ? (isDemoTest ? 'Finish preview →' : (isReplay ? 'Save changes →' : 'Finish setup →'))
                 : 'Continue →'}
             </button>
           </div>

@@ -15,12 +15,35 @@ async def get_auth_context(
     request: Request,
     authorization: Optional[str] = Header(None),
     token_param: Optional[str] = Query(None, alias="token"),
+    x_dlbc_demo: Optional[str] = Header(None, alias="X-DLBC-Demo"),
 ) -> AuthContext:
     """
     Extracts and validates Supabase Bearer token, provisions/updates user record,
     and resolves the user's primary church account.
-    Supports both Authorization: Bearer <token> header and ?token=<token> query parameter.
+    Supports local development demo mode via X-DLBC-Demo header strictly when enabled.
     """
+    # Check for explicit local development demo header
+    # Must satisfy BOTH: APP_ENV == "development" AND ENABLE_LOCAL_DEMO == "true"
+    app_env = os.environ.get("APP_ENV", "").lower()
+    enable_local_demo = os.environ.get("ENABLE_LOCAL_DEMO", "").lower() in ("true", "1")
+    demo_header_val = (x_dlbc_demo or request.headers.get("x-dlbc-demo") or "").strip()
+
+    if demo_header_val == "1":
+        if app_env == "development" and enable_local_demo:
+            legacy_acct = await account_repo.get_account_by_id("legacy_default_account")
+            return AuthContext(
+                user_id="demo_local_user",
+                supabase_user_id="demo_local_sub",
+                email="demo@local.dlbc",
+                account_id="legacy_default_account",
+                account=legacy_acct,
+                is_onboarded=True,
+                role="owner",
+                is_demo=True,
+            )
+        # In production or when ENABLE_LOCAL_DEMO is not active, X-DLBC-Demo has NO privileged effect.
+        # It falls through to the standard authentication requirement.
+
     raw_token = None
     if authorization and authorization.startswith("Bearer "):
         raw_token = authorization.split(" ", 1)[1].strip()
@@ -28,20 +51,6 @@ async def get_auth_context(
         raw_token = token_param.strip()
 
     if not raw_token:
-        # Check if running under local dev unauthenticated fallback mode
-        allow_unauth = os.environ.get("ALLOW_UNAUTHENTICATED_DEV", "").lower() in ("true", "1")
-        if allow_unauth:
-            # Provide legacy default account fallback for explicit local dev override
-            legacy_acct = await account_repo.get_account_by_id("legacy_default_account")
-            return AuthContext(
-                user_id="usr_dev_default",
-                supabase_user_id="sub_dev_default",
-                email="dev@church.org",
-                account_id="legacy_default_account",
-                account=legacy_acct,
-                is_onboarded=True,
-                role="owner"
-            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",

@@ -17801,4 +17801,70 @@ textarea.form-control {
 @keyframes authSpin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
-}
+}
+
+/* Local Development Demo Mode Styles (Development-only) */
+.auth-demo-entry {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+  padding-top: 6px;
+}
+
+.auth-demo-link {
+  background: transparent;
+  border: none;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: #64748B;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  font-family: inherit;
+  font-weight: 400;
+  text-decoration: none;
+  opacity: 0.75;
+}
+
+.auth-demo-link:hover {
+  color: #94A3B8;
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.user-menu-demo-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #94A3B8;
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.demo-settings-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.demo-reset-draft-btn {
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  font-size: 12px;
+  color: #64748B;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 0.15s ease;
+  text-decoration: none;
+}
+
+.demo-reset-draft-btn:hover {
+  color: #94A3B8;
+  text-decoration: underline;
+}
+

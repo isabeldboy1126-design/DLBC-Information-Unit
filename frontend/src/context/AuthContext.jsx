@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { supabase, isSupabaseConfigured } from '../services/supabase'
-import { setAuthToken, authFetch, getApiUrl } from '../config'
+import { setAuthToken, authFetch, getApiUrl, isLocalDemoAllowed, setDemoMode, isDemoModeActive } from '../config'
 
 const AuthContext = createContext(null)
 
@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [account, setAccount] = useState(null)
   const [isOnboarded, setIsOnboarded] = useState(false)
+  const [demoMode, setDemoModeState] = useState(() => isDemoModeActive())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [authNotice, setAuthNotice] = useState(null)
@@ -23,9 +24,7 @@ export function AuthProvider({ children }) {
 
     try {
       setAuthToken(accessToken)
-      const res = await authFetch('/api/auth/me', {
-        headers: { Authorization: Bearer  },
-      })
+      const res = await authFetch('/api/auth/me')
 
       if (res.ok) {
         const data = await res.json()
@@ -51,6 +50,32 @@ export function AuthProvider({ children }) {
     let isMounted = true
 
     async function initAuth() {
+      // Check if resuming an existing local demo session
+      if (isDemoModeActive()) {
+        try {
+          const res = await authFetch('/api/auth/me')
+          if (res.ok) {
+            const data = await res.json()
+            if (isMounted) {
+              setUser({ id: 'demo_local_user', email: 'demo@local.dlbc', is_demo: true })
+              setAccount(data.account || {
+                id: 'legacy_default_account',
+                account_name: 'DLBC Information Unit (Demo)',
+                display_name: 'DLBC Information Unit',
+                sector: 'Adult',
+                church_state: 'Lagos',
+                terminal_level: 'state_headquarters',
+              })
+              setIsOnboarded(true)
+              setLoading(false)
+            }
+            return
+          }
+        } catch (e) {
+          console.warn('Local demo bootstrap check failed:', e)
+        }
+      }
+
       if (!isSupabaseConfigured || !supabase) {
         setLoading(false)
         return
@@ -61,6 +86,8 @@ export function AuthProvider({ children }) {
         if (sessionError) throw sessionError
 
         if (initialSession && isMounted) {
+          setDemoMode(false)
+          setDemoModeState(false)
           setSession(initialSession)
           setUser(initialSession.user)
           setAuthToken(initialSession.access_token)
@@ -299,17 +326,72 @@ export function AuthProvider({ children }) {
     }
   }
 
+  // Enter local demo mode
+  const enterDemoMode = async () => {
+    if (!isLocalDemoAllowed()) return false
+    setError(null)
+    setAuthNotice(null)
+    setDemoMode(true)
+    setDemoModeState(true)
+    const demoUser = { id: 'demo_local_user', email: 'demo@local.dlbc', is_demo: true }
+    setUser(demoUser)
+    try {
+      const res = await authFetch('/api/auth/me')
+      if (res.ok) {
+        const data = await res.json()
+        setAccount(data.account || {
+          id: 'legacy_default_account',
+          account_name: 'DLBC Information Unit (Demo)',
+          display_name: 'DLBC Information Unit',
+          sector: 'Adult',
+          church_state: 'Lagos',
+          terminal_level: 'state_headquarters',
+        })
+        setIsOnboarded(true)
+        return true
+      }
+    } catch (e) {
+      console.warn('Demo profile fetch error:', e)
+    }
+    // Safe local fallback
+    setAccount({
+      id: 'legacy_default_account',
+      account_name: 'DLBC Information Unit (Demo)',
+      display_name: 'DLBC Information Unit',
+      sector: 'Adult',
+      church_state: 'Lagos',
+      terminal_level: 'state_headquarters',
+    })
+    setIsOnboarded(true)
+    return true
+  }
+
+  // Exit local demo mode
+  const exitDemoMode = () => {
+    setDemoMode(false)
+    setDemoModeState(false)
+    setUser(null)
+    setAccount(null)
+    setIsOnboarded(false)
+    setError(null)
+    setAuthNotice(null)
+  }
+
   const value = {
     user,
     session,
     account,
     isOnboarded,
+    demoMode,
+    isLocalDemoAllowed: isLocalDemoAllowed(),
     loading,
     error,
     authNotice,
     login,
     signUp,
     signOut,
+    enterDemoMode,
+    exitDemoMode,
     resetPassword,
     updatePassword,
     refreshAccount: () => session?.access_token ? fetchAccountProfile(session.access_token) : null,

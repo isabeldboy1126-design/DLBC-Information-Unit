@@ -105,9 +105,10 @@ function App() {
   const [sessionsStatusFilter, setSessionsStatusFilter] = useState('all')
   const scrollPositions = useRef({})
 
-  const { user, isOnboarded, loading: authLoading } = useAuth()
+  const { user, isOnboarded, loading: authLoading, demoMode } = useAuth()
   const [authScreen, setAuthScreen] = useState('login')
   const [replayOnboardingActive, setReplayOnboardingActive] = useState(false)
+  const [demoTestOnboardingActive, setDemoTestOnboardingActive] = useState(false)
 
   useEffect(() => {
     const handleHash = () => {
@@ -452,6 +453,17 @@ function App() {
     return <OnboardingView isReplay={false} />
   }
 
+  // Demo Test Onboarding mode triggered from Settings in Demo mode
+  if (demoMode && demoTestOnboardingActive) {
+    return (
+      <OnboardingView
+        isDemoTest={true}
+        onDemoTestCancel={() => setDemoTestOnboardingActive(false)}
+        onDemoTestComplete={() => setDemoTestOnboardingActive(false)}
+      />
+    )
+  }
+
   // Replay onboarding mode triggered from Settings
   if (replayOnboardingActive) {
     return (
@@ -739,7 +751,11 @@ function App() {
         /* ----------------------------------------------------------- */
         /* VIEW 5: SETTINGS & STANDARDS                                */
         /* ----------------------------------------------------------- */
-        <SettingsView onBack={handleInAppBack} onReplayOnboarding={() => setReplayOnboardingActive(true)} />
+        <SettingsView
+          onBack={handleInAppBack}
+          onReplayOnboarding={() => setReplayOnboardingActive(true)}
+          onTestOnboarding={() => setDemoTestOnboardingActive(true)}
+        />
       ) : currentView === 'youtube' ? (
         /* ----------------------------------------------------------- */
         /* VIEW 6: YOUTUBE INGESTION PIPELINE                          */

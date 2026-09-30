@@ -96,7 +96,7 @@ export function AppShell({
   children,
 }) {
   const { isDark, toggleTheme } = useTheme()
-  const { user, account, signOut } = useAuth()
+  const { user, account, signOut, demoMode, exitDemoMode } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
@@ -478,29 +478,51 @@ export function AppShell({
                 onClick={() => setIsUserMenuOpen(prev => !prev)}
                 id="topbar-user-avatar-btn"
               >
-                <span>{user?.email ? user.email.charAt(0).toUpperCase() : 'D'}</span>
+                <span>{demoMode ? 'D' : (user?.email ? user.email.charAt(0).toUpperCase() : 'U')}</span>
               </button>
 
               {isUserMenuOpen && (
                 <div className="user-menu-popover" role="menu" aria-label="Account Menu">
                   <div className="user-menu-header">
-                    <span className="user-menu-email">{user?.email || 'user@church.org'}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                      <span className="user-menu-email">{user?.email || (demoMode ? 'demo@local.dlbc' : 'user@church.org')}</span>
+                      {demoMode && (
+                        <span className="user-menu-demo-tag">Local Demo</span>
+                      )}
+                    </div>
                     <span className="user-menu-unit">{account?.account_name || 'DLBC Information Unit'}</span>
-                    <span className="user-menu-role">{account?.role ? `${account.role.charAt(0).toUpperCase() + account.role.slice(1)}` : 'Owner'}</span>
+                    <span className="user-menu-role">
+                      {demoMode ? 'Local Demo Mode' : (account?.role ? `${account.role.charAt(0).toUpperCase() + account.role.slice(1)}` : 'Owner')}
+                    </span>
                   </div>
                   <div className="user-menu-divider" />
-                  <button
-                    type="button"
-                    className="user-menu-item user-menu-item--danger"
-                    onClick={() => {
-                      setIsUserMenuOpen(false)
-                      signOut()
-                    }}
-                    id="btn-user-signout"
-                    role="menuitem"
-                  >
-                    Sign out
-                  </button>
+                  {demoMode ? (
+                    <button
+                      type="button"
+                      className="user-menu-item"
+                      onClick={() => {
+                        setIsUserMenuOpen(false)
+                        exitDemoMode()
+                      }}
+                      id="btn-user-exit-demo"
+                      role="menuitem"
+                    >
+                      Exit Demo
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="user-menu-item user-menu-item--danger"
+                      onClick={() => {
+                        setIsUserMenuOpen(false)
+                        signOut()
+                      }}
+                      id="btn-user-signout"
+                      role="menuitem"
+                    >
+                      Sign out
+                    </button>
+                  )}
                 </div>
               )}
             </div>

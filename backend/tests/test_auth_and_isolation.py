@@ -326,3 +326,85 @@ async def test_legacy_production_session_migration():
     assert assign_result["status"] == "success"
     assert assign_result["account_id"] == "legacy_default_account"
     assert assign_result["user_email"] == "first_admin@dlbc.org"
+
+
+@pytest.mark.asyncio
+async def test_demo_mode_security_and_gating():
+    """
+    Mandatory Security Verification for Local Demo Mode:
+    1. Production mode + X-DLBC-Demo: 1 -> 401 Unauthorized
+    2. Development mode without ENABLE_LOCAL_DEMO + X-DLBC-Demo: 1 -> 401 Unauthorized
+    3. Development mode with ENABLE_LOCAL_DEMO=true but no Demo header -> 401 Unauthorized
+    4. Development mode with ENABLE_LOCAL_DEMO=true + X-DLBC-Demo: 1 -> 200 OK with legacy_default_account
+    5. Demo mode cannot execute authoritative onboarding mutations -> 400 Bad Request
+    6. Demo mode does not insert fake users or memberships into the database
+    """
+    import os
+    orig_app_env = os.environ.get("APP_ENV")
+    orig_local_demo = os.environ.get("ENABLE_LOCAL_DEMO")
+
+    transport = ASGITransport(app=app)
+    try:
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            # 1. PRODUCTION MODE + X-DLBC-Demo: 1 -> MUST BE 401
+            os.environ["APP_ENV"] = "production"
+            os.environ["ENABLE_LOCAL_DEMO"] = "true"  # Even if mistakenly set, production mode must strictly block it
+            res_prod = await client.get("/api/auth/me", headers={"X-DLBC-Demo": "1"})
+            assert res_prod.status_code == 401, f"Production mode allowed demo header: {res_prod.status_code}"
+            res_prod_sess = await client.get("/api/sessions", headers={"X-DLBC-Demo": "1"})
+            assert res_prod_sess.status_code == 401, f"Production mode allowed demo sessions: {res_prod_sess.status_code}"
+
+            # 2. DEVELOPMENT WITHOUT ENABLE_LOCAL_DEMO -> MUST BE 401
+            os.environ["APP_ENV"] = "development"
+            os.environ.pop("ENABLE_LOCAL_DEMO", None)
+            res_dev_no_flag = await client.get("/api/auth/me", headers={"X-DLBC-Demo": "1"})
+            assert res_dev_no_flag.status_code == 401, f"Development without flag allowed demo: {res_dev_no_flag.status_code}"
+
+            os.environ["ENABLE_LOCAL_DEMO"] = "false"
+            res_dev_false_flag = await client.get("/api/auth/me", headers={"X-DLBC-Demo": "1"})
+            assert res_dev_false_flag.status_code == 401, f"Development with false flag allowed demo: {res_dev_false_flag.status_code}"
+
+            # 3. DEVELOPMENT WITH ENABLE_LOCAL_DEMO=true BUT NO DEMO HEADER -> MUST BE 401
+            os.environ["APP_ENV"] = "development"
+            os.environ["ENABLE_LOCAL_DEMO"] = "true"
+            res_no_header = await client.get("/api/auth/me")
+            assert res_no_header.status_code == 401, f"Dev with flag allowed unauthenticated request without header: {res_no_header.status_code}"
+            res_no_header_sess = await client.get("/api/sessions")
+            assert res_no_header_sess.status_code == 401, f"Dev with flag allowed session list without header: {res_no_header_sess.status_code}"
+
+            # 4. DEVELOPMENT WITH ENABLE_LOCAL_DEMO=true + EXPLICIT DEMO HEADER -> 200 OK
+            res_demo_me = await client.get("/api/auth/me", headers={"X-DLBC-Demo": "1"})
+            assert res_demo_me.status_code == 200, f"Valid demo request rejected: {res_demo_me.status_code}"
+            demo_data = res_demo_me.json()
+            assert demo_data["account_id"] == "legacy_default_account"
+            assert demo_data["is_demo"] is True
+            assert demo_data["is_onboarded"] is True
+
+            res_demo_sess = await client.get("/api/sessions", headers={"X-DLBC-Demo": "1"})
+            assert res_demo_sess.status_code == 200, f"Demo sessions request rejected: {res_demo_sess.status_code}"
+
+            # 5. DEMO MODE CANNOT MUTATE AUTHORITATIVE ONBOARDING IN DATABASE -> 400
+            res_demo_mut = await client.post(
+                "/api/auth/onboarding/complete",
+                headers={"X-DLBC-Demo": "1"},
+                json={"sector": "Youth", "church_state": "Abia", "terminal_level": "state_headquarters"},
+            )
+            assert res_demo_mut.status_code == 400, f"Demo mutation was not blocked: {res_demo_mut.status_code}"
+            assert "Demo mode cannot modify authoritative onboarding" in res_demo_mut.json()["detail"]
+
+            # 6. DEMO MODE DOES NOT INSERT FAKE USERS OR MEMBERSHIPS IN DATABASE
+            async with get_db_connection() as conn:
+                cur = await conn.execute("SELECT COUNT(*) as cnt FROM app_users WHERE id = 'demo_local_user'")
+                row = await cur.fetchone()
+                assert row["cnt"] == 0, "demo_local_user was incorrectly persisted to app_users"
+    finally:
+        # Restore environment variables
+        if orig_app_env is not None:
+            os.environ["APP_ENV"] = orig_app_env
+        else:
+            os.environ.pop("APP_ENV", None)
+        if orig_local_demo is not None:
+            os.environ["ENABLE_LOCAL_DEMO"] = orig_local_demo
+        else:
+            os.environ.pop("ENABLE_LOCAL_DEMO", None)
+

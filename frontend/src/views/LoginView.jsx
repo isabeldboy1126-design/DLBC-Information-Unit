@@ -1,8 +1,8 @@
-﻿import React, { useState } from 'react'
+import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 
 export function LoginView({ onSwitchToCreate, onSwitchToForgot }) {
-  const { login, error, clearError, authNotice } = useAuth()
+  const { login, error, clearError, authNotice, isLocalDemoAllowed, enterDemoMode } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -150,6 +150,20 @@ export function LoginView({ onSwitchToCreate, onSwitchToForgot }) {
             Create account
           </button>
         </div>
+
+        {isLocalDemoAllowed && (
+          <div className="auth-demo-entry">
+            <button
+              type="button"
+              className="auth-demo-link"
+              onClick={enterDemoMode}
+              disabled={isSubmitting}
+              id="link-local-demo"
+            >
+              Demo
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

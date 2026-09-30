@@ -88,9 +88,45 @@ export function getAuthToken() {
   return null
 }
 
+export function isLocalDemoAllowed() {
+  if (typeof window === 'undefined') return false
+  const isDev = Boolean(import.meta.env.DEV)
+  const envFlag = (import.meta.env.VITE_ENABLE_LOCAL_DEMO || '').toLowerCase()
+  const flagEnabled = envFlag === 'true' || envFlag === '1'
+  const hostname = (window.location.hostname || '').toLowerCase()
+  const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+  return isDev && flagEnabled && isLocalHost
+}
+
+let _isDemoActive = false
+
+export function setDemoMode(active) {
+  _isDemoActive = Boolean(active)
+  if (typeof sessionStorage !== 'undefined') {
+    if (_isDemoActive) {
+      sessionStorage.setItem('dlbc_demo_mode', '1')
+    } else {
+      sessionStorage.removeItem('dlbc_demo_mode')
+    }
+  }
+}
+
+export function isDemoModeActive() {
+  if (!isLocalDemoAllowed()) return false
+  if (_isDemoActive) return true
+  if (typeof sessionStorage !== 'undefined') {
+    return sessionStorage.getItem('dlbc_demo_mode') === '1'
+  }
+  return false
+}
+
 export function getAuthHeaders(customHeaders = {}) {
-  const token = getAuthToken()
   const headers = { ...customHeaders }
+  if (isDemoModeActive()) {
+    headers['X-DLBC-Demo'] = '1'
+    return headers
+  }
+  const token = getAuthToken()
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
@@ -99,13 +135,7 @@ export function getAuthHeaders(customHeaders = {}) {
 
 export async function authFetch(url, options = {}) {
   const fullUrl = url.startsWith('http://') || url.startsWith('https://') ? url : getApiUrl(url)
-  const token = getAuthToken()
-  const headers = {
-    ...(options.headers || {}),
-  }
-  if (token && !headers['Authorization']) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
+  const headers = getAuthHeaders(options.headers || {})
   return fetch(fullUrl, {
     ...options,
     headers,

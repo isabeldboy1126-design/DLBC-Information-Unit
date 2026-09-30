@@ -58,6 +58,7 @@ async def get_me(auth: AuthContext = Depends(require_auth)):
         "account": auth.account,
         "is_onboarded": auth.is_onboarded,
         "role": auth.role,
+        "is_demo": getattr(auth, "is_demo", False),
     }
 
 
@@ -88,6 +89,11 @@ async def get_onboarding_state(auth: AuthContext = Depends(require_auth)):
 @router.post("/onboarding/progress")
 async def save_onboarding_progress(req: OnboardingProgressRequest, auth: AuthContext = Depends(require_auth)):
     """Progressively saves user's onboarding choices."""
+    if getattr(auth, "is_demo", False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Demo mode cannot modify authoritative onboarding database records. Use local demo test onboarding instead.",
+        )
     account_id = auth.account_id
     data = req.model_dump(exclude_unset=True)
     if req.draft:
@@ -118,6 +124,11 @@ async def save_onboarding_progress(req: OnboardingProgressRequest, auth: AuthCon
 @router.post("/onboarding/complete")
 async def complete_onboarding(req: OnboardingCompleteRequest, auth: AuthContext = Depends(require_auth)):
     """Validates and finalizes first-time onboarding."""
+    if getattr(auth, "is_demo", False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Demo mode cannot modify authoritative onboarding database records. Use local demo test onboarding instead.",
+        )
     account_id = auth.account_id
     if not account_id:
         acct = await account_repo.create_draft_account(auth.user_id, sector=req.sector, church_state=req.church_state, terminal_level=req.terminal_level)
@@ -141,6 +152,11 @@ async def replay_finish(req: OnboardingCompleteRequest, auth: AuthContext = Depe
     Atomically updates live church hierarchy without affecting existing sessions,
     recordings, reports, or programmes.
     """
+    if getattr(auth, "is_demo", False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Demo mode cannot modify authoritative onboarding database records. Use local demo test onboarding instead.",
+        )
     updated = await account_repo.update_account_hierarchy_atomic(
         auth.account_id,
         req.model_dump()

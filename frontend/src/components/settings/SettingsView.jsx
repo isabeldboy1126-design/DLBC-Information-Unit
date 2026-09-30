@@ -3,8 +3,8 @@ import { getApiUrl, API_BASE_URL } from '../../config'
 import { useAuth } from '../../context/AuthContext'
 import { ProgrammesSettingsSection } from './ProgrammesSettingsSection'
 
-export function SettingsView({ onBack, onReplayOnboarding }) {
-  const { account } = useAuth()
+export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
+  const { account, demoMode } = useAuth()
   const [instruction, setInstruction] = useState('')
   const [instructionLoaded, setInstructionLoaded] = useState(false)
   const [autoProcessAfterVerification, setAutoProcessAfterVerification] = useState(false)
@@ -15,6 +15,24 @@ export function SettingsView({ onBack, onReplayOnboarding }) {
   const [feedback, setFeedback] = useState(null)
   const [error, setError] = useState(null)
   const [lastRefreshed, setLastRefreshed] = useState(null)
+  const [hasDemoDraft, setHasDemoDraft] = useState(() => {
+    try {
+      return Boolean(localStorage.getItem('dlbc_demo_onboarding_draft'))
+    } catch (e) {
+      return false
+    }
+  })
+
+  const handleResetDemoDraft = () => {
+    try {
+      localStorage.removeItem('dlbc_demo_onboarding_draft')
+      setHasDemoDraft(false)
+      setFeedback('Demo test onboarding draft cleared.')
+      setTimeout(() => setFeedback(null), 3000)
+    } catch (e) {
+      console.warn('Error clearing demo draft:', e)
+    }
+  }
 
   const fetchSettingsData = useCallback(async () => {
     setIsLoading(true)
@@ -342,15 +360,41 @@ export function SettingsView({ onBack, onReplayOnboarding }) {
                 {[account?.sector, account?.church_state, account?.terminal_level ? account.terminal_level.replace(/_/g, ' ') : null].filter(Boolean).join(' · ')}
               </span>
             </div>
-            {onReplayOnboarding && (
-              <button
-                type="button"
-                className="btn btn--secondary btn-replay-onboarding"
-                onClick={onReplayOnboarding}
-                id="btn-replay-onboarding"
-              >
-                Replay Onboarding
-              </button>
+            {demoMode ? (
+              <div className="demo-settings-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                {onTestOnboarding && (
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn-replay-onboarding"
+                    onClick={onTestOnboarding}
+                    id="btn-test-onboarding"
+                  >
+                    Test Onboarding
+                  </button>
+                )}
+                {hasDemoDraft && (
+                  <button
+                    type="button"
+                    className="demo-reset-draft-btn"
+                    onClick={handleResetDemoDraft}
+                    id="btn-reset-demo-draft"
+                    title="Clear local test onboarding draft"
+                  >
+                    Reset test onboarding
+                  </button>
+                )}
+              </div>
+            ) : (
+              onReplayOnboarding && (
+                <button
+                  type="button"
+                  className="btn btn--secondary btn-replay-onboarding"
+                  onClick={onReplayOnboarding}
+                  id="btn-replay-onboarding"
+                >
+                  Replay Onboarding
+                </button>
+              )
             )}
           </div>
         </div>
