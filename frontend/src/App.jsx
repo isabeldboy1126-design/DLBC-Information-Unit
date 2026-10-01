@@ -116,10 +116,9 @@ function App() {
       if (typeof window === 'undefined') return true
       const enabled = localStorage.getItem('dlbc_startup_animation_enabled')
       if (enabled === 'false') return true
-      const played = sessionStorage.getItem('dlbc_startup_animation_played')
-      return played === 'true'
+      return false
     } catch {
-      return true
+      return false
     }
   })
 
@@ -507,9 +506,6 @@ function App() {
       {!hasPlayedStartupAnimation && (
         <StartupAnimation
           onComplete={() => {
-            try {
-              sessionStorage.setItem('dlbc_startup_animation_played', 'true')
-            } catch {}
             setHasPlayedStartupAnimation(true)
           }}
         />
