@@ -42,6 +42,10 @@ class SettingUpdateRequest(BaseModel):
     value: str
 
 
+class ProfileUpdateRequest(BaseModel):
+    display_name: Optional[str] = None
+
+
 @router.get("/me")
 async def get_me(auth: AuthContext = Depends(require_auth)):
     """Returns authenticated user profile, active church account, and onboarding status."""
@@ -50,15 +54,39 @@ async def get_me(auth: AuthContext = Depends(require_auth)):
             "id": auth.user_id,
             "supabase_user_id": auth.supabase_user_id,
             "email": auth.email,
+            "display_name": auth.display_name,
         },
         "user_id": auth.user_id,
         "supabase_user_id": auth.supabase_user_id,
         "email": auth.email,
+        "display_name": auth.display_name,
         "account_id": auth.account_id,
         "account": auth.account,
         "is_onboarded": auth.is_onboarded,
         "role": auth.role,
         "is_demo": getattr(auth, "is_demo", False),
+    }
+
+
+@router.patch("/profile")
+async def update_profile(req: ProfileUpdateRequest, auth: AuthContext = Depends(require_auth)):
+    """Updates personal profile fields (display_name). Does not affect church account."""
+    if getattr(auth, "is_demo", False):
+        cleaned = req.display_name.strip() if req.display_name and req.display_name.strip() else ""
+        return {
+            "status": "updated",
+            "user": {
+                "id": auth.user_id,
+                "email": auth.email,
+                "display_name": cleaned,
+            },
+            "display_name": cleaned,
+        }
+    updated_user = await account_repo.update_user_display_name(auth.user_id, req.display_name)
+    return {
+        "status": "updated",
+        "user": updated_user,
+        "display_name": updated_user.get("display_name") if updated_user else None,
     }
 
 

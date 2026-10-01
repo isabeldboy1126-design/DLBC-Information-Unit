@@ -407,9 +407,6 @@ export function OnboardingView({
                       className={`sector-tile ${isSelected ? 'sector-tile--selected' : ''}`}
                       onClick={() => setSector(s)}
                     >
-                      <div className="sector-tile-radio">
-                        {isSelected && <div className="sector-tile-radio-dot" />}
-                      </div>
                       <span className="sector-tile-label">{s}</span>
                     </button>
                   )

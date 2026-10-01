@@ -412,3 +412,39 @@ async def test_demo_mode_security_and_gating():
         )
         assert res_demo_mut.status_code == 400, f"Demo onboarding mutation was not blocked: {res_demo_mut.status_code}"
         assert "Demo mode cannot modify authoritative onboarding" in res_demo_mut.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_personal_profile_display_name(auth_header_user_a):
+    """Personal display_name can be inspected and updated via PATCH /api/auth/profile without affecting church account."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        # Check initial me response has display_name key
+        me_res1 = await client.get("/api/auth/me", headers=auth_header_user_a)
+        assert me_res1.status_code == 200
+        assert "display_name" in me_res1.json()
+
+        # Update display_name
+        patch_res = await client.patch(
+            "/api/auth/profile",
+            headers=auth_header_user_a,
+            json={"display_name": "Bro. John Doe"},
+        )
+        assert patch_res.status_code == 200
+        assert patch_res.json()["status"] == "updated"
+        assert patch_res.json()["display_name"] == "Bro. John Doe"
+
+        # Verify persisted in me endpoint
+        me_res2 = await client.get("/api/auth/me", headers=auth_header_user_a)
+        assert me_res2.status_code == 200
+        assert me_res2.json()["display_name"] == "Bro. John Doe"
+        assert me_res2.json()["user"]["display_name"] == "Bro. John Doe"
+
+        # Test demo mode profile patch
+        demo_patch = await client.patch(
+            "/api/auth/profile",
+            headers={"X-DLBC-Demo": "1"},
+            json={"display_name": "Demo Operator"},
+        )
+        assert demo_patch.status_code == 200
+        assert demo_patch.json()["display_name"] == "Demo Operator"

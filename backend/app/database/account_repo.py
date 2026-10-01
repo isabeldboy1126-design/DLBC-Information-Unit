@@ -185,7 +185,7 @@ class AccountRepository:
     async def get_user_by_supabase_id(self, supabase_user_id: str) -> Optional[Dict[str, Any]]:
         async with get_db_connection() as conn:
             cursor = await conn.execute(
-                "SELECT id, supabase_user_id, email, status, created_at, updated_at, last_login_at FROM app_users WHERE supabase_user_id = ?",
+                "SELECT id, supabase_user_id, email, display_name, status, created_at, updated_at, last_login_at FROM app_users WHERE supabase_user_id = ?",
                 (supabase_user_id,)
             )
             row = await cursor.fetchone()
@@ -196,7 +196,7 @@ class AccountRepository:
     async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         async with get_db_connection() as conn:
             cursor = await conn.execute(
-                "SELECT id, supabase_user_id, email, status, created_at, updated_at, last_login_at FROM app_users WHERE LOWER(email) = LOWER(?)",
+                "SELECT id, supabase_user_id, email, display_name, status, created_at, updated_at, last_login_at FROM app_users WHERE LOWER(email) = LOWER(?)",
                 (email.strip(),)
             )
             row = await cursor.fetchone()
@@ -208,7 +208,7 @@ class AccountRepository:
         now = utc_now_iso()
         async with get_db_connection() as conn:
             cursor = await conn.execute(
-                "SELECT id, supabase_user_id, email, status, created_at, updated_at, last_login_at FROM app_users WHERE supabase_user_id = ?",
+                "SELECT id, supabase_user_id, email, display_name, status, created_at, updated_at, last_login_at FROM app_users WHERE supabase_user_id = ?",
                 (supabase_user_id,)
             )
             row = await cursor.fetchone()
@@ -219,14 +219,14 @@ class AccountRepository:
                     (email.strip().lower(), now, now, user_id)
                 )
                 await conn.commit()
-                cursor = await conn.execute("SELECT id, supabase_user_id, email, status, created_at, updated_at, last_login_at FROM app_users WHERE id = ?", (user_id,))
+                cursor = await conn.execute("SELECT id, supabase_user_id, email, display_name, status, created_at, updated_at, last_login_at FROM app_users WHERE id = ?", (user_id,))
                 return dict(await cursor.fetchone())
             else:
                 user_id = f"usr_{uuid.uuid4().hex[:16]}"
                 await conn.execute(
                     """
-                    INSERT INTO app_users (id, supabase_user_id, email, status, created_at, updated_at, last_login_at)
-                    VALUES (?, ?, ?, 'active', ?, ?, ?)
+                    INSERT INTO app_users (id, supabase_user_id, email, display_name, status, created_at, updated_at, last_login_at)
+                    VALUES (?, ?, ?, NULL, 'active', ?, ?, ?)
                     """,
                     (user_id, supabase_user_id, email.strip().lower(), now, now, now)
                 )
@@ -235,11 +235,28 @@ class AccountRepository:
                     "id": user_id,
                     "supabase_user_id": supabase_user_id,
                     "email": email.strip().lower(),
+                    "display_name": None,
                     "status": "active",
                     "created_at": now,
                     "updated_at": now,
                     "last_login_at": now,
                 }
+
+    async def update_user_display_name(self, user_id: str, display_name: Optional[str]) -> Optional[Dict[str, Any]]:
+        now = utc_now_iso()
+        cleaned = display_name.strip() if display_name and display_name.strip() else None
+        async with get_db_connection() as conn:
+            await conn.execute(
+                "UPDATE app_users SET display_name = ?, updated_at = ? WHERE id = ?",
+                (cleaned, now, user_id)
+            )
+            await conn.commit()
+            cursor = await conn.execute(
+                "SELECT id, supabase_user_id, email, display_name, status, created_at, updated_at, last_login_at FROM app_users WHERE id = ?",
+                (user_id,)
+            )
+            row = await cursor.fetchone()
+            return dict(row) if row else None
 
     async def get_user_account(self, user_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Returns (account_dict, membership_role) or (None, None)."""

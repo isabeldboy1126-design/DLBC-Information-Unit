@@ -347,6 +347,7 @@ CREATE TABLE IF NOT EXISTS app_users (
     id TEXT PRIMARY KEY,
     supabase_user_id TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL,
+    display_name TEXT,
     status TEXT NOT NULL DEFAULT 'active',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -458,6 +459,7 @@ STAGE7_REPORT_PROCESSING_COLUMNS = [
 AUTH_MIGRATION_COLUMNS = [
     "ALTER TABLE sessions ADD COLUMN account_id TEXT",
     "ALTER TABLE programmes ADD COLUMN account_id TEXT",
+    "ALTER TABLE app_users ADD COLUMN display_name TEXT",
 ]
 
 # ---------------------------------------------------------------------------
@@ -857,6 +859,7 @@ CREATE TABLE app_users (
     id VARCHAR(255) PRIMARY KEY,
     supabase_user_id VARCHAR(255) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL,
+    display_name NVARCHAR(255),
     status VARCHAR(50) NOT NULL DEFAULT 'active',
     created_at VARCHAR(255) NOT NULL,
     updated_at VARCHAR(255) NOT NULL,
@@ -973,6 +976,7 @@ STAGE7_REPORT_PROCESSING_COLUMNS_MSSQL = [
 AUTH_MIGRATION_COLUMNS_MSSQL = [
     "IF COL_LENGTH('sessions', 'account_id') IS NULL ALTER TABLE sessions ADD account_id VARCHAR(255)",
     "IF COL_LENGTH('programmes', 'account_id') IS NULL ALTER TABLE programmes ADD account_id VARCHAR(255)",
+    "IF COL_LENGTH('app_users', 'display_name') IS NULL ALTER TABLE app_users ADD display_name NVARCHAR(255)",
 ]
 
 

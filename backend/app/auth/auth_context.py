@@ -15,4 +15,5 @@ class AuthContext:
     account: Optional[Dict[str, Any]]
     is_onboarded: bool
     role: str
+    display_name: Optional[str] = None
     is_demo: bool = False

@@ -48,6 +48,7 @@ export function AppShell({ activeView, isLiveRecordingActive = false, onNavigate
     <span className="desk-nav-baseline" aria-hidden="true" />
   </nav>
   const utilities = <div className="desk-utilities">
+    <button id="btn-user-profile" className="desk-utility" onClick={() => navigate('profile')} aria-label="Profile" aria-current={activeView === 'profile' ? 'page' : undefined}><Icon name="user" /><span>Profile</span></button>
     <button id="nav-link-settings" className="desk-utility" onClick={() => navigate('settings')} aria-current={activeView === 'settings' ? 'page' : undefined}><Icon name="settings" /><span>Settings</span></button>
     <button id="btn-sidebar-theme-toggle" className="desk-utility" onClick={toggleTheme} aria-label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}><Icon name={isDark ? 'sun' : 'moon'} /><span>{isDark ? 'Light mode' : 'Dark mode'}</span></button>
     <button className="desk-utility desk-account-exit" onClick={() => { setMobileNavOpen(false); demoMode ? exitDemoMode() : signOut() }} aria-label={demoMode ? 'Exit demo' : 'Sign out'} title={account?.account_name || user?.email || 'Account'}><span>{demoMode ? 'Exit demo' : 'Sign out'}</span></button>

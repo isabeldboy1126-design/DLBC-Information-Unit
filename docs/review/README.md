@@ -2,7 +2,7 @@
 
 Repository: https://github.com/isabeldboy1126-design/DLBC-Information-Unit
 
-Upgrade branch: `codex/product-ux-audit`. GitHub default branch is **master**; `origin/main` pointed to the same commit when checked. Baseline at preparation: `7a33f41a6be4f7fce07f3f16fa6b9783dea978a9` (1 October 2026). Fetch again and record the actual commits used if they have moved.
+Upgrade branch: `codex/product-ux-audit`. GitHub default branch is **master**; `origin/main` pointed to the same commit when checked. Baseline at preparation: `d72204d18223dd93717a6ffa310b63b58eeb0afc` (1 October 2026). Fetch again and record the actual commits used if they have moved.
 
 For an independent comparison, first avoid `COMPARISON.md`, implementation handoffs, tickets, design research and PR commentary. Record your own findings with files and evidence. This page contains operational instructions only. Do not merge, deploy, upload church data or use paid AI services during local review.
 
