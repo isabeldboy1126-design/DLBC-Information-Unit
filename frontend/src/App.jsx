@@ -37,10 +37,16 @@ import { OnboardingView } from './views/OnboardingView'
 import { ProfileView } from './components/profile/ProfileView'
 import { useRemoteControl } from './hooks/useRemoteControl'
 import { RemoteControlView } from './components/remote/RemoteControlView'
+import { DownloadView } from './views/DownloadView'
+import { CloseRecordingModal } from './components/common/CloseRecordingModal'
+import { setupWindowCloseProtection, forceExitApplication } from './services/desktopPlatform'
 import './App.css'
 
 function App() {
   const parseRoute = (rawHash) => {
+    if (typeof window !== 'undefined' && window.location.pathname === '/download') {
+      return { view: 'download', sessionId: null, stage: null, subAction: null }
+    }
     const clean = (rawHash || '').replace(/^#\/?/, '').trim()
     if (!clean || clean === 'dashboard') {
       return { view: 'dashboard', sessionId: null, stage: null, subAction: null }
@@ -72,7 +78,7 @@ function App() {
     if (clean === 'verification_workspace') {
       return { view: 'sessions', sessionId: null, stage: 'verification', subAction: null }
     }
-    if (['new_live', 'transcribe', 'youtube', 'settings', 'live_recording', 'reports', 'events', 'profile', 'remote_control'].includes(clean)) {
+    if (['new_live', 'transcribe', 'youtube', 'settings', 'live_recording', 'reports', 'events', 'profile', 'remote_control', 'download'].includes(clean)) {
       return { view: clean, sessionId: null, stage: null, subAction: null }
     }
     return { view: 'dashboard', sessionId: null, stage: null, subAction: null }
@@ -164,6 +170,27 @@ function App() {
       sessionsHook.fetchSessions()
     }
   }, [user, isOnboarded])
+
+  // Desktop Windows close protection during live recording
+  const [showCloseRecordingModal, setShowCloseRecordingModal] = useState(false)
+
+  useEffect(() => {
+    const cleanup = setupWindowCloseProtection(
+      () => liveAudio.isRecording,
+      () => setShowCloseRecordingModal(true)
+    )
+    return cleanup
+  }, [liveAudio.isRecording])
+
+  const handleConfirmStopAndClose = async () => {
+    try {
+      if (handleStopRecordingRef.current) {
+        await handleStopRecordingRef.current()
+      }
+    } finally {
+      await forceExitApplication()
+    }
+  }
 
   // Global background processing job tracker (Verification & Report Processing)
   const { activeProcess, clearActiveProcess } = useActiveProcess()
@@ -483,6 +510,11 @@ function App() {
         </div>
       </div>
     )
+  }
+
+  // Public Download Landing Page (accessible without login)
+  if (currentView === 'download') {
+    return <DownloadView onBackToApp={() => navigateTo('dashboard')} />
   }
 
   // Unauthenticated routing
@@ -882,8 +914,17 @@ function App() {
           onNavigate={navigateTo}
           onBack={handleInAppBack}
         />
+      ) : currentView === 'download' ? (
+        <DownloadView onBackToApp={() => navigateTo('dashboard')} />
       ) : null}
       </ErrorBoundary>
+
+      {/* Desktop Windows Close Protection Modal */}
+      <CloseRecordingModal
+        isOpen={showCloseRecordingModal}
+        onKeepRecording={() => setShowCloseRecordingModal(false)}
+        onStopAndClose={handleConfirmStopAndClose}
+      />
 
       {/* ------------------------------------------------------------- */}
       {/* FLOATING PROCESS CONTROLLER: Only visible when explicitly minimized */}

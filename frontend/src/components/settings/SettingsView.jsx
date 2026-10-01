@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { getApiUrl, API_BASE_URL } from '../../config'
 import { useAuth } from '../../context/AuthContext'
 import { ProgrammesSettingsSection } from './ProgrammesSettingsSection'
+import { APP_VERSION } from '../../utils/version'
+import { isDesktop, checkForAppUpdates, downloadAndInstallUpdate, relaunchApplication } from '../../services/desktopPlatform'
 
 export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
   const { account, demoMode } = useAuth()
@@ -53,6 +55,50 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
     } catch (e) {
       console.warn('Error clearing demo draft:', e)
     }
+  }
+
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
+  const [updateInfo, setUpdateInfo] = useState(null)
+  const [updateState, setUpdateState] = useState('idle') // idle, checking, available, downloading, ready, up_to_date, failed
+  const [updateError, setUpdateError] = useState(null)
+
+  const handleCheckForUpdates = async () => {
+    setIsCheckingUpdate(true)
+    setUpdateError(null)
+    setUpdateState('checking')
+    try {
+      const res = await checkForAppUpdates()
+      if (res.available) {
+        setUpdateInfo(res)
+        setUpdateState('available')
+      } else {
+        setUpdateState('up_to_date')
+        setTimeout(() => setUpdateState('idle'), 4000)
+      }
+    } catch (err) {
+      setUpdateError('Update check failed. Try again later.')
+      setUpdateState('failed')
+    } finally {
+      setIsCheckingUpdate(false)
+    }
+  }
+
+  const handleDownloadUpdate = async () => {
+    if (!updateInfo?.updateRef) return
+    setUpdateState('downloading')
+    setUpdateError(null)
+    try {
+      await downloadAndInstallUpdate(updateInfo.updateRef)
+      setUpdateState('ready')
+    } catch (err) {
+      console.error('Update download failed:', err)
+      setUpdateError('Update could not be installed. Try again later.')
+      setUpdateState('failed')
+    }
+  }
+
+  const handleRestartToUpdate = async () => {
+    await relaunchApplication()
   }
 
   const fetchSettingsData = useCallback(async () => {
@@ -436,6 +482,90 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
                 </button>
               )
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 4: Application & Updates */}
+      <div className="settings-card" id="settings-application-version">
+        <div className="settings-card-header">
+          <div className="settings-card-header-left">
+            <span className="settings-card-icon">💻</span>
+            <div>
+              <h2 className="settings-card-title">Application &amp; Updates</h2>
+              <span className="settings-card-subtitle">Version metadata and release channel</span>
+            </div>
+          </div>
+        </div>
+        <div className="settings-card-body">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <div>
+              <div style={{ fontWeight: 500, color: '#f3f4f6' }}>App version</div>
+              <div style={{ fontSize: '13px', color: '#9ca3af' }}>Semantic build release</div>
+            </div>
+            <div style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '14px', color: '#60a5fa', background: 'rgba(96, 165, 250, 0.1)', padding: '4px 10px', borderRadius: '6px' }}>
+              {APP_VERSION}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <div>
+              <div style={{ fontWeight: 500, color: '#f3f4f6' }}>Platform</div>
+              <div style={{ fontSize: '13px', color: '#9ca3af' }}>Current runtime environment</div>
+            </div>
+            <div style={{ fontSize: '13px', color: '#d1d5db' }}>
+              {isDesktop() ? 'Windows Desktop (Tauri V2)' : 'Web Application (Vercel)'}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '16px' }}>
+            <div>
+              <div style={{ fontWeight: 500, color: '#f3f4f6' }}>Software updates</div>
+              <div style={{ fontSize: '13px', color: '#9ca3af' }}>
+                {updateState === 'checking' && 'Checking for signed updates...'}
+                {updateState === 'available' && `Update ${updateInfo?.version || ''} available for download`}
+                {updateState === 'downloading' && 'Downloading update in background...'}
+                {updateState === 'ready' && 'Update ready to install. Restart when safe.'}
+                {updateState === 'up_to_date' && 'Application is up to date.'}
+                {updateState === 'failed' && (updateError || 'Update could not be installed. Try again later.')}
+                {updateState === 'idle' && (isDesktop() ? 'Periodic background checks enabled' : 'Web version is automatically up to date')}
+              </div>
+            </div>
+            <div>
+              {isDesktop() ? (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {updateState === 'ready' ? (
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={handleRestartToUpdate}
+                      style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
+                    >
+                      Restart to update
+                    </button>
+                  ) : updateState === 'available' ? (
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={handleDownloadUpdate}
+                    >
+                      Download update
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn--secondary"
+                      onClick={handleCheckForUpdates}
+                      disabled={isCheckingUpdate}
+                    >
+                      {isCheckingUpdate ? 'Checking...' : 'Check for updates'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <span style={{ fontSize: '13px', color: '#10b981', fontWeight: 500 }}>✓ Auto-synced</span>
+              )}
+            </div>
           </div>
         </div>
       </div>

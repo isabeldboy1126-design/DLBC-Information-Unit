@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { getApiUrl } from '../../config'
 import { SourceReferenceDrawer } from '../editing/SourceReferenceDrawer'
+import { saveFileWithNativeDialog } from '../../services/desktopPlatform'
 
 export function FinalReportView({ session, onBack }) {
   const [finalReportData, setFinalReportData] = useState({
@@ -112,9 +113,31 @@ export function FinalReportView({ session, onBack }) {
     }
   }
 
-  const handleDownloadDocx = () => {
+  const handleDownloadDocx = async () => {
     if (!activeFinal) return
-    window.location.href = getApiUrl(`/api/final-report/sessions/${sessionId}/download`)
+    try {
+      const url = getApiUrl(`/api/final-report/sessions/${sessionId}/download`)
+      const res = await fetch(url)
+      if (!res.ok) {
+        throw new Error(`Failed to download report (HTTP ${res.status})`)
+      }
+      const blob = await res.blob()
+      const filename = finalReportData.suggested_docx_filename || `${reportTitle || 'Report'}.docx`
+      const saveRes = await saveFileWithNativeDialog(blob, filename, [
+        { name: 'Word Document', extensions: ['docx'] }
+      ])
+      if (saveRes.success) {
+        if (saveRes.path) {
+          setSuccessBanner(`✓ Report saved to ${saveRes.path}`)
+        } else {
+          setSuccessBanner('✓ Report downloaded successfully!')
+        }
+        setTimeout(() => setSuccessBanner(null), 4000)
+      }
+    } catch (err) {
+      console.error('Download error:', err)
+      setErrorBanner(`Download failed: ${err.message}`)
+    }
   }
 
   const handleCopyReport = () => {

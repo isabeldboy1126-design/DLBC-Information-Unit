@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DLBC Information Unit",
+  "version": "1.0.0",
+  "identifier": "org.dlbc.informationunit",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "DLBC Information Unit",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "publisher": "DLBC Information Unit",
+    "shortDescription": "DLBC Information Unit Desktop Application",
+    "longDescription": "DLBC Information Unit Desktop Application for reporting, audio recording, transcription verification, and editorial workflows.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/latest.json"
+      ],
+      "pubkey": "RWRYscMsE10L6pxcTwK5Q8D1t9OQfh1+BXL8fY52XITleAr9wwxz9cD3"
+    }
+  }
+}

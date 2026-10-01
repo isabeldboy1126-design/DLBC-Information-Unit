@@ -1,0 +1,68 @@
+name: Release Windows Desktop Application
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release Tag (e.g. v1.0.0)'
+        required: false
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Run frontend tests and build
+        run: npm run build --prefix frontend
+
+      - name: Build Tauri Desktop & Publish Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          projectPath: frontend
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}
+          releaseName: "DLBC Information Unit ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}"
+          releaseBody: |
+            DLBC Information Unit Windows Desktop Application.
+            
+            ### Installation
+            Download and run `DLBC-Information-Unit_1.0.0_x64-setup.exe` to install the desktop client.
+            
+            - Built with Tauri V2
+            - Single-instance recording protection
+            - Cryptographically signed automatic background updates
+          releaseDraft: false
+          prerelease: false
+          args: --target x86_64-pc-windows-msvc
