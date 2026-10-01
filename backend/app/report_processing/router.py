@@ -254,11 +254,6 @@ async def generate_report_docx(session_id: str, auth: AuthContext = Depends(requ
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No finalized report exists for this session yet. Complete report processing first.",
         )
-    if active_final.get("approval_status") != "approved":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Review and approve the current saved revision before export.",
-        )
 
     title = active_final.get("report_title") or session.get("title") or "DLBC Information Unit Report"
     programme = active_final.get("programme") or "Sunday Worship Service"
@@ -324,11 +319,6 @@ async def download_report_docx(session_id: str, auth: AuthContext = Depends(requ
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No finalized report exists for this session.",
-        )
-    if active_final.get("approval_status") != "approved":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Review and approve the current saved revision before export.",
         )
 
     title = active_final.get("report_title") or "DLBC Information Unit Report"

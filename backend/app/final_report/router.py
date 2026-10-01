@@ -241,12 +241,6 @@ async def download_final_report_docx(session_id: str):
             detail="No finalized report found for this session. Please finalize the report first.",
         )
 
-    if active_final.get("approval_status") != "approved":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Review and approve the current saved revision before export.",
-        )
-
     programme = session.get("metadata", {}).get("programme") or session.get("programme")
     date_str = session.get("date_created") or session.get("created_at")
     raw_filename = active_final.get("docx_filename") or document_service.generate_filename(active_final["report_title"], programme, date_str)

@@ -442,7 +442,7 @@ export function ReportProcessingModal({
             <div className="completed-badge-icon">
               <CheckIcon />
             </div>
-            <h3 className="completed-title">Report ready for review</h3>
+            <h3 className="completed-title">Report ready</h3>
             <div className="completed-actions-row">
               <button
                 type="button"
@@ -452,7 +452,7 @@ export function ReportProcessingModal({
                   if (onViewReport) onViewReport(runData)
                 }}
               >
-                Review Report →
+                View report →
               </button>
             </div>
           </div>

@@ -691,16 +691,16 @@ export function SessionDetailView({
                     <DocumentIcon />
                   </div>
                   <span className="verification-strip-text">
-                    Document ready
+                    Report ready
                   </span>
                 </div>
                 <button
                   type="button"
                   className="btn-verify-cta"
-                  onClick={handleDownloadDocx}
-                  id="btn-workspace-download-doc"
+                  onClick={() => changeStage('final_report')}
+                  id="btn-workspace-view-report"
                 >
-                  Download
+                  View report →
                 </button>
               </div>
             )
@@ -922,7 +922,7 @@ export function SessionDetailView({
                 className="btn-tile-action btn-tile-action--active"
                 onClick={() => changeStage('final_report')}
               >
-                Download .docx
+                View report →
               </button>
             ) : (
               <button

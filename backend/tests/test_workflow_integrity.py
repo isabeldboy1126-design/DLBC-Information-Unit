@@ -2,7 +2,7 @@
 Workflow Integrity Pass Integration Tests
 
 Verifies:
-1. HTTP 409 gate on unapproved export across both final-report and report-processing routes.
+1. Immediate document export without mandatory human approval gate.
 2. Approval binds to specific revision, timestamp, user_id, and account_id.
 3. Automatic invalidation of approval when:
    - Verified transcript changes (resolve item, bulk confirm, finalise verification).
@@ -38,8 +38,8 @@ async def create_onboarded_user_account(client: AsyncClient, username: str) -> t
 
 
 @pytest.mark.asyncio
-async def test_unapproved_export_gates_409():
-    """Exporting unapproved report must fail with HTTP 409."""
+async def test_immediate_export_without_approval_gate():
+    """Exporting finalized report succeeds immediately without requiring explicit human approval."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         headers, account_id = await create_onboarded_user_account(client, f"user_exp_{uuid.uuid4().hex[:6]}")
@@ -63,34 +63,34 @@ async def test_unapproved_export_gates_409():
         )
         assert report["approval_status"] == "draft"
 
-        # 1. Attempt generate-docx -> expect 409
+        # 1. Attempt generate-docx -> succeeds immediately (200)
         gen_res = await client.post(
             f"/api/report-processing/generate-docx/{session_id}",
             headers=headers,
         )
-        assert gen_res.status_code == 409
-        assert "Review and approve the current saved revision before export" in gen_res.json()["detail"]
+        assert gen_res.status_code == 200
+        assert gen_res.json()["status"] == "success"
 
-        # 2. Attempt download-docx -> expect 409
+        # 2. Attempt download-docx -> succeeds immediately (200)
         dl_res = await client.get(
             f"/api/report-processing/download-docx/{session_id}",
             headers=headers,
         )
-        assert dl_res.status_code == 409
-        assert "Review and approve the current saved revision before export" in dl_res.json()["detail"]
+        assert dl_res.status_code == 200
+        assert "application/vnd.openxmlformats-officedocument.wordprocessingml.document" in dl_res.headers["content-type"]
 
-        # 3. Attempt final-report/sessions/{id}/download -> expect 409
+        # 3. Attempt final-report/sessions/{id}/download -> succeeds immediately (200)
         fr_dl_res = await client.get(
             f"/api/final-report/sessions/{session_id}/download",
             headers=headers,
         )
-        assert fr_dl_res.status_code == 409
-        assert "Review and approve the current saved revision before export" in fr_dl_res.json()["detail"]
+        assert fr_dl_res.status_code == 200
+        assert "application/vnd.openxmlformats-officedocument.wordprocessingml.document" in fr_dl_res.headers["content-type"]
 
 
 @pytest.mark.asyncio
 async def test_approval_and_invalidation_workflow():
-    """Approving report binds revision + user; editing or changing transcript invalidates it."""
+    """Approving report binds revision + user; editing or changing transcript invalidates approval status while export remains accessible."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         headers, account_id = await create_onboarded_user_account(client, f"user_appr_{uuid.uuid4().hex[:6]}")
@@ -125,7 +125,7 @@ async def test_approval_and_invalidation_workflow():
         assert approved_data["approved_revision_id"] == rev_id
         assert approved_data["approved_at"] is not None
 
-        # Verify export now succeeds (200)
+        # Verify export succeeds (200)
         dl_res = await client.get(
             f"/api/report-processing/download-docx/{session_id}",
             headers=headers,
@@ -140,12 +140,12 @@ async def test_approval_and_invalidation_workflow():
         )
         assert saved_rev["approval_status"] == "draft"
 
-        # Verify export is now blocked again with 409
+        # Verify export succeeds with updated revision
         dl_res_after_edit = await client.get(
             f"/api/report-processing/download-docx/{session_id}",
             headers=headers,
         )
-        assert dl_res_after_edit.status_code == 409
+        assert dl_res_after_edit.status_code == 200
 
         # Re-approve the new revision
         appr_res2 = await client.post(
@@ -155,18 +155,18 @@ async def test_approval_and_invalidation_workflow():
         )
         assert appr_res2.status_code == 200
 
-        # Now simulate transcript finalisation change -> must invalidate approval
+        # Now simulate transcript finalisation change -> must invalidate approval status
         await session_repo.finalise_verification(session_id)
 
         active_report = await final_report_repo.get_active_final_report(session_id)
         assert active_report["approval_status"] in ("needs_review", "draft")
 
-        # Export blocked again
+        # Export remains available immediately without requiring re-approval
         dl_res_after_transcript = await client.get(
             f"/api/report-processing/download-docx/{session_id}",
             headers=headers,
         )
-        assert dl_res_after_transcript.status_code == 409
+        assert dl_res_after_transcript.status_code == 200
 
 
 @pytest.mark.asyncio

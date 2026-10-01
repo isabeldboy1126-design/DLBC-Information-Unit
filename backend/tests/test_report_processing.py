@@ -479,15 +479,7 @@ async def test_api_generate_and_download_docx():
         service_date="2026-08-23",
     )
 
-    # 1. POST generate-docx without approval gives 409 Conflict
-    unapproved_gen = client.post(f"/api/report-processing/generate-docx/{session_id}", headers=auth_header)
-    assert unapproved_gen.status_code == 409
-
-    # Approve report
-    appr_res = client.post(f"/api/final-report/sessions/{session_id}/approve", headers=auth_header, json={})
-    assert appr_res.status_code == 200
-
-    # POST generate-docx after approval succeeds
+    # 1. POST generate-docx succeeds immediately without requiring approval
     gen_res = client.post(f"/api/report-processing/generate-docx/{session_id}", headers=auth_header)
     assert gen_res.status_code == 200
     gen_data = gen_res.json()
@@ -495,7 +487,7 @@ async def test_api_generate_and_download_docx():
     assert gen_data["filename"].endswith(".docx")
     assert gen_data["file_size"] > 1000
 
-    # 2. GET download-docx
+    # 2. GET download-docx succeeds immediately
     dl_res = client.get(f"/api/report-processing/download-docx/{session_id}", headers=auth_header)
     assert dl_res.status_code == 200
     assert "application/vnd.openxmlformats-officedocument.wordprocessingml.document" in dl_res.headers["content-type"]

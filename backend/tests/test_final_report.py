@@ -233,22 +233,18 @@ def test_final_report_and_editing_export_endpoints():
     assert get_data["final_report_status"] == "complete"
     assert get_data["active_final_report"] is not None
 
-    # 4. Test Unapproved Download gives 409 Conflict
-    unapproved_res = client.get(f"/api/final-report/sessions/{session_id}/download")
-    assert unapproved_res.status_code == 409
+    # 4. Test Final Report Download Endpoint (.docx) succeeds immediately without requiring approval
+    download_res = client.get(f"/api/final-report/sessions/{session_id}/download")
+    assert download_res.status_code == 200
+    assert "application/vnd.openxmlformats-officedocument.wordprocessingml.document" in download_res.headers["content-type"]
+    assert "attachment;" in download_res.headers["content-disposition"]
+    assert ".docx" in download_res.headers["content-disposition"]
+    assert len(download_res.content) > 1000
 
-    # Approve the report
+    # Optional manual approval endpoint still works if called
     approve_res = client.post(f"/api/final-report/sessions/{session_id}/approve", json={})
     assert approve_res.status_code == 200
     assert approve_res.json()["status"] == "approved"
-
-    # 5. Test Final Report Download Endpoint (.docx) now succeeds
-    final_res = client.get(f"/api/final-report/sessions/{session_id}/download")
-    assert final_res.status_code == 200
-    assert "application/vnd.openxmlformats-officedocument.wordprocessingml.document" in final_res.headers["content-type"]
-    assert "attachment;" in final_res.headers["content-disposition"]
-    assert ".docx" in final_res.headers["content-disposition"]
-    assert len(final_res.content) > 1000
 
     # Clean up
     asyncio.run(session_repo.delete_session(session_id))
