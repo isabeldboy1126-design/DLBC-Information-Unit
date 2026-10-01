@@ -233,7 +233,16 @@ def test_final_report_and_editing_export_endpoints():
     assert get_data["final_report_status"] == "complete"
     assert get_data["active_final_report"] is not None
 
-    # 4. Test Final Report Download Endpoint (.docx)
+    # 4. Test Unapproved Download gives 409 Conflict
+    unapproved_res = client.get(f"/api/final-report/sessions/{session_id}/download")
+    assert unapproved_res.status_code == 409
+
+    # Approve the report
+    approve_res = client.post(f"/api/final-report/sessions/{session_id}/approve", json={})
+    assert approve_res.status_code == 200
+    assert approve_res.json()["status"] == "approved"
+
+    # 5. Test Final Report Download Endpoint (.docx) now succeeds
     final_res = client.get(f"/api/final-report/sessions/{session_id}/download")
     assert final_res.status_code == 200
     assert "application/vnd.openxmlformats-officedocument.wordprocessingml.document" in final_res.headers["content-type"]

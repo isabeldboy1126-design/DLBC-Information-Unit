@@ -161,7 +161,7 @@ class DocumentService:
         r_spk_label.font.size = Pt(10.5)
         r_spk_label.font.color.rgb = COLOR_TEXT_MAIN
 
-        r_spk = p_meta.add_run(f"{speaker or 'Pastor W.F. Kumuyi'}    |    ")
+        r_spk = p_meta.add_run(f"{speaker or 'Minister not provided'}    |    ")
         r_spk.font.size = Pt(10.5)
         r_spk.font.color.rgb = COLOR_TEXT_MAIN
 
@@ -359,7 +359,7 @@ class DocumentService:
             or session_metadata.get("metadata", {}).get("speaker")
             or session_metadata.get("minister")
             or session_metadata.get("speaker")
-            or "Pastor W.F. Kumuyi"
+            or "Minister not provided"
         )
         programme = (
             session_metadata.get("metadata", {}).get("programme")
@@ -405,7 +405,7 @@ class DocumentService:
             or session_metadata.get("metadata", {}).get("speaker")
             or session_metadata.get("minister")
             or session_metadata.get("speaker")
-            or "Pastor W.F. Kumuyi"
+            or "Minister not provided"
         )
         programme = (
             session_metadata.get("metadata", {}).get("programme")

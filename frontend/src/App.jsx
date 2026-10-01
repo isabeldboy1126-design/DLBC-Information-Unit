@@ -19,6 +19,7 @@ import { SettingsView } from './components/settings/SettingsView'
 import { YouTubeSessionView } from './components/youtube/YouTubeSessionView'
 import { CompletedReportsView } from './components/reporting/CompletedReportsView'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
+import { StartupAnimation } from './components/common/StartupAnimation'
 
 // File Transcription Components
 import { RecordedFileUploader } from './components/transcription/RecordedFileUploader'
@@ -110,6 +111,17 @@ function App() {
   const [authScreen, setAuthScreen] = useState('login')
   const [replayOnboardingActive, setReplayOnboardingActive] = useState(false)
   const [demoTestOnboardingActive, setDemoTestOnboardingActive] = useState(false)
+  const [hasPlayedStartupAnimation, setHasPlayedStartupAnimation] = useState(() => {
+    try {
+      if (typeof window === 'undefined') return true
+      const enabled = localStorage.getItem('dlbc_startup_animation_enabled')
+      if (enabled === 'false') return true
+      const played = sessionStorage.getItem('dlbc_startup_animation_played')
+      return played === 'true'
+    } catch {
+      return true
+    }
+  })
 
   useEffect(() => {
     const handleHash = () => {
@@ -491,14 +503,25 @@ function App() {
   const { title: currentScreenTitle, onBack: currentScreenBack } = getHeaderContext()
 
   return (
-    <AppShell
-      activeView={
-        showCompletionModal
-          ? 'dashboard'
-          : liveAudio.isRecording && !isRecorderMinimized
-          ? 'live_recording'
-          : currentView
-      }
+    <>
+      {!hasPlayedStartupAnimation && (
+        <StartupAnimation
+          onComplete={() => {
+            try {
+              sessionStorage.setItem('dlbc_startup_animation_played', 'true')
+            } catch {}
+            setHasPlayedStartupAnimation(true)
+          }}
+        />
+      )}
+      <AppShell
+        activeView={
+          showCompletionModal
+            ? 'dashboard'
+            : liveAudio.isRecording && !isRecorderMinimized
+            ? 'live_recording'
+            : currentView
+        }
       isLiveRecordingActive={liveAudio.isRecording}
       onNavigate={handleNavigate}
       screenTitle={currentScreenTitle}
@@ -866,6 +889,7 @@ function App() {
         />
       )}
     </AppShell>
+    </>
   )
 }
 

@@ -13,9 +13,11 @@ from typing import Any, Dict, List, Optional
 import urllib.parse
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
 
+from app.auth.auth_context import AuthContext
+from app.auth.dependencies import get_optional_account, require_account
 from app.database.session_repo import session_repo
 from app.database.proofreading_repo import proofreading_repo
 from app.database.final_report_repo import final_report_repo
@@ -32,6 +34,10 @@ class FinalizeReportRequest(BaseModel):
 class SaveFinalReportRevisionRequest(BaseModel):
     report_text: str = Field(description="The updated text of the final report.")
     report_title: Optional[str] = Field(default=None, description="Optional updated title.")
+
+
+class ApproveReportRequest(BaseModel):
+    revision_id: Optional[str] = Field(default=None, description="Optional specific revision ID to approve.")
 
 
 @router.get("/sessions/{session_id}")
@@ -94,7 +100,7 @@ async def finalize_session_report(session_id: str, payload: Optional[FinalizeRep
         )
 
     # 2. Extract metadata
-    speaker = session.get("metadata", {}).get("speaker") or session.get("speaker") or "Pastor W.F. Kumuyi"
+    speaker = session.get("metadata", {}).get("speaker") or session.get("speaker") or "Minister not provided"
     programme = session.get("metadata", {}).get("programme") or session.get("programme") or "Deeper Life Bible Church Service"
     date_str = session.get("date_created") or session.get("created_at")
 
@@ -147,7 +153,7 @@ async def save_final_report_revision(session_id: str, payload: SaveFinalReportRe
 
     active_final = await final_report_repo.get_active_final_report(session_id)
     title = payload.report_title or (active_final.get("report_title") if active_final else session.get("title", "Message Report"))
-    speaker = session.get("metadata", {}).get("speaker") or session.get("speaker") or "Pastor W.F. Kumuyi"
+    speaker = session.get("metadata", {}).get("speaker") or session.get("speaker") or "Minister not provided"
     programme = session.get("metadata", {}).get("programme") or session.get("programme") or "Deeper Life Bible Church Service"
     date_str = session.get("date_created") or session.get("created_at")
 
@@ -179,6 +185,46 @@ async def save_final_report_revision(session_id: str, payload: SaveFinalReportRe
     }
 
 
+@router.post("/sessions/{session_id}/approve")
+async def approve_session_final_report(
+    session_id: str,
+    payload: Optional[ApproveReportRequest] = None,
+    auth: Optional[AuthContext] = Depends(get_optional_account),
+):
+    """
+    Explicit human review approval for a specific final report revision.
+    Gates final .docx document export.
+    """
+    account_id = getattr(auth, "account_id", None)
+    session = await session_repo.get_session(session_id, account_id=account_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found.")
+
+    active_final = await final_report_repo.get_active_final_report(session_id)
+    if not active_final:
+        raise HTTPException(status_code=400, detail="No final report found to approve.")
+
+    rev_id = (payload.revision_id if payload and payload.revision_id else None) or active_final.get("revision_id") or active_final.get("id")
+
+    user_id = getattr(auth, "user_id", None)
+    account_id = getattr(auth, "account_id", None)
+
+    approved = await final_report_repo.approve_report(
+        session_id=session_id,
+        revision_id=rev_id,
+        user_id=user_id,
+        account_id=account_id,
+    )
+    if not approved:
+        raise HTTPException(status_code=400, detail="Failed to approve final report.")
+
+    return {
+        "status": "approved",
+        "session_id": session_id,
+        "final_report": approved,
+    }
+
+
 @router.get("/sessions/{session_id}/download")
 async def download_final_report_docx(session_id: str):
     """
@@ -193,6 +239,12 @@ async def download_final_report_docx(session_id: str):
         raise HTTPException(
             status_code=404,
             detail="No finalized report found for this session. Please finalize the report first.",
+        )
+
+    if active_final.get("approval_status") != "approved":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Review and approve the current saved revision before export.",
         )
 
     programme = session.get("metadata", {}).get("programme") or session.get("programme")

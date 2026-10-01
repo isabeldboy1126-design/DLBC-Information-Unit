@@ -1298,6 +1298,9 @@ class SessionRepository:
             )
             await conn.commit()
 
+        from app.database.final_report_repo import final_report_repo
+        await final_report_repo.invalidate_approval(session_id)
+
         return await self.get_verification_state(session_id)
 
     async def confirm_all_remaining(self, session_id: str) -> Dict[str, Any]:
@@ -1353,6 +1356,9 @@ class SessionRepository:
                 (resolved_count, session_id),
             )
             await conn.commit()
+
+        from app.database.final_report_repo import final_report_repo
+        await final_report_repo.invalidate_approval(session_id)
 
         return await self.get_verification_state(session_id)
 
@@ -1534,6 +1540,9 @@ class SessionRepository:
         }
         self._save_verified_transcript_file(session_id, verified_data)
 
+        from app.database.final_report_repo import final_report_repo
+        await final_report_repo.invalidate_approval(session_id)
+
         return {
             "status": "complete",
             "session_id": session_id,
@@ -1626,6 +1635,9 @@ class SessionRepository:
         }
         self._save_verified_transcript_file(session_id, verified_data)
 
+        from app.database.final_report_repo import final_report_repo
+        await final_report_repo.invalidate_approval(session_id)
+
         return {
             "status": "complete",
             "session_id": session_id,
@@ -1661,7 +1673,7 @@ class SessionRepository:
         if status in ("compiling", "verifying"):
             updates.append("ai_verification_started_at = ?")
             params.append(now_iso)
-        elif status in ("completed_verified", "completed_needs_review", "ai_unavailable", "failed"):
+        elif status in ("completed_verified", "completed_needs_review", "ai_unavailable", "failed", "cancelled"):
             updates.append("ai_verification_completed_at = ?")
             params.append(now_iso)
 

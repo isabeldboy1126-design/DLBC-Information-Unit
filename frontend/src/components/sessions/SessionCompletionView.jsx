@@ -38,6 +38,29 @@ export function SessionCompletionView({
   const [itemsPending, setItemsPending] = useState(rawFlagCount)
   const [itemsResolved, setItemsResolved] = useState(session?.verification_items_resolved || 0)
   const [compilingStep, setCompilingStep] = useState(skipCompiling ? 2 : 1)
+  const [isCancelling, setIsCancelling] = useState(false)
+
+  const handleCancelVerification = async () => {
+    if (!sessionId) return
+    try {
+      setIsCancelling(true)
+      await fetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/cancel`), {
+        method: 'POST',
+      })
+      if (onBeginVerification) {
+        await onBeginVerification()
+      } else if (onFinishForNow) {
+        onFinishForNow()
+      } else if (onViewSessionDetails) {
+        onViewSessionDetails()
+      }
+    } catch (e) {
+      console.error('Error cancelling verification:', e)
+      if (onBeginVerification) onBeginVerification()
+    } finally {
+      setIsCancelling(false)
+    }
+  }
 
   // Poll verification status while compiling or verifying
   useEffect(() => {
@@ -253,6 +276,19 @@ export function SessionCompletionView({
                     Completing session
                   </span>
                 </div>
+              </div>
+
+              {/* Cancel verification action */}
+              <div style={{ marginTop: '1.25rem', textAlign: 'center' }}>
+                <button
+                  type="button"
+                  className="btn-cancel-report-process"
+                  onClick={handleCancelVerification}
+                  disabled={isCancelling}
+                  id="btn-cancel-verification"
+                >
+                  {isCancelling ? 'Cancelling...' : 'Cancel verification'}
+                </button>
               </div>
             </div>
           )}

@@ -283,6 +283,9 @@ export function ReportProcessingModal({
     }
     try {
       setIsCancelling(true)
+      if (sessionId) {
+        await fetch(getApiUrl(`/api/report-processing/sessions/${sessionId}/cancel`), { method: 'POST' })
+      }
       if (runId) {
         await fetch(getApiUrl(`/api/report-processing/cancel/${runId}`), { method: 'POST' })
       }
@@ -291,6 +294,7 @@ export function ReportProcessingModal({
         pollTimerRef.current = null
       }
       setCurrentStage('cancelled')
+      clearActiveProcess()
       setTimeout(() => {
         if (isMountedRef.current) onClose()
       }, 500)
@@ -338,7 +342,7 @@ export function ReportProcessingModal({
   const cleanTitle = getCleanSessionName(session)
   const sessionDate = formatDate(session?.date_created || session?.created_at)
   const sessionDuration = formatDuration(session?.duration_seconds || session?.duration)
-  const sessionMinister = session?.minister || 'Pastor (Dr) W.F. Kumuyi'
+  const sessionMinister = session?.minister || 'Minister not provided'
   const activeStep = getActiveStepNumber()
 
   // -------------------------------------------------------------
@@ -438,7 +442,7 @@ export function ReportProcessingModal({
             <div className="completed-badge-icon">
               <CheckIcon />
             </div>
-            <h3 className="completed-title">Report ready</h3>
+            <h3 className="completed-title">Report ready for review</h3>
             <div className="completed-actions-row">
               <button
                 type="button"
@@ -448,7 +452,7 @@ export function ReportProcessingModal({
                   if (onViewReport) onViewReport(runData)
                 }}
               >
-                View Report →
+                Review Report →
               </button>
             </div>
           </div>
@@ -503,7 +507,7 @@ export function ReportProcessingModal({
               onClick={handleCancel}
               disabled={isCancelling}
             >
-              {isCancelling ? 'Cancelling...' : 'Cancel Process'}
+              {isCancelling ? 'Cancelling...' : 'Cancel processing'}
             </button>
           </div>
         )}

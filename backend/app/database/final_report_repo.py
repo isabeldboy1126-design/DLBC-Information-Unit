@@ -19,6 +19,8 @@ from app.database.models import (
     PHASE7_MIGRATION_COLUMNS,
     PHASE8_MIGRATION_COLUMNS,
     PHASE9_MIGRATION_COLUMNS,
+    PHASE9_APPROVAL_COLUMNS,
+    PHASE9_APPROVAL_COLUMNS_MSSQL,
 )
 
 
@@ -29,20 +31,36 @@ class FinalReportRepository:
     async def init_db(self):
         """Initializes database schema and runs Phase 5–9 migrations."""
         async with get_db_connection() as conn:
-            await conn.executescript(INIT_SCHEMA_SQL)
+            is_mssql = False
+            try:
+                mod_name = conn.__class__.__module__.lower()
+                if "odbc" in mod_name or "mssql" in mod_name:
+                    is_mssql = True
+            except Exception:
+                pass
 
-            for sql_list in [
-                PHASE5_MIGRATION_COLUMNS,
-                PHASE6_MIGRATION_COLUMNS,
-                PHASE7_MIGRATION_COLUMNS,
-                PHASE8_MIGRATION_COLUMNS,
-                PHASE9_MIGRATION_COLUMNS,
-            ]:
-                for sql in sql_list:
+            if is_mssql:
+                for sql in PHASE9_APPROVAL_COLUMNS_MSSQL:
                     try:
                         await conn.execute(sql)
                     except Exception:
                         pass
+            else:
+                await conn.executescript(INIT_SCHEMA_SQL)
+
+                for sql_list in [
+                    PHASE5_MIGRATION_COLUMNS,
+                    PHASE6_MIGRATION_COLUMNS,
+                    PHASE7_MIGRATION_COLUMNS,
+                    PHASE8_MIGRATION_COLUMNS,
+                    PHASE9_MIGRATION_COLUMNS,
+                    PHASE9_APPROVAL_COLUMNS,
+                ]:
+                    for sql in sql_list:
+                        try:
+                            await conn.execute(sql)
+                        except Exception:
+                            pass
 
             await conn.commit()
         self._initialized = True
@@ -58,6 +76,8 @@ class FinalReportRepository:
         service_date: Optional[str] = None,
         docx_filename: Optional[str] = None,
         docx_file_size: Optional[int] = None,
+        approval_status: str = "draft",
+        source_hash: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Creates and stores a new Final Report derived from the approved Proofread Report.
@@ -84,7 +104,7 @@ class FinalReportRepository:
                 (session_id,),
             )
 
-            # 3. Insert new Final Report
+            # 3. Insert new Final Report (default approval_status = 'draft')
             await conn.execute(
                 """
                 INSERT INTO final_reports (
@@ -92,8 +112,11 @@ class FinalReportRepository:
                     revision_number, report_title, report_text,
                     minister, programme, service_date,
                     docx_filename, docx_file_size,
-                    is_active, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                    is_active, created_at, updated_at,
+                    approval_status, approved_at,
+                    approved_by_user_id, approved_by_account_id,
+                    approved_revision_id, source_hash
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, NULL, NULL, NULL, NULL, ?)
                 """,
                 (
                     final_report_id,
@@ -109,6 +132,8 @@ class FinalReportRepository:
                     docx_file_size,
                     now_iso,
                     now_iso,
+                    approval_status,
+                    source_hash,
                 ),
             )
 
@@ -141,6 +166,7 @@ class FinalReportRepository:
     ) -> Dict[str, Any]:
         """
         Saves a post-finalization human adjustment as a new revision without overwriting earlier ones.
+        Resets approval status to 'draft' requiring re-approval.
         """
         active_report = await self.get_active_final_report(session_id)
         proofread_id = active_report.get("proofread_report_revision_id") if active_report else None
@@ -155,7 +181,74 @@ class FinalReportRepository:
             service_date=service_date or (active_report.get("service_date") if active_report else None),
             docx_filename=docx_filename,
             docx_file_size=docx_file_size,
+            approval_status="draft",
         )
+
+    async def approve_report(
+        self,
+        session_id: str,
+        revision_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        account_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Marks a specific final report revision (or active revision) as human-approved.
+        Records user, account, timestamp, and approved revision ID.
+        """
+        await self.init_db()
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+        target_report = None
+        if revision_id:
+            target_report = await self.get_final_report_by_id(revision_id)
+        if not target_report:
+            target_report = await self.get_active_final_report(session_id)
+        if not target_report or target_report["session_id"] != session_id:
+            return None
+
+        report_id = target_report["id"]
+
+        async with get_db_connection() as conn:
+            await conn.execute(
+                """
+                UPDATE final_reports
+                SET approval_status = 'approved',
+                    approved_at = ?,
+                    approved_by_user_id = ?,
+                    approved_by_account_id = ?,
+                    approved_revision_id = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (now_iso, user_id, account_id, report_id, now_iso, report_id),
+            )
+            await conn.commit()
+
+        return await self.get_final_report_by_id(report_id)
+
+    async def invalidate_approval(self, session_id: str) -> bool:
+        """
+        Invalidates approval when authoritative transcript or report draft changes.
+        Resets approval_status to 'draft'.
+        """
+        await self.init_db()
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        async with get_db_connection() as conn:
+            await conn.execute(
+                """
+                UPDATE final_reports
+                SET approval_status = 'draft',
+                    approved_at = NULL,
+                    approved_by_user_id = NULL,
+                    approved_by_account_id = NULL,
+                    approved_revision_id = NULL,
+                    updated_at = ?
+                WHERE session_id = ? AND approval_status = 'approved'
+                """,
+                (now_iso, session_id),
+            )
+            await conn.commit()
+        return True
 
     async def get_active_final_report(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Returns the currently active Final Report for a session."""
@@ -167,7 +260,10 @@ class FinalReportRepository:
                        revision_number, report_title, report_text,
                        minister, programme, service_date,
                        docx_filename, docx_file_size,
-                       is_active, created_at, updated_at
+                       is_active, created_at, updated_at,
+                       approval_status, approved_at,
+                       approved_by_user_id, approved_by_account_id,
+                       approved_revision_id, source_hash
                 FROM final_reports
                 WHERE session_id = ? AND is_active = 1
                 """,
@@ -184,7 +280,10 @@ class FinalReportRepository:
                        revision_number, report_title, report_text,
                        minister, programme, service_date,
                        docx_filename, docx_file_size,
-                       is_active, created_at, updated_at
+                       is_active, created_at, updated_at,
+                       approval_status, approved_at,
+                       approved_by_user_id, approved_by_account_id,
+                       approved_revision_id, source_hash
                 FROM final_reports
                 WHERE session_id = ?
                 ORDER BY revision_number DESC
@@ -204,7 +303,10 @@ class FinalReportRepository:
                        revision_number, report_title, report_text,
                        minister, programme, service_date,
                        docx_filename, docx_file_size,
-                       is_active, created_at, updated_at
+                       is_active, created_at, updated_at,
+                       approval_status, approved_at,
+                       approved_by_user_id, approved_by_account_id,
+                       approved_revision_id, source_hash
                 FROM final_reports
                 WHERE id = ?
                 """,
@@ -223,7 +325,10 @@ class FinalReportRepository:
                        revision_number, report_title, report_text,
                        minister, programme, service_date,
                        docx_filename, docx_file_size,
-                       is_active, created_at, updated_at
+                       is_active, created_at, updated_at,
+                       approval_status, approved_at,
+                       approved_by_user_id, approved_by_account_id,
+                       approved_revision_id, source_hash
                 FROM final_reports
                 WHERE session_id = ?
                 ORDER BY revision_number DESC
@@ -281,6 +386,12 @@ class FinalReportRepository:
             "is_active": bool(row[11]),
             "created_at": row[12],
             "updated_at": row[13],
+            "approval_status": row[14] if len(row) > 14 and row[14] else "draft",
+            "approved_at": row[15] if len(row) > 15 else None,
+            "approved_by_user_id": row[16] if len(row) > 16 else None,
+            "approved_by_account_id": row[17] if len(row) > 17 else None,
+            "approved_revision_id": row[18] if len(row) > 18 else None,
+            "source_hash": row[19] if len(row) > 19 else None,
         }
 
 

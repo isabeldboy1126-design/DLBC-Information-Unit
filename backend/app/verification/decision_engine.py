@@ -699,6 +699,12 @@ Return a JSON array of decision objects matching this schema:
 
         audio_items = [it for it in ordered_items if it["clean_id"] in items_with_audio]
 
+        # Check cancellation before audio transcription
+        cur_v = await session_repo.get_ai_verification_status(session_id)
+        if cur_v.get("ai_verification_status") in ("cancelled", "cancel_requested"):
+            logger.info("[%s] AI verification cancelled before audio call; halting.", session_id)
+            return {"status": "cancelled", "session_id": session_id}
+
         # -------------------------------------------------------------
         # LOGICAL AI CALL 1: Independent Audio Listener Batch (ONCE)
         # -------------------------------------------------------------
@@ -747,6 +753,12 @@ Return a JSON array of decision objects matching this schema:
         )
 
         for chunk_idx, chunk_items in enumerate(reasoning_chunks):
+            # Check cancellation before processing chunk
+            cur_v = await session_repo.get_ai_verification_status(session_id)
+            if cur_v.get("ai_verification_status") in ("cancelled", "cancel_requested"):
+                logger.info("[%s] AI verification cancelled before chunk %d; halting.", session_id, chunk_idx + 1)
+                return {"status": "cancelled", "session_id": session_id}
+
             chunk_num = chunk_idx + 1
             total_chunks = len(reasoning_chunks)
             chunk_size = len(chunk_items)
@@ -962,6 +974,11 @@ Return a JSON array of decision objects matching this schema:
                 )
 
         # Step 10: Determine final verification status
+        cur_v = await session_repo.get_ai_verification_status(session_id)
+        if cur_v.get("ai_verification_status") in ("cancelled", "cancel_requested"):
+            logger.info("[%s] AI verification was cancelled; discarding final completion.", session_id)
+            return {"status": "cancelled", "session_id": session_id}
+
         final_state = await session_repo.get_verification_state(session_id)
         remaining_pending = len([i for i in final_state.get("items", []) if i.get("action") == "pending"])
 

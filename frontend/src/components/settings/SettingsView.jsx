@@ -23,6 +23,27 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
     }
   })
 
+  const [startupAnimationEnabled, setStartupAnimationEnabled] = useState(() => {
+    try {
+      const val = localStorage.getItem('dlbc_startup_animation_enabled')
+      return val !== 'false'
+    } catch {
+      return true
+    }
+  })
+
+  const handleToggleStartupAnimation = (e) => {
+    const nextVal = e.target.checked
+    setStartupAnimationEnabled(nextVal)
+    try {
+      localStorage.setItem('dlbc_startup_animation_enabled', String(nextVal))
+      setFeedback(nextVal ? 'Startup logo animation enabled.' : 'Startup logo animation disabled.')
+      setTimeout(() => setFeedback(null), 3000)
+    } catch (err) {
+      console.warn('Failed to save startup animation setting:', err)
+    }
+  }
+
   const handleResetDemoDraft = () => {
     try {
       localStorage.removeItem('dlbc_demo_onboarding_draft')
@@ -294,6 +315,25 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
                 checked={autoProcessAfterVerification}
                 onChange={handleToggleAutoProcess}
                 disabled={!isAutoProcessLoaded || isLoading || isSavingAutoProcess}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+          </div>
+
+          {/* Startup Animation Row */}
+          <div className="settings-auto-process-row" style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color, #e2e8f0)' }}>
+            <div className="settings-auto-process-label-group">
+              <span className="settings-auto-process-label">DLBC Startup Animation</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #888)', display: 'block' }}>
+                Play institutional DLBC emblem startup animation when entering workspace
+              </span>
+            </div>
+            <label className="toggle-switch" aria-label="DLBC Startup Animation">
+              <input
+                type="checkbox"
+                checked={startupAnimationEnabled}
+                onChange={handleToggleStartupAnimation}
+                id="toggle-startup-animation"
               />
               <span className="toggle-slider"></span>
             </label>

@@ -248,3 +248,28 @@ async def get_ai_verification_status_endpoint(session_id: str, auth: AuthContext
     return result
 
 
+@router.post("/{session_id}/verification/cancel")
+@router.post("/{session_id}/verification/verify-ai/cancel")
+@router.post("/{session_id}/verify-ai/cancel")
+async def cancel_ai_verification(session_id: str, auth: AuthContext = Depends(require_account)):
+    """
+    Cancels an in-progress automated AI verification run for a session.
+    Idempotent. Preserves previously resolved items and allows manual completion.
+    """
+    session = await session_repo.get_session(session_id, account_id=auth.account_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    cur_status = await session_repo.get_ai_verification_status(session_id)
+    current_ai_status = cur_status.get("ai_verification_status")
+
+    if current_ai_status in ("compiling", "verifying"):
+        await session_repo.set_ai_verification_status(session_id, "cancelled")
+
+    return {
+        "status": "cancelled",
+        "session_id": session_id,
+        "message": "AI verification was cancelled.",
+    }
+
+

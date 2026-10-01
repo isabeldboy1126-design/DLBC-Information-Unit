@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { getApiUrl } from '../../config'
+import { SourceReferenceDrawer } from '../editing/SourceReferenceDrawer'
 
 export function FinalReportView({ session, onBack }) {
   const [finalReportData, setFinalReportData] = useState({
@@ -23,6 +24,9 @@ export function FinalReportView({ session, onBack }) {
   const [errorBanner, setErrorBanner] = useState(null)
   const [successBanner, setSuccessBanner] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [isReviewed, setIsReviewed] = useState(false)
+  const [isApproving, setIsApproving] = useState(false)
+  const [showSourceContext, setShowSourceContext] = useState(false)
 
   const sessionId = session?.session_id
 
@@ -140,41 +144,72 @@ export function FinalReportView({ session, onBack }) {
   const activeFinal = finalReportData.active_final_report
   const isFinalized = Boolean(activeFinal)
   const canFinalize = finalReportData.can_finalize
+  const isApproved = activeFinal?.approval_status === 'approved'
   const wordCount = reportText ? reportText.trim().split(/\s+/).filter(Boolean).length : 0
   const charCount = reportText ? reportText.length : 0
   const fileSizeKb = activeFinal?.docx_file_size ? (activeFinal.docx_file_size / 1024).toFixed(1) : null
 
   const [isDownloadingDoc, setIsDownloadingDoc] = useState(false)
 
+  const handleApproveReport = async () => {
+    if (!sessionId) return
+    setIsApproving(true)
+    setErrorBanner(null)
+    try {
+      const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/approve`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          revision_id: activeFinal?.id || undefined,
+        }),
+      })
+
+      if (res.ok) {
+        setSuccessBanner('✓ Report revision approved successfully! The approved document is now ready for download.')
+        setTimeout(() => setSuccessBanner(null), 4000)
+        setIsReviewed(false)
+        await fetchFinalReportData()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setErrorBanner(err.detail || 'Failed to approve report.')
+      }
+    } catch (e) {
+      setErrorBanner(`Error approving report: ${e.message}`)
+    } finally {
+      setIsApproving(false)
+    }
+  }
+
   const handleDownloadDocument = async () => {
     if (!sessionId) return
+    if (!isApproved) {
+      setErrorBanner('Review and approve the current saved revision before export.')
+      return
+    }
     setIsDownloadingDoc(true)
     setErrorBanner(null)
     try {
-      // 1. Try dedicated report-processing download/generation route
-      const res = await fetch(getApiUrl(`/api/report-processing/download-docx/${sessionId}`))
-      if (res.ok) {
-        const blob = await res.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${reportTitle || session?.title || 'Report'}.docx`
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
-        setSuccessBanner('✓ Document downloaded successfully!')
-        setTimeout(() => setSuccessBanner(null), 3000)
+      const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/download`))
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        if (res.status === 409) {
+          setErrorBanner(err.detail || 'Review and approve the current saved revision before export.')
+        } else {
+          setErrorBanner(err.detail || 'Failed to download document.')
+        }
         return
       }
-
-      // 2. If not finalized, finalize to generate Word document
-      if (!isFinalized && canFinalize) {
-        await handleFinalizeReport()
-      }
-
-      // 3. Download via final-report download endpoint
-      window.location.href = getApiUrl(`/api/final-report/sessions/${sessionId}/download`)
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${reportTitle || session?.title || 'Report'}.docx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      setSuccessBanner('✓ Approved document downloaded successfully!')
+      setTimeout(() => setSuccessBanner(null), 3000)
     } catch (e) {
       setErrorBanner(`Failed to download document: ${e.message}`)
     } finally {
@@ -189,16 +224,33 @@ export function FinalReportView({ session, onBack }) {
       {/* Top Navigation & Action Banner */}
       <div className="reporting-ready-floating-card" style={{ marginBottom: '1.5rem' }}>
         <div className="ready-card-left">
-          <div className="ready-check-icon-circle" style={{ background: '#ecfdf5', color: '#10b981' }}>✓</div>
+          <div
+            className="ready-check-icon-circle"
+            style={{
+              background: isApproved ? '#ecfdf5' : '#fffbeb',
+              color: isApproved ? '#10b981' : '#f59e0b',
+            }}
+          >
+            {isApproved ? '✓' : '⚠️'}
+          </div>
           <div className="ready-card-text">
-            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#10b981', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              REPORT READY
+            <span
+              style={{
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                color: isApproved ? '#10b981' : '#f59e0b',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {isApproved ? 'APPROVED' : 'DRAFT · HUMAN REVIEW REQUIRED'}
             </span>
             <h3 className="ready-card-title" style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0.15rem 0' }}>
               {reportTitle || 'Message Report'}
             </h3>
             <p style={{ margin: 0, fontSize: '0.88rem' }}>
               {session?.title || 'Sunday Morning Worship & Sermon'} • {wordCount} words
+              {activeFinal?.revision_number ? ` • Revision ${activeFinal.revision_number}` : ''}
             </p>
           </div>
         </div>
@@ -207,25 +259,112 @@ export function FinalReportView({ session, onBack }) {
           <button
             type="button"
             className="btn btn--secondary btn--small"
+            onClick={() => setShowSourceContext((prev) => !prev)}
+            aria-expanded={showSourceContext}
+            title="Inspect verified transcript and source context"
+          >
+            {showSourceContext ? '✕ Hide source' : '📚 Source context'}
+          </button>
+
+          <button
+            type="button"
+            className="btn btn--secondary btn--small"
             onClick={handleCopyReport}
             title="Copy formatted text"
           >
-            {copied ? '✓ Copied!' : '📋 Copy Text'}
+            {copied ? '✓ Copied!' : '📋 Copy text'}
           </button>
 
           <button
             type="button"
             className="btn-continue-editing-primary"
             onClick={handleDownloadDocument}
-            disabled={isDownloadingDoc}
+            disabled={!isApproved || isDownloadingDoc}
             id="btn-download-final-docx-card"
-            title="Download Microsoft Word (.docx) document"
+            title={isApproved ? 'Download approved Microsoft Word (.docx) document' : 'Review and approve this revision to enable download'}
+            style={{
+              opacity: !isApproved ? 0.6 : 1,
+              cursor: !isApproved ? 'not-allowed' : 'pointer',
+            }}
           >
-            <span>{isDownloadingDoc ? 'Generating Document...' : 'Download Document'}</span>
-            <span>⬇</span>
+            <span>
+              {isDownloadingDoc
+                ? 'Downloading...'
+                : isApproved
+                ? 'Download approved document'
+                : 'Approval Required to Download'}
+            </span>
+            <span>{isApproved ? '⬇' : '🔒'}</span>
           </button>
         </div>
       </div>
+
+      {/* Human Review & Approval Action Card */}
+      {hasReportContent && (
+        <div
+          className={`approval-review-callout-card ${isApproved ? 'approval-card--approved' : 'approval-card--pending'}`}
+          style={{ marginBottom: '1.5rem' }}
+        >
+          {isApproved ? (
+            <div className="approval-card-approved-content">
+              <span className="approval-status-icon">✓</span>
+              <div>
+                <strong>Approved Document:</strong> Human approval is recorded for Revision {activeFinal?.revision_number || 1}
+                {activeFinal?.approved_at ? ` on ${new Date(activeFinal.approved_at).toLocaleString()}` : ''}
+                {activeFinal?.approved_by ? ` by ${activeFinal.approved_by}` : ''}.
+                Any new edit will create a new draft revision requiring review before export.
+              </div>
+            </div>
+          ) : (
+            <div className="approval-card-pending-content">
+              <div className="approval-instruction-header">
+                <span className="approval-icon">⚠️</span>
+                <div className="approval-instruction-text">
+                  <strong>Human Review Required:</strong> Review the full report against the verified transcript and source audio before approval. AI generation alone does not approve a report.
+                </div>
+              </div>
+              <div className="approval-action-row">
+                <label className="approval-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={isReviewed}
+                    onChange={(e) => setIsReviewed(e.target.checked)}
+                    disabled={isApproving || isEditing}
+                    id="cb-confirm-reviewed"
+                  />
+                  <span>I have reviewed this saved revision against the source.</span>
+                </label>
+                <button
+                  type="button"
+                  className="btn btn--primary btn--small btn-approve-revision"
+                  id="btn-approve-report"
+                  onClick={handleApproveReport}
+                  disabled={!isReviewed || isApproving || isEditing}
+                >
+                  {isApproving ? 'Approving...' : '✓ Approve this revision'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Collapsible Source Reference Context Drawer */}
+      {showSourceContext && (
+        <div className="final-report-source-drawer-wrapper" style={{ marginBottom: '1.5rem' }}>
+          <SourceReferenceDrawer
+            sources={{
+              verified_text: session?.verified_text || session?.raw_text || 'No verified transcript found.',
+              reporter_a: finalReportData.source_proofread_report
+                ? {
+                    report_title: finalReportData.source_proofread_report.proofread_title,
+                    report_text: finalReportData.source_proofread_report.proofread_text,
+                  }
+                : null,
+            }}
+          />
+        </div>
+      )}
 
       {/* Alert Banners */}
       {errorBanner && (
@@ -273,7 +412,7 @@ export function FinalReportView({ session, onBack }) {
 
               <div className="meta-field-item">
                 <span className="meta-field-label">MINISTER</span>
-                <span className="meta-field-value">{activeFinal?.minister || session?.minister_name || session?.minister || 'Pastor W.F. Kumuyi'}</span>
+                <span className="meta-field-value">{activeFinal?.minister || session?.minister_name || session?.minister || 'Minister not provided'}</span>
               </div>
 
               <div className="meta-field-item">
@@ -288,7 +427,7 @@ export function FinalReportView({ session, onBack }) {
 
               <div className="meta-field-item">
                 <span className="meta-field-label">STATUS</span>
-                <span className="meta-field-value">{isFinalized ? 'Finalized Archival' : 'Ready for Distribution'}</span>
+                <span className="meta-field-value">{isApproved ? 'Approved Archival' : 'Draft · Human Review Required'}</span>
               </div>
             </div>
 
@@ -374,7 +513,7 @@ export function FinalReportView({ session, onBack }) {
                   {reportTitle || activeFinal?.report_title || 'Message Report'}
                 </h1>
                 <div className="archival-doc-delivery">
-                  Delivered by {activeFinal?.minister || session?.minister || 'Pastor W.F. Kumuyi'} on {activeFinal?.service_date ? new Date(activeFinal.service_date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                  Delivered by {activeFinal?.minister || session?.minister || 'Minister not provided'} on {activeFinal?.service_date ? new Date(activeFinal.service_date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
                 </div>
                 <hr className="archival-doc-divider" />
 

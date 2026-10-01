@@ -215,12 +215,19 @@ CREATE TABLE IF NOT EXISTS final_reports (
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
+    approval_status TEXT DEFAULT 'draft',
+    approved_at TEXT,
+    approved_by_user_id TEXT,
+    approved_by_account_id TEXT,
+    approved_revision_id TEXT,
+    source_hash TEXT,
     FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_final_reports_session ON final_reports(session_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_final_reports_rev ON final_reports(session_id, revision_number DESC);
 CREATE INDEX IF NOT EXISTS idx_final_reports_created ON final_reports(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_final_reports_approval ON final_reports(session_id, approval_status);
 
 -- Configurable Programmes & Sessions
 CREATE TABLE IF NOT EXISTS programmes (
@@ -265,6 +272,7 @@ CREATE TABLE IF NOT EXISTS report_processing_runs (
     proofreading_json TEXT,
     validation_summary_json TEXT,
     final_report_id TEXT,
+    source_hash TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     completed_at TEXT,
@@ -431,6 +439,17 @@ PHASE9_MIGRATION_COLUMNS = [
     "ALTER TABLE sessions ADD COLUMN final_report_status TEXT DEFAULT 'not_started'",
     "ALTER TABLE sessions ADD COLUMN final_report_completed_at TEXT",
     "ALTER TABLE sessions ADD COLUMN final_report_id TEXT",
+]
+
+# Phase 9 approval & source protection migration: add revision-bound approval and source_hash columns.
+PHASE9_APPROVAL_COLUMNS = [
+    "ALTER TABLE final_reports ADD COLUMN approval_status TEXT DEFAULT 'draft'",
+    "ALTER TABLE final_reports ADD COLUMN approved_at TEXT",
+    "ALTER TABLE final_reports ADD COLUMN approved_by_user_id TEXT",
+    "ALTER TABLE final_reports ADD COLUMN approved_by_account_id TEXT",
+    "ALTER TABLE final_reports ADD COLUMN approved_revision_id TEXT",
+    "ALTER TABLE final_reports ADD COLUMN source_hash TEXT",
+    "ALTER TABLE report_processing_runs ADD COLUMN source_hash TEXT",
 ]
 
 # Stage 6 migration: add AI verification engine workflow columns to sessions & verification_items tables.
@@ -708,6 +727,12 @@ CREATE TABLE final_reports (
     is_active INT NOT NULL DEFAULT 1,
     created_at VARCHAR(255) NOT NULL,
     updated_at VARCHAR(255) NOT NULL,
+    approval_status VARCHAR(50) DEFAULT 'draft',
+    approved_at VARCHAR(255),
+    approved_by_user_id VARCHAR(255),
+    approved_by_account_id VARCHAR(255),
+    approved_revision_id VARCHAR(255),
+    source_hash VARCHAR(255),
     FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
 );
 
@@ -719,6 +744,9 @@ CREATE INDEX idx_final_reports_rev ON final_reports(session_id, revision_number 
 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_final_reports_created')
 CREATE INDEX idx_final_reports_created ON final_reports(created_at DESC);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_final_reports_approval')
+CREATE INDEX idx_final_reports_approval ON final_reports(session_id, approval_status);
 
 IF OBJECT_ID(N'programmes', N'U') IS NULL
 CREATE TABLE programmes (
@@ -766,6 +794,7 @@ CREATE TABLE report_processing_runs (
     proofreading_json NVARCHAR(MAX),
     validation_summary_json NVARCHAR(MAX),
     final_report_id VARCHAR(255),
+    source_hash VARCHAR(255),
     created_at VARCHAR(255) NOT NULL,
     updated_at VARCHAR(255) NOT NULL,
     completed_at VARCHAR(255),
@@ -951,6 +980,16 @@ PHASE9_MIGRATION_COLUMNS_MSSQL = [
     "IF COL_LENGTH('sessions', 'final_report_status') IS NULL ALTER TABLE sessions ADD final_report_status VARCHAR(100) DEFAULT 'not_started'",
     "IF COL_LENGTH('sessions', 'final_report_completed_at') IS NULL ALTER TABLE sessions ADD final_report_completed_at VARCHAR(255)",
     "IF COL_LENGTH('sessions', 'final_report_id') IS NULL ALTER TABLE sessions ADD final_report_id VARCHAR(255)",
+]
+
+PHASE9_APPROVAL_COLUMNS_MSSQL = [
+    "IF COL_LENGTH('final_reports', 'approval_status') IS NULL ALTER TABLE final_reports ADD approval_status VARCHAR(50) DEFAULT 'draft'",
+    "IF COL_LENGTH('final_reports', 'approved_at') IS NULL ALTER TABLE final_reports ADD approved_at VARCHAR(255)",
+    "IF COL_LENGTH('final_reports', 'approved_by_user_id') IS NULL ALTER TABLE final_reports ADD approved_by_user_id VARCHAR(255)",
+    "IF COL_LENGTH('final_reports', 'approved_by_account_id') IS NULL ALTER TABLE final_reports ADD approved_by_account_id VARCHAR(255)",
+    "IF COL_LENGTH('final_reports', 'approved_revision_id') IS NULL ALTER TABLE final_reports ADD approved_revision_id VARCHAR(255)",
+    "IF COL_LENGTH('final_reports', 'source_hash') IS NULL ALTER TABLE final_reports ADD source_hash VARCHAR(255)",
+    "IF COL_LENGTH('report_processing_runs', 'source_hash') IS NULL ALTER TABLE report_processing_runs ADD source_hash VARCHAR(255)",
 ]
 
 STAGE6_AI_VERIFICATION_COLUMNS_MSSQL = [

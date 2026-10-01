@@ -424,6 +424,7 @@ class ReportProcessingRepository:
         model_name: Optional[str] = None,
         tokens_used: Optional[int] = None,
         reused_existing_material: Optional[bool] = None,
+        source_hash: Optional[str] = None,
     ):
         await self.init_db()
         now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -443,6 +444,7 @@ class ReportProcessingRepository:
                     model_name = COALESCE(?, model_name),
                     tokens_used = COALESCE(?, tokens_used),
                     reused_existing_material = COALESCE(?, reused_existing_material),
+                    source_hash = COALESCE(?, source_hash),
                     updated_at = ?,
                     completed_at = COALESCE(?, completed_at)
                 WHERE run_id = ?
@@ -454,6 +456,7 @@ class ReportProcessingRepository:
                     model_name,
                     tokens_used,
                     (1 if reused_existing_material else 0) if reused_existing_material is not None else None,
+                    source_hash,
                     now_iso,
                     completed_at,
                     run_id,
@@ -534,13 +537,29 @@ class ReportProcessingRepository:
     async def cancel_run(self, run_id: str) -> bool:
         await self.init_db()
         run = await self.get_run(run_id)
-        if not run or run["status"] in ('completed', 'failed', 'cancelled'):
+        if not run:
+            return False
+        if run.get("status") == "cancelled":
+            return True
+        if run.get("status") in ('completed', 'failed'):
             return False
 
         await self.update_run_status(
             run_id, status='cancelled', current_step='cancelled', error_message='Cancelled by user'
         )
+        if run.get("session_id"):
+            await session_repo.set_report_processing_status(
+                run["session_id"], 'idle', run_id=run_id
+            )
         return True
+
+    async def cancel_active_run_for_session(self, session_id: str) -> bool:
+        """Cancels any currently active report processing run for the given session."""
+        await self.init_db()
+        active = await self.get_active_run(session_id)
+        if not active:
+            return True
+        return await self.cancel_run(active["run_id"])
 
     # -------------------------------------------------------------------------
     # STANDARDS & INSTRUCTIONS VERSIONING

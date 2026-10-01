@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.auth.auth_context import AuthContext
-from app.auth.dependencies import require_account
+from app.auth.dependencies import get_optional_account, require_account
 from app.config import STORAGE_DOCUMENTS_DIR
 from app.database.final_report_repo import final_report_repo
 from app.database.report_processing_repo import report_processing_repo
@@ -149,6 +149,61 @@ async def cancel_report_processing(run_id: str):
     return {"status": "cancelled", "run_id": run_id}
 
 
+@router.post("/sessions/{session_id}/cancel", response_model=Dict[str, Any])
+async def cancel_session_report_processing(
+    session_id: str,
+    auth: AuthContext = Depends(require_account),
+):
+    """Cancels any active report processing run for a given session."""
+    session = await session_repo.get_session(session_id, account_id=auth.account_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+    await report_processing_repo.cancel_active_run_for_session(session_id)
+    return {"status": "cancelled", "session_id": session_id}
+
+
+class ApproveProcessingReportRequest(BaseModel):
+    revision_id: Optional[str] = None
+
+
+@router.post("/sessions/{session_id}/approve", response_model=Dict[str, Any])
+async def approve_report_processing_report(
+    session_id: str,
+    payload: Optional[ApproveProcessingReportRequest] = None,
+    auth: Optional[AuthContext] = Depends(get_optional_account),
+):
+    """Approves the current saved report revision for final export."""
+    account_id = getattr(auth, "account_id", None)
+    session = await session_repo.get_session(session_id, account_id=account_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+    active_final = await final_report_repo.get_active_final_report(session_id)
+    if not active_final:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No final report exists to approve.",
+        )
+    rev_id = (payload.revision_id if payload and payload.revision_id else None) or active_final.get("revision_id") or active_final.get("id")
+    user_id = getattr(auth, "user_id", None)
+    account_id = getattr(auth, "account_id", None)
+
+    approved = await final_report_repo.approve_report(
+        session_id=session_id,
+        revision_id=rev_id,
+        user_id=user_id,
+        account_id=account_id,
+    )
+    if not approved:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to approve report.")
+    return {"status": "approved", "session_id": session_id, "final_report": approved}
+
+
 @router.get("/result/{run_id}", response_model=Dict[str, Any])
 async def get_report_processing_result(run_id: str):
     """Retrieves the full durable result and JSON artifacts of a completed run."""
@@ -199,10 +254,15 @@ async def generate_report_docx(session_id: str, auth: AuthContext = Depends(requ
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No finalized report exists for this session yet. Complete report processing first.",
         )
+    if active_final.get("approval_status") != "approved":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Review and approve the current saved revision before export.",
+        )
 
     title = active_final.get("report_title") or session.get("title") or "DLBC Information Unit Report"
     programme = active_final.get("programme") or "Sunday Worship Service"
-    minister = active_final.get("minister") or session.get("minister") or "Pastor (Dr) W.F. Kumuyi"
+    minister = active_final.get("minister") or session.get("minister") or "Minister not provided"
     service_date = active_final.get("service_date") or session.get("date_created", "")[:10]
     report_text = active_final.get("report_text") or ""
 
@@ -265,6 +325,11 @@ async def download_report_docx(session_id: str, auth: AuthContext = Depends(requ
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No finalized report exists for this session.",
         )
+    if active_final.get("approval_status") != "approved":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Review and approve the current saved revision before export.",
+        )
 
     title = active_final.get("report_title") or "DLBC Information Unit Report"
     programme = active_final.get("programme") or "Sunday Worship Service"
@@ -281,7 +346,7 @@ async def download_report_docx(session_id: str, auth: AuthContext = Depends(requ
     else:
         # Generate on the fly
         report_text = active_final.get("report_text") or ""
-        minister = active_final.get("minister") or "Pastor (Dr) W.F. Kumuyi"
+        minister = active_final.get("minister") or "Minister not provided"
         stream = document_service.generate_final_report_docx(
             report_title=title,
             report_text=report_text,

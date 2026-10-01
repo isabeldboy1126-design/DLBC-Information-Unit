@@ -10,6 +10,7 @@ Coordinates the single-stage Information Unit generation pipeline:
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -37,7 +38,6 @@ FORBIDDEN_SLOP_PATTERNS = [
     r"\bpivotal\b",
     r"\bgame-changer\b",
     r"\bin conclusion\b",
-    r"\bfurthermore\b",
     r"\bit is worth noting\b",
     r"\bserves as\b",
     r"\bunpacking\b",
@@ -124,7 +124,7 @@ class ReportProcessingEngine:
         6. Full Authoritative Verified Transcript
         """
         title = session.get("title") or "Sunday Worship Service"
-        minister = session.get("minister") or "Pastor (Dr) W.F. Kumuyi"
+        minister = session.get("minister") or "Minister not provided"
         service_date = session.get("date_created", "")[:10]
         programme = "Deeper Christian Life Ministry"
 
@@ -347,6 +347,14 @@ You MUST output valid, parseable JSON conforming strictly to this format:
             legacy_material = await self._extract_legacy_material(session_id)
             reused_existing = bool(legacy_material)
 
+            source_hash = hashlib.sha256(transcript_text.strip().encode("utf-8")).hexdigest()
+            await self.repo.update_run_status(
+                run_id,
+                status="preparing_transcript",
+                current_step="preparing_transcript",
+                source_hash=source_hash,
+            )
+
             standard = await self.repo.get_active_standard()
             examples = await self.repo.list_approved_examples(active_only=True)
 
@@ -360,7 +368,8 @@ You MUST output valid, parseable JSON conforming strictly to this format:
 
             # Check cancellation before AI call
             curr_run = await self.repo.get_run(run_id)
-            if curr_run and curr_run.get("status") == "cancelled":
+            if curr_run and curr_run.get("status") in ("cancelled", "cancel_requested"):
+                logger.info(f"[{run_id}] Run was cancelled before AI call; halting pipeline.")
                 return
 
             # -----------------------------------------------------------------
@@ -383,7 +392,7 @@ You MUST output valid, parseable JSON conforming strictly to this format:
                 # Create a graceful mock representation for testing/offline support
                 logger.warning(f"[{run_id}] Gemini gateway not configured; generating graceful offline report.")
                 clean_title = session.get("title") or "Sunday Worship Service"
-                minister_name = session.get("minister") or "Pastor (Dr) W.F. Kumuyi"
+                minister_name = session.get("minister") or "Minister not provided"
                 date_str = session.get("date_created", "")[:10]
                 parsed_data = {
                     "report_title": clean_title,
@@ -487,7 +496,8 @@ You MUST output valid, parseable JSON conforming strictly to this format:
 
             # Check cancellation after AI call
             curr_run = await self.repo.get_run(run_id)
-            if curr_run and curr_run.get("status") == "cancelled":
+            if curr_run and curr_run.get("status") in ("cancelled", "cancel_requested"):
+                logger.info(f"[{run_id}] Run was cancelled after AI call; discarding output.")
                 return
 
             # -----------------------------------------------------------------
@@ -502,9 +512,32 @@ You MUST output valid, parseable JSON conforming strictly to this format:
                 tokens_used=tokens_used,
             )
 
+            # Re-fetch session transcript and verify source hash hasn't changed (cross-db portable)
+            latest_session = await session_repo.get_session(session_id)
+            latest_transcript = (
+                latest_session.get("verified_text")
+                or latest_session.get("raw_text")
+                or ""
+            ) if latest_session else ""
+            if not latest_transcript.strip():
+                latest_segments = latest_session.get("segments", []) if latest_session else []
+                if latest_segments:
+                    latest_transcript = " ".join(s.get("text", "").strip() for s in latest_segments)
+
+            latest_source_hash = hashlib.sha256(latest_transcript.strip().encode("utf-8")).hexdigest()
+            if latest_source_hash != source_hash:
+                logger.warning(f"[{run_id}] Source transcript changed while generating report. Failing safely.")
+                await self.repo.update_run_status(
+                    run_id,
+                    status="failed",
+                    current_step="failed",
+                    error_message="The verified transcript changed while this report was being generated. Run Process with AI again to use the latest version.",
+                )
+                return
+
             report_title = parsed_data.get("report_title") or session.get("title") or "DLBC Information Unit Report"
             report_text = parsed_data.get("report_text") or ""
-            minister = parsed_data.get("minister") or session.get("minister") or "Pastor (Dr) W.F. Kumuyi"
+            minister = parsed_data.get("minister") or session.get("minister") or "Minister not provided"
             programme = session.get("metadata", {}).get("programme") or "Sunday Worship Service"
             service_date = parsed_data.get("service_date") or session.get("date_created", "")[:10]
 
@@ -519,6 +552,8 @@ You MUST output valid, parseable JSON conforming strictly to this format:
                 minister=minister,
                 programme=programme,
                 service_date=service_date,
+                approval_status="draft",
+                source_hash=source_hash,
             )
             final_report_id = final_report_record.get("id")
 

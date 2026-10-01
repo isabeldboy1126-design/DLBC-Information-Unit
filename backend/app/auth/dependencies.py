@@ -103,3 +103,16 @@ async def require_account(auth: AuthContext = Depends(get_auth_context)) -> Auth
             detail="Onboarding required before accessing church resources",
         )
     return auth
+
+
+async def get_optional_account(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    token_param: Optional[str] = Query(None, alias="token"),
+    x_dlbc_demo: Optional[str] = Header(None, alias="X-DLBC-Demo"),
+) -> Optional[AuthContext]:
+    """Resolves AuthContext if authorization is present, otherwise returns None without error."""
+    try:
+        return await get_auth_context(request, authorization, token_param, x_dlbc_demo)
+    except HTTPException:
+        return None

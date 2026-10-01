@@ -230,6 +230,9 @@ export function AuthProvider({ children }) {
       setAccount(null)
       setIsOnboarded(false)
       setAuthToken(null)
+      try {
+        sessionStorage.removeItem('dlbc_startup_animation_played')
+      } catch {}
     }
   }
 

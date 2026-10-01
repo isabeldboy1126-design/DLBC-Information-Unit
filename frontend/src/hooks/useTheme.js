@@ -10,6 +10,9 @@ export function getInitialTheme() {
       const docTheme = document.documentElement.getAttribute('data-theme')
       if (docTheme === 'dark' || docTheme === 'light') return docTheme
     }
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark'
+    }
     return 'light'
   } catch (e) {
     return 'light'
