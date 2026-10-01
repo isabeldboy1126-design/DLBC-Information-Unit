@@ -11,7 +11,7 @@ import { APP_VERSION } from '../utils/version';
  * - Responsive: Stacks neatly on narrow mobile screens
  */
 export function DownloadView({ onBackToApp }) {
-  const windowsDownloadUrl = 'https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC-Information-Unit-Setup-x64.exe';
+  const windowsDownloadUrl = `https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC%20Information%20Unit_${APP_VERSION}_x64-setup.exe`;
 
   const handleWindowsDownload = () => {
     window.location.href = windowsDownloadUrl;

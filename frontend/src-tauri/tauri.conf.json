@@ -28,6 +28,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
@@ -50,7 +51,7 @@
       "endpoints": [
         "https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/latest.json"
       ],
-      "pubkey": "RWRYscMsE10L6pxcTwK5Q8D1t9OQfh1+BXL8fY52XITleAr9wwxz9cD3"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEyRUQ5RTAxOEVEQUVBQzYKUldURzZ0cU9BWjd0RXZmZkc2U1JSaldiNGJPRkJRYUN1a0FRMjB2a1Y4U0dLYWdpN1pFRWdYYnIK"
     }
   }
 }

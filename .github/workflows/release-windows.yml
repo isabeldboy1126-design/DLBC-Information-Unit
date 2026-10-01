@@ -58,7 +58,7 @@ jobs:
             DLBC Information Unit Windows Desktop Application.
             
             ### Installation
-            Download and run `DLBC-Information-Unit_1.0.0_x64-setup.exe` to install the desktop client.
+            Download and run `DLBC Information Unit_1.0.0_x64-setup.exe` to install the desktop client.
             
             - Built with Tauri V2
             - Single-instance recording protection

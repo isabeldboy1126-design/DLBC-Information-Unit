@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Permissions for DLBC Information Unit desktop application","local":true,"windows":["main"],"permissions":["core:default","dialog:default","fs:default","opener:default","notification:default","updater:default","process:default"]}}
