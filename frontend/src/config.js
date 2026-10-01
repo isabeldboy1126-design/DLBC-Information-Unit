@@ -14,6 +14,12 @@ const resolveApiBaseUrl = () => {
     return envUrl.replace(/\/+$/, '')
   }
 
+  // In production builds or inside Tauri desktop app, always target the production Azure API
+  const isTauriEnv = typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__ || window.__TAURI__)
+  if (import.meta.env.PROD || isTauriEnv) {
+    return PRODUCTION_API_URL
+  }
+
   // Automatic production fallback for client-side environments not on localhost
   if (typeof window !== 'undefined' && window.location) {
     const hostname = (window.location.hostname || '').toLowerCase()

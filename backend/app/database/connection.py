@@ -174,7 +174,12 @@ class AsyncConnectionAdapter:
 
         statements = [s.strip() for s in script_to_run.split(";") if s.strip()]
         for stmt in statements:
-            await self.execute(stmt)
+            try:
+                await self.execute(stmt)
+            except Exception as e:
+                # Log benign DDL errors (such as object or index already existing) without failing entire script
+                print(f"[executescript notice] Statement failed: {stmt[:60]}... Reason: {e}")
+        await self.commit()
 
     async def commit(self):
         await self._conn.commit()

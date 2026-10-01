@@ -25,6 +25,8 @@ from app.database.models import (
     PHASE8_MIGRATION_COLUMNS_MSSQL,
     PHASE9_MIGRATION_COLUMNS,
     PHASE9_MIGRATION_COLUMNS_MSSQL,
+    PHASE9_APPROVAL_COLUMNS,
+    PHASE9_APPROVAL_COLUMNS_MSSQL,
     STAGE6_AI_VERIFICATION_COLUMNS,
     STAGE6_AI_VERIFICATION_COLUMNS_MSSQL,
     STAGE7_REPORT_PROCESSING_COLUMNS,
@@ -54,6 +56,7 @@ class SessionRepository:
                     + PHASE7_MIGRATION_COLUMNS_MSSQL
                     + PHASE8_MIGRATION_COLUMNS_MSSQL
                     + PHASE9_MIGRATION_COLUMNS_MSSQL
+                    + PHASE9_APPROVAL_COLUMNS_MSSQL
                     + STAGE6_AI_VERIFICATION_COLUMNS_MSSQL
                     + STAGE7_REPORT_PROCESSING_COLUMNS_MSSQL
                 ):
@@ -61,6 +64,7 @@ class SessionRepository:
                         await conn.execute(alter_sql)
                     except Exception:
                         pass
+                await conn.commit()
             else:
                 await conn.executescript(INIT_SCHEMA_SQL)
                 # Phase 5 migration: add verification columns (safe if already exist)
@@ -89,6 +93,12 @@ class SessionRepository:
                         pass  # Column already exists
                 # Phase 9 migration: add final report columns (safe if already exist)
                 for alter_sql in PHASE9_MIGRATION_COLUMNS:
+                    try:
+                        await conn.execute(alter_sql)
+                    except Exception:
+                        pass  # Column already exists
+                # Phase 9 approval migration: add approval and source hash columns
+                for alter_sql in PHASE9_APPROVAL_COLUMNS:
                     try:
                         await conn.execute(alter_sql)
                     except Exception:

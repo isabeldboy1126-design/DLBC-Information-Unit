@@ -26,7 +26,7 @@ export function useSessions() {
       setHasLoadedInitially(true)
       setError(null)
     } catch (err) {
-      console.error('Error fetching sessions:', err)
+      console.error(`[useSessions] Failed to fetch sessions (${API_BASE}):`, err.message || err)
       // Check if we already have loaded sessions in memory
       setSessions((currentSessions) => {
         if (currentSessions && currentSessions.length > 0) {

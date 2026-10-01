@@ -55,13 +55,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS configuration — allow local dev servers and Vercel production domains
+# CORS configuration — allow local dev servers, Tauri desktop, Capacitor, and Vercel domains
 cors_origins_env = os.getenv("CORS_ORIGINS", "")
 allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost",
+    "https://localhost",
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+    "tauri://localhost",
+    "capacitor://localhost",
 ]
 if cors_origins_env:
     for origin in cors_origins_env.split(","):
@@ -72,7 +78,7 @@ if cors_origins_env:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",  # Automatically supports all Vercel deployments and preview URLs
+    allow_origin_regex=r"(https://.*\.vercel\.app|^(https?|tauri)://.*localhost(:\d+)?$)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
