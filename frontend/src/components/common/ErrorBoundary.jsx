@@ -1,3 +1,4 @@
+import { Icon } from './Icon'
 import React from 'react'
 
 export class ErrorBoundary extends React.Component {
@@ -27,7 +28,7 @@ export class ErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
         <div className="card p-5 text-center my-4" style={{ maxWidth: '600px', margin: '40px auto' }}>
-          <div style={{ fontSize: '32px', marginBottom: '12px' }}>⚠️</div>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}><Icon name="alert" /></div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#0f172a', marginBottom: '8px' }}>
             Unable to display this view
           </h2>

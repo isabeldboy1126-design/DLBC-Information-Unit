@@ -34,7 +34,7 @@ export function TranscriptsHistoryList({ transcripts, activeTranscriptId, onSele
             >
               <div className="item-meta">
                 <span className="item-title">
-                  {t.is_video ? '🎬' : '🎵'} <strong>{t.original_filename}</strong>
+                  {t.is_video ? '' : ''} <strong>{t.original_filename}</strong>
                 </span>
                 <span className="item-details">
                   {formatSeconds(t.duration_seconds)} &middot; {t.segments_count} segments &middot;{' '}

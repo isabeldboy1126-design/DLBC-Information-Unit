@@ -11,7 +11,7 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 
-from app.database.connection import get_db_connection
+from app.database.connection import connection_scope, get_db_connection
 from app.database.models import (
     INIT_SCHEMA_SQL,
     PHASE5_MIGRATION_COLUMNS,
@@ -324,15 +324,17 @@ class EditingRepository:
         review_notes: Optional[List[str]] = None,
         source_uncertainties: Optional[List[str]] = None,
         model_name: Optional[str] = None,
+        *, connection=None,
     ) -> Dict[str, Any]:
         """
         Saves a new revision of the Edited Report.
         Preserves all earlier revisions by incrementing revision_number.
         """
-        await self.init_db()
+        if connection is None:
+            await self.init_db()
         now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-        async with get_db_connection() as conn:
+        async with connection_scope(connection) as conn:
             # 1. Calculate next revision number
             cursor = await conn.execute(
                 "SELECT MAX(revision_number) FROM edited_reports WHERE session_id = ?",
@@ -392,7 +394,17 @@ class EditingRepository:
                 (new_editing_status, standard_version, session_id),
             )
 
-            await conn.commit()
+            await conn.execute("UPDATE sessions SET accepted_proofread_revision_id=NULL, proofreading_completed_at=NULL, proofreading_status='not_started' WHERE session_id=?", (session_id,))
+            from app.database.review_integrity import invalidate_approval
+            await invalidate_approval(conn, session_id)
+            if connection is None:
+                await conn.commit()
+            else:
+                cursor = await conn.execute("""SELECT revision_id, session_id, transcript_id, reporter_a_id,
+                    reporter_b_id, standard_version, standard_version_label, revision_number, revision_source,
+                    report_title, report_text, review_notes_json, source_uncertainties_json, model_name,
+                    is_active, created_at, updated_at FROM edited_reports WHERE revision_id=?""", (revision_id,))
+                return self._row_to_revision(await cursor.fetchone())
 
         return await self.get_revision_by_id(revision_id)
 
@@ -486,6 +498,9 @@ class EditingRepository:
 
             await conn.execute("UPDATE edited_reports SET is_active = 0 WHERE session_id = ?", (session_id,))
             await conn.execute("UPDATE edited_reports SET is_active = 1 WHERE revision_id = ?", (revision_id,))
+            await conn.execute("UPDATE sessions SET accepted_proofread_revision_id=NULL, proofreading_completed_at=NULL, proofreading_status='not_started' WHERE session_id=?", (session_id,))
+            from app.database.review_integrity import invalidate_approval
+            await invalidate_approval(conn, session_id)
             await conn.commit()
 
         return await self.get_revision_by_id(revision_id)

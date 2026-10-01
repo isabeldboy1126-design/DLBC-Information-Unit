@@ -18,6 +18,7 @@ It makes ZERO external AI / Gemini calls.
 from __future__ import annotations
 
 import difflib
+import os
 import json
 import re
 import sqlite3
@@ -135,7 +136,7 @@ class BibleContextService:
     """
 
     def __init__(self, db_path: Optional[Path] = None):
-        self.db_path = db_path or DEFAULT_DB_PATH
+        self.db_path = Path(db_path or os.getenv("KJV_CONTEXT_DB_PATH") or DEFAULT_DB_PATH)
         self._aliases: Dict[str, str] = {}
         self._kjv_vocab: Dict[str, str] = {}
         self._church_vocab: List[Dict[str, Any]] = []
@@ -205,6 +206,30 @@ class BibleContextService:
     def is_ready(self) -> bool:
         """Returns True if the database and in-memory caches are loaded."""
         return self._initialized and self.db_path.exists()
+
+    def readiness(self) -> Dict[str, Any]:
+        result = {"available": self.is_ready(), "complete": False,
+                  "verse_corpus_complete": False, "proper_names_complete": False,
+                  "missing_sources": [], "book_count": 0, "verse_count": 0}
+        if not self.is_ready():
+            result["missing_sources"] = ["KJV context database; run scripts/build_kjv_database.py"]
+            return result
+        try:
+            with self._get_connection() as conn:
+                result["verse_count"] = conn.execute("SELECT COUNT(*) FROM bible_verses").fetchone()[0]
+                result["book_count"] = conn.execute("SELECT COUNT(DISTINCT book) FROM bible_verses").fetchone()[0]
+                try:
+                    metadata = {row["key"]: json.loads(row["value"]) for row in conn.execute("SELECT * FROM build_metadata")}
+                except sqlite3.OperationalError:
+                    metadata = {}
+                result["verse_corpus_complete"] = result["verse_count"] == 31102 and result["book_count"] == 66
+                result["proper_names_complete"] = metadata.get("proper_names_complete", False)
+                result["missing_sources"] = metadata.get("missing_sources", ["Verified proper-name source provenance"])
+                result["complete"] = result["verse_corpus_complete"] and result["proper_names_complete"]
+        except sqlite3.Error:
+            result["available"] = False
+            result["missing_sources"] = ["Valid KJV context database"]
+        return result
 
     # -------------------------------------------------------------------------
     # 1. Reference Parsing & Validation

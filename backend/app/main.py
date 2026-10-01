@@ -119,3 +119,26 @@ async def health_check():
         "version": "0.1.0",
         "environment": os.getenv("APP_ENV", "development"),
     }
+
+
+@app.get("/api/readiness")
+async def readiness_check():
+    """Local readiness only: credentials configured is not a live provider probe."""
+    from app.database.connection import get_db_connection
+    from app.services.bible_context_service import bible_context_service
+    from app.services.gemini_gateway import gemini_gateway
+    try:
+        async with get_db_connection() as conn:
+            await conn.execute("SELECT session_id FROM sessions WHERE 1=0")
+        database_available = True
+    except Exception:
+        database_available = False
+    context = bible_context_service.readiness()
+    configured = gemini_gateway.is_configured()
+    return {
+        "backend_available": True, "database_available": database_available,
+        "ai_provider": {"configured": configured, "live_verified": False,
+                        "model": os.getenv("GEMINI_REPORTING_MODEL", "gemini-3.8-flash")},
+        "kjv_context": context,
+        "ready": database_available and configured and context["complete"],
+    }

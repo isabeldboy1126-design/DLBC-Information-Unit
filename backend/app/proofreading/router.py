@@ -1,3 +1,4 @@
+from app.auth.dependencies import require_session_access
 """
 Proofreading API Router (Phase 8)
 
@@ -14,13 +15,13 @@ import time
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from app.database.proofreading_repo import proofreading_repo
 from app.database.editing_repo import editing_repo
 from app.database.session_repo import session_repo
 from app.services.proofreading_provider import gemini_proofreading_provider
 
-router = APIRouter(prefix="/api/proofreading", tags=["AI Proofreading (Phase 8)"])
+router = APIRouter(dependencies=[Depends(require_session_access)], prefix="/api/proofreading", tags=["AI Proofreading (Phase 8)"])
 
 
 class ProofreadingStandardCreateRequest(BaseModel):
@@ -284,7 +285,10 @@ async def accept_proofread_report(session_id: str, payload: Optional[AcceptProof
             )
         rev_id = active_rev["revision_id"]
 
-    accepted = await proofreading_repo.accept_revision(session_id, rev_id)
+    try:
+        accepted = await proofreading_repo.accept_revision(session_id, rev_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not accepted:
         raise HTTPException(status_code=404, detail=f"Revision {rev_id} could not be accepted.")
 

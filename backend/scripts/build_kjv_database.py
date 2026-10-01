@@ -13,6 +13,8 @@ All data is indexed locally in SQLite for token-free, sub-millisecond lookups.
 
 from __future__ import annotations
 
+import argparse
+import hashlib
 import csv
 import io
 import json
@@ -21,7 +23,6 @@ import re
 import sqlite3
 import sys
 import time
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -37,6 +38,8 @@ METADATA_PATH = DATA_DIR / "source_metadata.json"
 KJV_SOURCE_URL = "https://cdn.jsdelivr.net/npm/kjv@1.0.0/json/verses-1769.json"
 BIBLENLP_NAMES_URL = "https://raw.githubusercontent.com/BibleNLP/biblical-names-data/main/names.tsv"
 EXPECTED_VERSES = 31102
+# Recorded complete name index in the checked-in source_metadata.json.
+EXPECTED_NAMES = 2808
 
 BOOK_ORDER = [
     "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth",
@@ -160,14 +163,20 @@ def clean_verse_text(text: str) -> str:
     return " ".join(text.split())
 
 
-def fetch_url(url: str, timeout: int = 60) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "DLBC-KJV-Context-Builder/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read()
-
-
-def build_database():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+def build_database(output_path=None, corpus_path=None, source_files_dir=None, names_path=None):
+    """Offline by default; never overwrites source assets or an existing output."""
+    global DB_PATH, FULL_JSON_PATH, SOURCE_FILES_DIR, METADATA_PATH
+    DB_PATH = Path(output_path or DB_PATH).resolve()
+    FULL_JSON_PATH = Path(corpus_path or FULL_JSON_PATH).resolve()
+    SOURCE_FILES_DIR = Path(source_files_dir or SOURCE_FILES_DIR).resolve()
+    METADATA_PATH = DB_PATH.with_suffix(".metadata.json")
+    if DB_PATH.exists() or METADATA_PATH.exists():
+        raise FileExistsError("Output already exists; select a new output path. No files overwritten.")
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # Required local seeds must be available, never silently omitted.
+    for required in (FULL_JSON_PATH, SOURCE_FILES_DIR / "kjv_speech_lexicon.txt", SOURCE_FILES_DIR / "dlbc_vocabulary_seed.json"):
+        if not required.is_file():
+            raise FileNotFoundError(f"Missing local source: {required}")
     start_time = time.perf_counter()
     print("=" * 60)
     print("DLBC KJV Context Database Builder")
@@ -176,8 +185,15 @@ def build_database():
     # -------------------------------------------------------------------------
     # 1. Fetch & Validate KJV 1769 Verses
     # -------------------------------------------------------------------------
-    print(f"Fetching KJV 1769 corpus from {KJV_SOURCE_URL}...")
-    kjv_data = json.loads(fetch_url(KJV_SOURCE_URL).decode("utf-8"))
+    print(f"Reading local KJV corpus: {FULL_JSON_PATH}")
+    source_bytes = FULL_JSON_PATH.read_bytes()
+    local_corpus = json.loads(source_bytes.decode("utf-8-sig"))
+    if all(isinstance(v, dict) for v in local_corpus.values()):
+        kjv_data = {f"{book} {chapter}:{verse}": text
+                    for book, chapters in local_corpus.items()
+                    for chapter, verses in chapters.items() for verse, text in verses.items()}
+    else:
+        kjv_data = local_corpus
     ref_re = re.compile(r"^(?P<book>.+?)\s+(?P<chapter>\d+):(?P<verse>\d+)$")
 
     parsed_verses = []
@@ -213,19 +229,20 @@ def build_database():
         missing = set(BOOK_ORDER) - seen_books
         raise RuntimeError(f"Integrity failure: missing Protestant canon books: {missing}")
 
-    # Write kjv_full.json
-    structured = {b: {} for b in BOOK_ORDER}
-    for _, book, _, chapter, verse, _, text, _ in parsed_verses:
-        structured[book].setdefault(str(chapter), {})[str(verse)] = text
-    FULL_JSON_PATH.write_text(json.dumps(structured, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Wrote structured JSON: {FULL_JSON_PATH} ({FULL_JSON_PATH.stat().st_size:,} bytes)")
-
-    # -------------------------------------------------------------------------
-    # 2. Fetch Biblical Proper Names (BibleNLP + Canonical Supplement)
-    # -------------------------------------------------------------------------
-    print(f"Fetching biblical proper names from {BIBLENLP_NAMES_URL}...")
-    names_tsv_bytes = fetch_url(BIBLENLP_NAMES_URL)
-    reader = csv.DictReader(io.StringIO(names_tsv_bytes.decode("utf-8")), delimiter="\t")
+    # Local structured corpus is immutable; do not rewrite it.
+    names_source = Path(names_path).resolve() if names_path else SOURCE_FILES_DIR / "names.tsv"
+    names_source_available = names_source.is_file()
+    names_complete = names_source_available
+    if names_path and not names_complete:
+        raise FileNotFoundError(f"Requested proper-name source is missing: {names_source}")
+    if names_complete:
+        names_tsv_bytes = names_source.read_bytes()
+        reader = list(csv.DictReader(io.StringIO(names_tsv_bytes.decode("utf-8-sig")), delimiter="\t"))
+        if not reader or not {"macula_eng", "ref"}.issubset(reader[0]):
+            raise ValueError("names.tsv requires populated macula_eng and ref columns")
+    else:
+        print("PARTIAL NAMES: names.tsv absent; using documented canonical supplement only.")
+        reader = []
 
     names_dict: dict[str, dict[str, Any]] = {}
 
@@ -390,8 +407,6 @@ def build_database():
     # -------------------------------------------------------------------------
     # 5. Populate SQLite Database
     # -------------------------------------------------------------------------
-    if DB_PATH.exists():
-        DB_PATH.unlink()
 
     print(f"Creating SQLite database at {DB_PATH}...")
     conn = sqlite3.connect(DB_PATH)
@@ -559,6 +574,8 @@ def build_database():
 
     cur.execute("SELECT COUNT(*) FROM bible_names")
     names_count = cur.fetchone()[0]
+    # A populated but reduced TSV must not masquerade as the comprehensive asset.
+    names_complete = names_complete and names_count == EXPECTED_NAMES
 
     cur.execute("SELECT COUNT(DISTINCT category) FROM bible_names")
     cat_count = cur.fetchone()[0]
@@ -578,15 +595,29 @@ def build_database():
             raise RuntimeError(f"Missing essential verse: {tr}")
         print(f"  Verified {tr}: {row[0][:40]}...")
 
+    metadata_record = {
+        "verse_corpus_complete": verse_count == EXPECTED_VERSES and book_count == 66,
+        "proper_names_complete": names_complete,
+        "missing_sources": [] if names_complete else ["Complete BibleNLP names.tsv (macula_eng, ref); expected 2,808 supplemented entries"],
+        "corpus_sha256": hashlib.sha256(source_bytes).hexdigest(),
+        "names_sha256": hashlib.sha256(names_tsv_bytes).hexdigest() if names_source_available else None,
+        "book_count": book_count, "verse_count": verse_count, "proper_names_count": names_count,
+    }
+    cur.execute("CREATE TABLE build_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    cur.executemany("INSERT INTO build_metadata VALUES (?, ?)",
+                    [(key, json.dumps(value)) for key, value in metadata_record.items()])
+    conn.commit()
     conn.close()
 
     # -------------------------------------------------------------------------
     # 7. Write Source Metadata
     # -------------------------------------------------------------------------
     elapsed = time.perf_counter() - start_time
-    categories = [row[0] for row in sqlite3.connect(DB_PATH).execute("SELECT DISTINCT category FROM bible_names ORDER BY category").fetchall()]
+    with sqlite3.connect(DB_PATH) as metadata_conn:
+        categories = [row[0] for row in metadata_conn.execute("SELECT DISTINCT category FROM bible_names ORDER BY category").fetchall()]
 
     metadata = {
+        **metadata_record,
         "title": "DLBC KJV Context & Biblical Knowledge Base",
         "built_at": datetime.now(timezone.utc).isoformat(),
         "build_duration_seconds": round(elapsed, 2),
@@ -606,10 +637,10 @@ def build_database():
                 "notes": "1769 Authorized Version with cleaned paragraph/supplied markers"
             },
             "biblical_proper_names": {
-                "source": "BibleNLP biblical-names-data (names.tsv) + Canonical Entities Supplement",
+                "source": "Local names.tsv + Canonical Entities Supplement" if names_source_available else "Canonical Entities Supplement only",
                 "url": BIBLENLP_NAMES_URL,
                 "license": "Open Data / MIT",
-                "notes": "Aligned proper names aligned with verse references"
+                "notes": "Name coverage differs from the recorded complete index" if not names_complete else "Local name source matches recorded count; hash recorded for provenance"
             },
             "kjv_speech_lexicon": {
                 "source": "DLBC KJV Verification Pack v3 (kjv_speech_lexicon.txt)",
@@ -640,5 +671,11 @@ def build_database():
 
 
 if __name__ == "__main__":
-    build_database()
+    parser = argparse.ArgumentParser(description="Build local KJV context offline, preserving source assets.")
+    parser.add_argument("--output", type=Path, default=DB_PATH)
+    parser.add_argument("--corpus", type=Path, default=FULL_JSON_PATH)
+    parser.add_argument("--source-files", type=Path, default=SOURCE_FILES_DIR)
+    parser.add_argument("--names", type=Path, help="Local BibleNLP names.tsv; absence produces honestly partial names readiness")
+    args = parser.parse_args()
+    build_database(args.output, args.corpus, args.source_files, args.names)
 

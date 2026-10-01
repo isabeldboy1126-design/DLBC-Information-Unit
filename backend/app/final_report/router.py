@@ -1,3 +1,4 @@
+from app.auth.dependencies import require_session_access
 """
 Final Report & Downloadable Document API Router (Phase 9)
 
@@ -13,20 +14,24 @@ from typing import Any, Dict, List, Optional
 import urllib.parse
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
 
 from app.database.session_repo import session_repo
 from app.database.proofreading_repo import proofreading_repo
-from app.database.final_report_repo import final_report_repo
+from app.database.final_report_repo import final_report_repo, FinalizationInputError, ReviewConflict
 from app.services.document_service import document_service
 
-router = APIRouter(prefix="/api/final-report", tags=["Final Report & Document Export (Phase 9)"])
+router = APIRouter(dependencies=[Depends(require_session_access)], prefix="/api/final-report", tags=["Final Report & Document Export (Phase 9)"])
 
 
 class FinalizeReportRequest(BaseModel):
     proofread_revision_id: Optional[str] = Field(default=None, description="Optional specific proofread revision to finalize. Defaults to active revision.")
     report_title: Optional[str] = Field(default=None, description="Optional custom final title override.")
+
+
+class ApproveReportRequest(BaseModel):
+    revision_id: str = Field(min_length=1, description="Exact saved active revision reviewed by the human.")
 
 
 class SaveFinalReportRevisionRequest(BaseModel):
@@ -61,7 +66,11 @@ async def get_session_final_report(session_id: str):
         "session_id": session_id,
         "final_report_status": session.get("final_report_status", "not_started"),
         "final_report_completed_at": session.get("final_report_completed_at"),
-        "can_finalize": has_proofread,
+        "can_finalize": bool(has_proofread and active_proofread.get("is_accepted") and
+                             session.get("accepted_proofread_revision_id") == active_proofread.get("revision_id")),
+        "review_status": active_final.get("review_status") if active_final else "not_started",
+        "can_approve": bool(active_final and active_final.get("can_approve")),
+        "can_export": bool(active_final and active_final.get("can_export")),
         "active_final_report": active_final,
         "revisions_count": len(revisions),
         "revisions": revisions,
@@ -73,61 +82,29 @@ async def get_session_final_report(session_id: str):
 @router.post("/sessions/{session_id}/finalize")
 async def finalize_session_report(session_id: str, payload: Optional[FinalizeReportRequest] = None):
     """
-    Derives and saves the Final Report from the human-approved Proofread Report.
-    Generates DOCX metadata and marks session as workflow complete.
+    Approves the current accepted proofread source as one atomic replacement.
+    A source conflict preserves the prior active final and session pointer.
     """
     session = await session_repo.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found.")
 
-    # 1. Retrieve the source Proofread Report
-    rev_id = payload.proofread_revision_id if (payload and payload.proofread_revision_id) else None
-    if rev_id:
-        source_proofread = await proofreading_repo.get_revision_by_id(rev_id)
-    else:
-        source_proofread = await proofreading_repo.get_active_proofread_report(session_id)
-
-    if not source_proofread or not source_proofread.get("proofread_text", "").strip():
-        raise HTTPException(
-            status_code=400,
-            detail="An approved Proofread Report is required before the Final Report can be generated.",
+    try:
+        final_report = await final_report_repo.finalize_accepted_proofread(
+            session_id,
+            proofread_revision_id=payload.proofread_revision_id if payload else None,
+            report_title=payload.report_title if payload else None,
         )
-
-    # 2. Extract metadata
-    speaker = session.get("metadata", {}).get("speaker") or session.get("speaker") or "Pastor W.F. Kumuyi"
-    programme = session.get("metadata", {}).get("programme") or session.get("programme") or "Deeper Life Bible Church Service"
-    date_str = session.get("date_created") or session.get("created_at")
-
-    final_title = (payload.report_title if (payload and payload.report_title) else None) or source_proofread.get("proofread_title") or session.get("title", "Message Report")
-    final_text = source_proofread["proofread_text"]
-
-    # 3. Calculate DOCX filename and byte size
-    filename = document_service.generate_filename(final_title, programme, date_str)
-    docx_stream = document_service.generate_final_report_docx(
-        report_title=final_title,
-        report_text=final_text,
-        session_metadata=session,
-    )
-    docx_bytes = docx_stream.getvalue()
-    file_size = len(docx_bytes)
-
-    # 4. Save Final Report record in repository
-    final_report = await final_report_repo.finalize_report(
-        session_id=session_id,
-        proofread_report_revision_id=source_proofread.get("revision_id"),
-        report_title=final_title,
-        report_text=final_text,
-        minister=speaker,
-        programme=programme,
-        service_date=date_str,
-        docx_filename=filename,
-        docx_file_size=file_size,
-    )
-
+    except FinalizationInputError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ReviewConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    filename = document_service.generate_filename(final_report['report_title'],
+        final_report['programme'], final_report['service_date'])
     return {
-        "status": "complete",
+        "status": "approved",
         "session_id": session_id,
-        "final_report_status": "complete",
+        "final_report_status": "approved",
         "final_report": final_report,
         "download_filename": filename,
     }
@@ -147,7 +124,7 @@ async def save_final_report_revision(session_id: str, payload: SaveFinalReportRe
 
     active_final = await final_report_repo.get_active_final_report(session_id)
     title = payload.report_title or (active_final.get("report_title") if active_final else session.get("title", "Message Report"))
-    speaker = session.get("metadata", {}).get("speaker") or session.get("speaker") or "Pastor W.F. Kumuyi"
+    speaker = session.get("metadata", {}).get("speaker") or session.get("speaker") or session.get("metadata", {}).get("minister") or ""
     programme = session.get("metadata", {}).get("programme") or session.get("programme") or "Deeper Life Bible Church Service"
     date_str = session.get("date_created") or session.get("created_at")
 
@@ -195,8 +172,11 @@ async def download_final_report_docx(session_id: str):
             detail="No finalized report found for this session. Please finalize the report first.",
         )
 
-    programme = session.get("metadata", {}).get("programme") or session.get("programme")
-    date_str = session.get("date_created") or session.get("created_at")
+    if not active_final.get("can_export"):
+        raise HTTPException(status_code=409, detail="Review and approve the current saved revision before export.")
+
+    programme = active_final.get("programme")
+    date_str = active_final.get("service_date")
     raw_filename = active_final.get("docx_filename") or document_service.generate_filename(active_final["report_title"], programme, date_str)
     filename = document_service.sanitize_filename(raw_filename.replace('.docx', '')) + '.docx'
 
@@ -204,7 +184,7 @@ async def download_final_report_docx(session_id: str):
     docx_stream = document_service.generate_final_report_docx(
         report_title=active_final["report_title"],
         report_text=active_final["report_text"],
-        session_metadata=session,
+        session_metadata={"minister": active_final.get("minister"), "programme": programme, "date_created": date_str},
     )
 
     encoded_filename = urllib.parse.quote(filename)
@@ -227,3 +207,19 @@ async def activate_final_report_revision(session_id: str, revision_id: str):
     if not activated:
         raise HTTPException(status_code=404, detail=f"Final report revision {revision_id} not found.")
     return {"status": "activated", "active_final_report": activated}
+
+
+@router.post("/sessions/{session_id}/approve")
+async def approve_session_report(session_id: str, payload: ApproveReportRequest):
+    session = await session_repo.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    active = await final_report_repo.get_active_final_report(session_id)
+    if not active:
+        raise HTTPException(status_code=404, detail="No saved draft exists")
+    try:
+        approved = await final_report_repo.approve_report(session_id, payload.revision_id)
+    except ReviewConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"status": "approved", "session_id": session_id,
+            "final_report_status": "approved", "final_report": approved}

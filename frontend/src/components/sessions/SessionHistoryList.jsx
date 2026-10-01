@@ -1,44 +1,18 @@
+import { sessionWorkflow, isApproved, hasReviewableReport } from './sessionWorkflow'
+import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useRef } from 'react'
-import { getApiUrl } from '../../config'
-import { getSessionHierarchy, deriveSessionDisplayStatus } from './SessionDetailView'
+import { getApiUrl, authFetch } from '../../config'
+import { getSessionHierarchy } from './SessionDetailView'
 import { ConfirmationModal } from '../common/ConfirmationModal'
+import { SessionListStatus } from './SessionListStatus'
 
-function ClockIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  )
-}
+function ClockIcon() { return <Icon name="clock" /> }
 
-function FilterIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-    </svg>
-  )
-}
+function FilterIcon() { return <Icon name="filter" /> }
 
-function SearchIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  )
-}
+function SearchIcon() { return <Icon name="search" /> }
 
-function TrashIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      <line x1="10" y1="11" x2="10" y2="17" />
-      <line x1="14" y1="11" x2="14" y2="17" />
-    </svg>
-  )
-}
+function TrashIcon() { return <Icon name="archive" /> }
 
 /**
  * SessionHistoryList — High-end productivity workspace matching the linear/vercel design standard.
@@ -47,13 +21,17 @@ export function SessionHistoryList({
   sessions = [],
   onOpenSession,
   onDeleteSession,
+  onRestoreSession,
   onRefresh,
   onStartNewSession,
   isLoading,
-  error,
-  onRetry,
+  sessionsLoaded,
+  sessionsError,
   initialStatusFilter = 'all',
 }) {
+  const [showArchived, setShowArchived] = useState(false)
+  const [archiveError, setArchiveError] = useState(null)
+  const [restoreBusy, setRestoreBusy] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [isFilterOpen, setIsFilterOpen] = useState(() => {
     try {
@@ -85,7 +63,7 @@ export function SessionHistoryList({
     let isMounted = true
     async function fetchProgrammes() {
       try {
-        const res = await fetch(getApiUrl('/api/programmes?include_archived=false'))
+        const res = await authFetch(getApiUrl('/api/programmes?include_archived=false'))
         if (res.ok && isMounted) {
           const data = await res.json()
           setConfiguredProgrammes(data)
@@ -205,6 +183,7 @@ export function SessionHistoryList({
 
   // Filter sessions
   const filteredSessions = sortedSessions.filter((s) => {
+    if (!!s.is_archived !== showArchived) return false
     const query = searchTerm.toLowerCase().trim()
     const matchesSearch =
       !query ||
@@ -233,17 +212,28 @@ export function SessionHistoryList({
     }
 
     // Stage detection
-    const { statusKey } = deriveSessionDisplayStatus(s)
+    const isInterrupted = !!s.is_interrupted
+    const isLive = s.status === 'recording'
+    const isFinalComplete = isApproved(s)
+    const isProofreadComplete = s.proofreading_status === 'complete'
+    const isProofreadingReview = s.proofreading_status === 'ready_for_review' || s.proofreading_status === 'generating'
+    const isEditingComplete = s.editing_status === 'complete'
+    const isEditingDraft = s.editing_status === 'draft_ready' || s.editing_status === 'in_review' || s.editing_status === 'generating'
+    const isReportsReady = s.reporting_status === 'reports_ready'
+    const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
+    const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress') && !isReportsReady && !isEditingComplete && !isEditingDraft && !isProofreadComplete && !isProofreadingReview && !isFinalComplete
 
     // Status Filter
     let matchesStatus = true
     if (statusFilter !== 'all') {
-      if (statusFilter === 'interrupted') matchesStatus = statusKey === 'interrupted'
-      else if (statusFilter === 'needs_verification') matchesStatus = statusKey === 'needs_verification'
-      else if (statusFilter === 'verified') matchesStatus = statusKey === 'verified'
-      else if (statusFilter === 'editing') matchesStatus = statusKey === 'in_progress'
-      else if (statusFilter === 'completed') matchesStatus = statusKey === 'completed'
-      else if (statusFilter === 'live') matchesStatus = statusKey === 'live'
+      if (statusFilter === 'attention') matchesStatus = sessionWorkflow(s).attention
+      else if (statusFilter === 'interrupted') matchesStatus = isInterrupted
+      else if (statusFilter === 'needs_verification') matchesStatus = needsVerification
+      else if (statusFilter === 'verified') matchesStatus = isVerified && !isReportsReady && !isEditingComplete && !isProofreadComplete && !isFinalComplete
+      else if (statusFilter === 'editing') matchesStatus = isEditingComplete || isEditingDraft || isReportsReady
+      else if (statusFilter === 'needs_review') matchesStatus = hasReviewableReport(s) && !isApproved(s)
+      else if (statusFilter === 'completed') matchesStatus = isFinalComplete
+      else if (statusFilter === 'live') matchesStatus = isLive
     }
 
     // Date Filter
@@ -260,7 +250,7 @@ export function SessionHistoryList({
     return matchesSearch && matchesProg && matchesSess && matchesStatus && matchesDate
   })
 
-  const activeSessionsCount = sessions.filter((s) => s.final_report_status !== 'complete').length
+  const activeSessionsCount = sessions.filter((s) => !isApproved(s) && !s.is_archived).length
 
   return (
     <div className="sessions-history-page-container">
@@ -271,7 +261,7 @@ export function SessionHistoryList({
         <div>
           <h1 className="sessions-history-title">Sessions History</h1>
           <p className="sessions-history-subtitle">
-            Active sessions: {activeSessionsCount}
+            Active sessions: {sessionsLoaded ? activeSessionsCount : 'Unknown'}
           </p>
         </div>
 
@@ -284,7 +274,7 @@ export function SessionHistoryList({
               disabled={isLoading}
               title="Refresh session list from database"
             >
-              ↻ Refresh
+              {isLoading ? 'Loading…' : sessionsError ? 'Retry' : '↻ Refresh'}
             </button>
           )}
 
@@ -301,6 +291,8 @@ export function SessionHistoryList({
         </div>
       </div>
 
+      <div className="archive-switch" aria-label="Session collection"><button type="button" aria-pressed={!showArchived} onClick={() => setShowArchived(false)}>Active sessions</button><button type="button" aria-pressed={showArchived} onClick={() => setShowArchived(true)}>Archived sessions</button></div>
+      {archiveError && <div className="error-banner" role="alert">{archiveError}</div>}
       {/* ------------------------------------------------------------- */}
       {/* 2. FILTER & SEARCH TOOLBAR WITH ELEGANT POPOVER               */}
       {/* ------------------------------------------------------------- */}
@@ -436,7 +428,9 @@ export function SessionHistoryList({
                     <option value="needs_verification">Needs Verification</option>
                     <option value="verified">Verified</option>
                     <option value="editing">In Editing</option>
-                    <option value="completed">Completed</option>
+                    <option value="attention">Needs attention</option>
+                    <option value="needs_review">Needs review</option>
+                    <option value="completed">Approved</option>
                     <option value="interrupted">Interrupted</option>
                     <option value="live">Live</option>
                   </select>
@@ -468,29 +462,8 @@ export function SessionHistoryList({
       {/* ------------------------------------------------------------- */}
       {/* 3. 3-COLUMN RESTRAINED SESSION CARDS GRID                     */}
       {/* ------------------------------------------------------------- */}
-      {isLoading && (!sessions || sessions.length === 0) ? (
-        <div className="sessions-state-box">
-          <div className="sessions-state-spinner" aria-hidden="true" />
-          <p className="sessions-state-text">Loading recorded sessions...</p>
-        </div>
-      ) : error && (!sessions || sessions.length === 0) ? (
-        <div className="sessions-state-box sessions-state-box--error" role="alert">
-          <div className="sessions-state-icon">⚠️</div>
-          <h3 className="sessions-state-title">Unable to Load Sessions</h3>
-          <p className="sessions-state-text">
-            {error || 'We could not connect to the server to load your recorded sessions.'}
-          </p>
-          {onRetry && (
-            <button
-              type="button"
-              className="btn btn--outline btn--small btn-retry-load"
-              onClick={onRetry}
-            >
-              Retry
-            </button>
-          )}
-        </div>
-      ) : filteredSessions.length === 0 ? (
+      <SessionListStatus isLoading={isLoading} hasLoaded={sessionsLoaded} error={sessionsError} />
+      {!sessionsLoaded ? null : filteredSessions.length === 0 ? (
         <div className="sessions-empty-card">
           <h3>No Sessions Found</h3>
           <p>
@@ -512,34 +485,90 @@ export function SessionHistoryList({
       ) : (
         <div className="sessions-cards-grid">
           {filteredSessions.map((s) => {
-            const { sessionName } = getSessionDisplayNames(s)
-            const {
-              statusLabel,
-              cardPillClass,
-              actionText,
-              targetStage,
-            } = deriveSessionDisplayStatus(s)
+            const { programmeName, sessionName } = getSessionDisplayNames(s)
+
+            const isInterrupted = !!s.is_interrupted
+            const isLive = s.status === 'recording'
+            const isFinalComplete = isApproved(s)
+            const isProofreadComplete = s.proofreading_status === 'complete'
+            const isProofreadingReview = s.proofreading_status === 'ready_for_review' || s.proofreading_status === 'generating'
+            const isEditingComplete = s.editing_status === 'complete'
+            const isEditingDraft = s.editing_status === 'draft_ready' || s.editing_status === 'in_review' || s.editing_status === 'generating'
+            const isReportsReady = s.reporting_status === 'reports_ready'
+            const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
+            const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress') && !isReportsReady && !isEditingComplete && !isEditingDraft && !isProofreadComplete && !isProofreadingReview && !isFinalComplete
+
+            // Status label, pill color scheme, and target workflow stage
+            let statusLabel = 'In Progress'
+            let statusPillClass = 'session-card-pill--neutral'
+            let actionText = 'View →'
+            let targetWorkflowStage = 'overview'
+
+            if (isInterrupted) {
+              statusLabel = 'Interrupted'
+              statusPillClass = 'session-card-pill--danger'
+              actionText = 'Review Log →'
+              targetWorkflowStage = 'overview'
+            } else if (isLive) {
+              statusLabel = 'Live'
+              statusPillClass = 'session-card-pill--brand'
+              actionText = 'Open Monitor →'
+              targetWorkflowStage = 'overview'
+            } else if (isFinalComplete) {
+              statusLabel = 'Completed'
+              statusPillClass = 'session-card-pill--neutral'
+              actionText = 'Download Document →'
+              targetWorkflowStage = 'final_report'
+            } else if (isProofreadComplete) {
+              statusLabel = 'Proofread'
+              statusPillClass = 'session-card-pill--neutral'
+              actionText = 'Final Report →'
+              targetWorkflowStage = 'final_report'
+            } else if (isProofreadingReview) {
+              statusLabel = 'Proofreading'
+              statusPillClass = 'session-card-pill--neutral'
+              actionText = 'Continue →'
+              targetWorkflowStage = 'proofreading'
+            } else if (isEditingComplete) {
+              statusLabel = 'Editing Done'
+              statusPillClass = 'session-card-pill--neutral'
+              actionText = 'Proofreading →'
+              targetWorkflowStage = 'proofreading'
+            } else if (isEditingDraft) {
+              statusLabel = 'Editing'
+              statusPillClass = 'session-card-pill--neutral'
+              actionText = 'Continue →'
+              targetWorkflowStage = 'editing'
+            } else if (isReportsReady) {
+              statusLabel = 'Reports Ready'
+              statusPillClass = 'session-card-pill--neutral'
+              actionText = 'Process with AI →'
+              targetWorkflowStage = 'report_processing'
+            } else if (isVerified) {
+              statusLabel = 'Verified'
+              statusPillClass = 'session-card-pill--neutral'
+              actionText = 'Process with AI →'
+              targetWorkflowStage = 'report_processing'
+            } else if (needsVerification) {
+              statusLabel = `${s.flag_count || 1} to verify`
+              statusPillClass = 'session-card-pill--warning'
+              actionText = 'Review →'
+              targetWorkflowStage = 'verification'
+            }
 
             const formattedDate = formatCardDate(s.date_created)
             const humanDuration = formatHumanDuration(s.duration_seconds || s.audio_duration_seconds)
 
+            if (hasReviewableReport(s)) { const workflow = sessionWorkflow(s); statusLabel = workflow.label; actionText = workflow.action; targetWorkflowStage = workflow.stage }
             return (
               <div
                 key={s.session_id}
                 className="refined-session-card"
                 onClick={() => onOpenSession && onOpenSession(s.session_id, 'overview')}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    if (onOpenSession) onOpenSession(s.session_id, 'overview')
-                  }
-                }}
               >
                 {/* Top Row: Status Pill */}
                 <div className="session-card-top-row">
-                  <span className={`session-card-pill ${cardPillClass}`}>
+                  <span className={`session-card-pill ${statusPillClass}`}>
                     <span className="pill-dot">●</span>
                     <span className="pill-label">{statusLabel}</span>
                   </span>
@@ -568,13 +597,14 @@ export function SessionHistoryList({
                     className="session-card-action-btn"
                     onClick={(e) => {
                       e.stopPropagation()
-                      if (onOpenSession) onOpenSession(s.session_id, targetStage)
+                      if (onOpenSession) onOpenSession(s.session_id, targetWorkflowStage)
                     }}
                   >
                     {actionText}
                   </button>
 
-                  {onDeleteSession && (
+                  {showArchived && onRestoreSession && <button type="button" className="btn btn--secondary" disabled={restoreBusy === s.session_id} onClick={async e => { e.stopPropagation(); setRestoreBusy(s.session_id); setArchiveError(null); const ok = await onRestoreSession(s.session_id); if (!ok) setArchiveError('Session could not be restored. Your archived source remains preserved. Try again.'); setRestoreBusy(null) }}>{restoreBusy === s.session_id ? 'Restoring…' : 'Restore session'}</button>}
+                  {onDeleteSession && !showArchived && (
                     <button
                       type="button"
                       className="session-card-delete-icon-btn"
@@ -582,8 +612,8 @@ export function SessionHistoryList({
                         e.stopPropagation()
                         setSessionToDelete({ id: s.session_id, name: sessionName })
                       }}
-                      title="Delete session record"
-                      aria-label="Delete session"
+                      title="Archive session"
+                      aria-label="Archive session"
                     >
                       <TrashIcon />
                     </button>
@@ -598,20 +628,22 @@ export function SessionHistoryList({
       {/* Reusable Confirmation Modal for Session Deletion */}
       <ConfirmationModal
         isOpen={!!sessionToDelete}
-        title="Delete session?"
-        message={`Permanently delete "${sessionToDelete?.name || 'this session'}"?`}
-        supportingText="This action cannot be undone."
-        confirmLabel="Delete Session"
+        title="Archive session?"
+        message={`Archive "${sessionToDelete?.name || 'this session'}" from active work?`}
+        supportingText="Original audio, transcripts and revisions remain preserved. You can restore this session from Archived sessions."
+        confirmLabel="Archive session"
         cancelLabel="Cancel"
-        variant="danger"
+        variant="primary"
         isLoading={isDeletingSession}
         onCancel={() => setSessionToDelete(null)}
         onConfirm={async () => {
           if (!sessionToDelete) return
+          setArchiveError(null)
           setIsDeletingSession(true)
           try {
-            await onDeleteSession(sessionToDelete.id)
+            const ok = await onDeleteSession(sessionToDelete.id)
             setSessionToDelete(null)
+            if (!ok) setArchiveError('Session could not be archived. It remains in active work. Try again.')
           } catch (err) {
             console.error('Failed to delete session:', err)
           } finally {

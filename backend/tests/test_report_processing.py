@@ -469,7 +469,7 @@ async def test_api_generate_and_download_docx():
     await session_repo.create_session(session_id=session_id, title="Faith and Victory Service", account_id=account_id)
 
     # Finalize a report
-    await final_report_repo.finalize_report(
+    draft = await final_report_repo.finalize_report(
         session_id=session_id,
         proofread_report_revision_id=None,
         report_title="Faith and Victory Service",
@@ -478,6 +478,10 @@ async def test_api_generate_and_download_docx():
         programme="Sunday Worship Service",
         service_date="2026-08-23",
     )
+
+    denied = client.post(f"/api/report-processing/generate-docx/{session_id}")
+    assert denied.status_code == 409
+    await final_report_repo.approve_report(session_id, draft["id"])
 
     # 1. POST generate-docx
     gen_res = client.post(f"/api/report-processing/generate-docx/{session_id}", headers=auth_header)

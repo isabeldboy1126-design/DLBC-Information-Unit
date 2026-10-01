@@ -37,7 +37,7 @@ export function AudioTestPanel({
               disabled={!permissionGranted || isRecording}
               id="btn-start-test"
             >
-              🎤 Start Audio Test (Pre-check)
+               Start Audio Test (Pre-check)
             </button>
           ) : (
             <button

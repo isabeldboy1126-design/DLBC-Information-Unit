@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getApiUrl } from '../config'
+import { getApiUrl, authFetch } from '../config'
 
 const API_BASE = getApiUrl('/api/transcription')
 
@@ -26,7 +26,7 @@ export function useRecordedTranscription() {
   // Fetch providers config status
   const checkConfigStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/config-status`)
+      const res = await authFetch(`${API_BASE}/config-status`)
       if (res.ok) {
         const data = await res.json()
         setConfigStatus(data)
@@ -42,7 +42,7 @@ export function useRecordedTranscription() {
   // Fetch saved raw transcripts list
   const fetchTranscriptsList = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/transcripts`)
+      const res = await authFetch(`${API_BASE}/transcripts`)
       if (res.ok) {
         const data = await res.json()
         setTranscriptsList(data.transcripts || [])
@@ -99,7 +99,7 @@ export function useRecordedTranscription() {
       const formData = new FormData()
       formData.append('file', selectedFile)
 
-      const uploadRes = await fetch(`${API_BASE}/upload`, {
+      const uploadRes = await authFetch(`${API_BASE}/upload`, {
         method: 'POST',
         body: formData,
       })
@@ -119,7 +119,7 @@ export function useRecordedTranscription() {
         language_code: 'en-NG',
         ...(selectedProvider ? { provider_id: selectedProvider } : {}),
       })
-      const transcribeRes = await fetch(`${API_BASE}/transcribe/${upload.upload_id}?${queryParams}`, {
+      const transcribeRes = await authFetch(`${API_BASE}/transcribe/${upload.upload_id}?${queryParams}`, {
         method: 'POST',
       })
 
@@ -147,7 +147,7 @@ export function useRecordedTranscription() {
 
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`${API_BASE}/jobs/${jobId}`)
+        const res = await authFetch(`${API_BASE}/jobs/${jobId}`)
         if (!res.ok) throw new Error('Job status check failed')
 
         const data = await res.json()
@@ -179,7 +179,7 @@ export function useRecordedTranscription() {
   // Load a saved transcript by ID
   const loadTranscriptById = async (transcriptId) => {
     try {
-      const res = await fetch(`${API_BASE}/transcripts/${transcriptId}`)
+      const res = await authFetch(`${API_BASE}/transcripts/${transcriptId}`)
       if (res.ok) {
         const data = await res.json()
         setActiveTranscript(data.transcript)

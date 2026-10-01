@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react'
+import { Icon } from '../common/Icon'
 import { useAuth } from '../../context/AuthContext'
 
 function formatTerminalLevel(level) {
@@ -89,7 +90,7 @@ export function ProfileView({ onBack, onEditChurchDetails }) {
       <div className="settings-card profile-card" id="personal-details-section">
         <div className="settings-card-header">
           <div className="settings-card-title-group">
-            <span className="settings-card-icon">👤</span>
+            <span className="settings-card-icon"><Icon name="user" /></span>
             <div>
               <h2 className="settings-card-title">Personal Details</h2>
               <p className="settings-card-subtitle">
