@@ -20,7 +20,7 @@ export function VerificationItemRow({ item, onResolve, onPlaySegment, formatSeco
     ? 'vi-row--confirmed'
     : 'vi-row--corrected'
 
-  const statusLabel = isPending ? '⏳ Pending' : isConfirmed ? '✓ Confirmed' : '✏️ Corrected'
+  const statusLabel = isPending ? '⏳ Pending' : isConfirmed ? '✓ Confirmed' : '✏ Corrected'
 
   // Flag reason display
   const flagReasons = item.flag_reasons || []
@@ -83,7 +83,7 @@ export function VerificationItemRow({ item, onResolve, onPlaySegment, formatSeco
       </div>
 
       {/* Flag reasons */}
-      {flagSummary && <div className="vi-flag-reasons">🚩 {flagSummary}</div>}
+      {flagSummary && <div className="vi-flag-reasons"> {flagSummary}</div>}
 
       {/* Original text (read-only reference) */}
       <div className="vi-original-text">
@@ -97,7 +97,7 @@ export function VerificationItemRow({ item, onResolve, onPlaySegment, formatSeco
           <span className="vi-label">Corrected to:</span>
           <span className="vi-text-display vi-text-corrected">{item.verified_text}</span>
           {item.correction_note && (
-            <div className="vi-correction-note">📝 Note: {item.correction_note}</div>
+            <div className="vi-correction-note"> Note: {item.correction_note}</div>
           )}
         </div>
       )}
@@ -136,7 +136,7 @@ export function VerificationItemRow({ item, onResolve, onPlaySegment, formatSeco
               disabled={isSaving || !editedText.trim()}
               title="Save corrected text"
             >
-              {isSaving ? 'Saving...' : '✏️ Save Correction'}
+              {isSaving ? 'Saving...' : '✏ Save Correction'}
             </button>
             {isEditing && (
               <button

@@ -1,0 +1,257 @@
+{
+  "repositories": {
+    "source-sans": "87b37a2daaed80fcb8e8ccb0085c4d72ddade12e",
+    "source-serif": "80d3f8894c09c937bebfa9011247d2e1c79fd6f4",
+    "phosphor": "2b75f3ad12b420c9504ef05df8d2564a28f8500e"
+  },
+  "weight": "Phosphor regular",
+  "fonts": "Source Sans 3 regular/semibold; Source Serif 4 regular. Official complete WOFF2 faces, no glyph editing.",
+  "assets": [
+    {
+      "file": "fonts\\SourceSans3-Regular.woff2",
+      "source": "https://raw.githubusercontent.com/adobe-fonts/source-sans/87b37a2daaed80fcb8e8ccb0085c4d72ddade12e/WOFF2/OTF/SourceSans3-Regular.otf.woff2",
+      "bytes": 153800,
+      "sha256": "63de0da0cc05298e2e9c6e5cef506d8454ca665f6e668a99d94f51174b9256ed"
+    },
+    {
+      "file": "fonts\\SourceSans3-Semibold.woff2",
+      "source": "https://raw.githubusercontent.com/adobe-fonts/source-sans/87b37a2daaed80fcb8e8ccb0085c4d72ddade12e/WOFF2/OTF/SourceSans3-Semibold.otf.woff2",
+      "bytes": 155624,
+      "sha256": "c248b0a178c362916db7c853ed640db77f184d19a0ed9fa5591fa707d3089635"
+    },
+    {
+      "file": "licenses\\source-sans-OFL.md",
+      "source": "https://raw.githubusercontent.com/adobe-fonts/source-sans/87b37a2daaed80fcb8e8ccb0085c4d72ddade12e/LICENSE.md",
+      "bytes": 4486,
+      "sha256": "56af9b9c6715597e458284a474dc118a50a4150e9d547c70f7b4a33c3e6a9328"
+    },
+    {
+      "file": "fonts\\SourceSerif4-Regular.woff2",
+      "source": "https://raw.githubusercontent.com/adobe-fonts/source-serif/80d3f8894c09c937bebfa9011247d2e1c79fd6f4/WOFF2/OTF/SourceSerif4-Regular.otf.woff2",
+      "bytes": 107408,
+      "sha256": "42aa010dbb82d90764a28f6cc7d809a9395999b7390eb3b212028c6975e97402"
+    },
+    {
+      "file": "licenses\\source-serif-OFL.md",
+      "source": "https://raw.githubusercontent.com/adobe-fonts/source-serif/80d3f8894c09c937bebfa9011247d2e1c79fd6f4/LICENSE.md",
+      "bytes": 4491,
+      "sha256": "c21d7293d87b6d7ab1d0229a2f55b77f33a7613a6a4e66f6693d68d7d8d09464"
+    },
+    {
+      "file": "licenses\\phosphor-MIT.txt",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/LICENSE",
+      "bytes": 1071,
+      "sha256": "b5b1f1da112d18ea2147decfd48ddc1bf2b5aeb6c265381579340e95b15a2bb2"
+    },
+    {
+      "file": "icons\\house.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/house.svg",
+      "bytes": 356,
+      "sha256": "180e9259e99e23da197b59b19394d006d6a5d33e384cc2b9c8381cb0214a5716"
+    },
+    {
+      "file": "icons\\file-text.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/file-text.svg",
+      "bytes": 416,
+      "sha256": "9a580a038cce9f6dd223597864abe1b5c5c03bf8176d2f7171574598468b16f7"
+    },
+    {
+      "file": "icons\\microphone.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/microphone.svg",
+      "bytes": 362,
+      "sha256": "b49dabfaf603e82594cef0c5e5784c747f4c098b7723d2973c92965745ca93a9"
+    },
+    {
+      "file": "icons\\tray-arrow-down.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/tray-arrow-down.svg",
+      "bytes": 544,
+      "sha256": "5636f01085ff8972bab12eb36730e55e12b7d26cfca27d426fdc83a922e1eb03"
+    },
+    {
+      "file": "icons\\download-simple.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/download-simple.svg",
+      "bytes": 317,
+      "sha256": "c48678aa09b44ba4974954690ee6cc846379c448a7214f8c802604c2a1562014"
+    },
+    {
+      "file": "icons\\arrow-right.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/arrow-right.svg",
+      "bytes": 245,
+      "sha256": "e45bc4a12592b8723110db42c6deffdf177e4fe7704cf50324963fa0a59b2d74"
+    },
+    {
+      "file": "icons\\arrow-left.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/arrow-left.svg",
+      "bytes": 248,
+      "sha256": "3c2001cf957d182fc54927e4b286cc8cf66dd97830f441ca2650d42a63a9006a"
+    },
+    {
+      "file": "icons\\check.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/check.svg",
+      "bytes": 215,
+      "sha256": "cbb89a8c42f283d4f846eb935e05d88c1be04462f16480e068c0f82b9ce40b12"
+    },
+    {
+      "file": "icons\\x.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/x.svg",
+      "bytes": 284,
+      "sha256": "7397b15e1fa66eaf6ff9b59fe91d483cb5c3bcf75b2fe052097ab6f0593b513a"
+    },
+    {
+      "file": "icons\\clock.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/clock.svg",
+      "bytes": 287,
+      "sha256": "b8c6c2899d2b9af48a55ba02ba6d7faf89b757915772dd24f5397f7b0d02aa5c"
+    },
+    {
+      "file": "icons\\calendar.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/calendar.svg",
+      "bytes": 580,
+      "sha256": "3b589be35978b8c400a60d6c2154885ea648c20b8947e376ccabfde66ddabda5"
+    },
+    {
+      "file": "icons\\magnifying-glass.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/magnifying-glass.svg",
+      "bytes": 243,
+      "sha256": "f9fa2561978a9a3291e8ae0ebfcb651104f5069fade8f84871627bca68889cde"
+    },
+    {
+      "file": "icons\\funnel.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/funnel.svg",
+      "bytes": 385,
+      "sha256": "26b847aa9f8566707443669502dcf08bf0a2d1d3cfb2dc1136842f4033104abb"
+    },
+    {
+      "file": "icons\\gear.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/gear.svg",
+      "bytes": 1977,
+      "sha256": "5c0cb3ba307c72babf78d952d9140c682ff30307fedc7fbb87c9a293c1e2fd64"
+    },
+    {
+      "file": "icons\\sidebar.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/sidebar.svg",
+      "bytes": 308,
+      "sha256": "d919f2b3fcfeae9a4ef61fba45f54e7d343ada48628585e38c5675782c6247ff"
+    },
+    {
+      "file": "icons\\list.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/list.svg",
+      "bytes": 253,
+      "sha256": "fb1851842c74b40a3f42ce3d6ae0e67ede556b624218e79c0f4ead7d9ceec51f"
+    },
+    {
+      "file": "icons\\sun.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/sun.svg",
+      "bytes": 685,
+      "sha256": "8df1c7b747774f8b2c1fe353b1b785c74aac35bfa50f2ed7d8d9a85a4191b2ac"
+    },
+    {
+      "file": "icons\\moon.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/moon.svg",
+      "bytes": 467,
+      "sha256": "5c91f82aea4e7b53305bf29628caebc22a1198ba9fa46c62eef13fb8b3c3f21d"
+    },
+    {
+      "file": "icons\\eye.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/eye.svg",
+      "bytes": 701,
+      "sha256": "91d39f20bf95e0f36c07bd79b83a85fe6ff4ca20e2759c4afee7419ef80403fe"
+    },
+    {
+      "file": "icons\\archive.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/archive.svg",
+      "bytes": 339,
+      "sha256": "bde81c0c44e80a7b8bf97f29ec11488c1b48998f2f74b2eb29e13ef8c1975e75"
+    },
+    {
+      "file": "icons\\lock.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/lock.svg",
+      "bytes": 321,
+      "sha256": "7f9e0acc09a417a48328cd5b74e95de98989c5af1710ca5da705179da75c72d9"
+    },
+    {
+      "file": "icons\\play.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/play.svg",
+      "bytes": 293,
+      "sha256": "885b3ed2095889c4ff063dac35dc424cb9f6c00273ab44e2f90dc9dadbee661a"
+    },
+    {
+      "file": "icons\\pause.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/pause.svg",
+      "bytes": 320,
+      "sha256": "7a9a8fe311234262b85c6e332f77db4ba9a59b6ca4292c41d327977cf61a2fc9"
+    },
+    {
+      "file": "icons\\stop.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/stop.svg",
+      "bytes": 216,
+      "sha256": "90c8296c46c18d913784d0c3d6c66bbbfcf536b161a0387659d65dc2548ba623"
+    },
+    {
+      "file": "icons\\flag.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/flag.svg",
+      "bytes": 500,
+      "sha256": "2460f65cc31b6c3ab52ff936b56cfd38b3f179aab5c27fbd810f177d0c7ad24d"
+    },
+    {
+      "file": "icons\\copy.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/copy.svg",
+      "bytes": 279,
+      "sha256": "5a892fc6a72866e60c67db2088a87653cf44b57b1a5d183b36e950cdc5dd66b3"
+    },
+    {
+      "file": "icons\\minus.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/minus.svg",
+      "bytes": 163,
+      "sha256": "5a068d1cfd707fde5ddb0ce0623958123b6a5afba98401318983aeb0fdad6382"
+    },
+    {
+      "file": "icons\\arrow-clockwise.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/arrow-clockwise.svg",
+      "bytes": 296,
+      "sha256": "4a78a777b692cb74826e3071ae7049cc0d3927e68a7b8272e7251b1760cd771f"
+    },
+    {
+      "file": "icons\\link.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/link.svg",
+      "bytes": 690,
+      "sha256": "526d89480e3064c614b7d46a93888c187696d7776f684527d48eb94e2d7cd5d4"
+    },
+    {
+      "file": "icons\\warning.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/warning.svg",
+      "bytes": 543,
+      "sha256": "047c8edbdfddb9f1692bbf56acc85b7e4649b567c60eb39470e98e4f9ddc6a2e"
+    },
+    {
+      "file": "icons\\user.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/user.svg",
+      "bytes": 340,
+      "sha256": "787434f7fef95f20e137d309d3c6b8b471548c55c9dfc137ae10625d70959d11"
+    },
+    {
+      "file": "icons\\pencil.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/pencil.svg",
+      "bytes": 412,
+      "sha256": "59c456fd1164519962c4828df6bc803e9659800c1ca478bac2ad477b220a79ec"
+    },
+    {
+      "file": "icons\\stack.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/stack.svg",
+      "bytes": 483,
+      "sha256": "ee9eaaeb345e8a28c9662cf8a59147cb86080bd922e41f143444189e0116ea7e"
+    },
+    {
+      "file": "icons\\dots-three.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/dots-three.svg",
+      "bytes": 237,
+      "sha256": "ca4e748007101155641ec3041cd129bb03a8030d0eed16e313b9dd75e6beac77"
+    },
+    {
+      "file": "icons\\caret-down.svg",
+      "source": "https://raw.githubusercontent.com/phosphor-icons/core/2b75f3ad12b420c9504ef05df8d2564a28f8500e/assets/regular/caret-down.svg",
+      "bytes": 214,
+      "sha256": "53f0cf2d0b144ac3cb07e353e0cd0853ffb3ed432d741460ce288edfcb0924b1"
+    }
+  ]
+}

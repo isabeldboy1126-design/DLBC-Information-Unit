@@ -299,7 +299,10 @@ Remember: Do not fabricate or extrapolate beyond what is in the verified transcr
             provider_slot = gateway_res.provider_slot
 
             response_text = response.text or "{}"
-            parsed_json = json.loads(response_text)
+            parsed_json = ReportOutputSchema.model_validate_json(response_text, strict=True).model_dump()
+            from app.report_processing.output_schema import validate_report_text
+            if not validate_report_text(parsed_json["report_text"])["is_valid"]:
+                raise ValueError("AI output rejected: empty text or report quality checks failed")
 
             # Assemble full markdown report text
             title = parsed_json.get("report_title", "").strip() or session_metadata.get("title", "Message Report Draft")

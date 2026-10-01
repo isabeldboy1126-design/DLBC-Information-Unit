@@ -53,11 +53,11 @@ export function LiveTranscriptPanel({
   const getTranscriptionStatusBadge = () => {
     switch (liveTranscript.status) {
       case 'listening':
-        return <span className="badge badge--success">🟢 Azure Connected (en-NG)</span>
+        return <span className="badge badge--success"> Azure Connected (en-NG)</span>
       case 'recognizing':
-        return <span className="badge badge--primary">🎙️ Receiving Speech...</span>
+        return <span className="badge badge--primary"> Receiving Speech...</span>
       case 'reconnecting':
-        return <span className="badge badge--warning">⚠️ Reconnecting...</span>
+        return <span className="badge badge--warning">⚠ Reconnecting...</span>
       case 'unavailable':
         return <span className="badge badge--danger">✕ Live Transcription Unavailable</span>
       case 'completed':
@@ -95,7 +95,7 @@ export function LiveTranscriptPanel({
             onClick={onToggleExpand}
             title={isExpanded ? 'Collapse transcript to normal size' : 'Expand transcript for full screen reading'}
           >
-            {isExpanded ? '🗗 Normal View' : '⛶ Expand Live Transcript'}
+            {isExpanded ? ' Normal View' : '⛶ Expand Live Transcript'}
           </button>
         </div>
       </div>
@@ -115,7 +115,7 @@ export function LiveTranscriptPanel({
               </div>
             ) : (
               <p className="idle-prompt">
-                🎙️ Start recording to begin live speech recognition with Azure Speech (en-NG).
+                 Start recording to begin live speech recognition with Azure Speech (en-NG).
               </p>
             )}
           </div>
@@ -148,7 +148,7 @@ export function LiveTranscriptPanel({
                             : `Confidence: ${Math.round(seg.confidence * 100)}%`
                         }
                       >
-                        {isAutoFlagged ? '⚠️ ' : ''}
+                        {isAutoFlagged ? '⚠ ' : ''}
                         {Math.round(seg.confidence * 100)}%
                       </span>
                     )}
@@ -163,7 +163,7 @@ export function LiveTranscriptPanel({
                           : 'Click to flag this phrase for review (Phase 5)'
                       }
                     >
-                      {hasManualFlag ? '🚩 Flagged' : '⚑ Flag'}
+                      {hasManualFlag ? ' Flagged' : '⚑ Flag'}
                     </button>
                   </div>
 
@@ -177,7 +177,7 @@ export function LiveTranscriptPanel({
             {/* Real-time Interim Hypothesis */}
             {liveTranscript.interimText && (
               <div className="live-interim-row">
-                <span className="interim-label">💬</span>
+                <span className="interim-label"></span>
                 <span className="interim-text">{liveTranscript.interimText}...</span>
               </div>
             )}
@@ -200,7 +200,7 @@ export function LiveTranscriptPanel({
       {/* Footer Info */}
       <div className="live-transcript-footer">
         <span className="footer-tip">
-          💡 <strong>Live Flagging:</strong> Click ⚑ on any phrase to mark it for verification. Recording continues safely even if live transcription reconnects.
+           <strong>Live Flagging:</strong> Click ⚑ on any phrase to mark it for verification. Recording continues safely even if live transcription reconnects.
         </span>
       </div>
     </div>

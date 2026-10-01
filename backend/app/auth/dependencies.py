@@ -103,3 +103,12 @@ async def require_account(auth: AuthContext = Depends(get_auth_context)) -> Auth
             detail="Onboarding required before accessing church resources",
         )
     return auth
+
+
+async def require_session_access(request: Request, auth: AuthContext = Depends(require_account)):
+    """Apply account ownership to every session route in a review-stage router."""
+    from app.database.session_repo import session_repo
+    session_id = request.path_params.get("session_id")
+    if session_id and not await session_repo.get_session(session_id, account_id=auth.account_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return auth

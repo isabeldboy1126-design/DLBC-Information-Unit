@@ -448,6 +448,3 @@ async def test_personal_profile_display_name(auth_header_user_a):
         )
         assert demo_patch.status_code == 200
         assert demo_patch.json()["display_name"] == "Demo Operator"
-
-
-

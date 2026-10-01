@@ -5087,7 +5087,7 @@ textarea.form-control {
       rgba(13, 28, 56, 0.25) 80%,
       rgba(13, 28, 56, 0.08) 100%
     ),
-    url('./assets/dashboard/start-live-background.png');
+    none;
   background-size: cover;
   background-repeat: no-repeat;
   background-position: right center;
@@ -5857,7 +5857,7 @@ textarea.form-control {
         rgba(11, 24, 48, 0.65) 80%,
         rgba(13, 28, 56, 0.30) 100%
       ),
-      url('./assets/dashboard/start-live-background.png');
+      none;
   }
 
   .creation-card--youtube {
@@ -6508,7 +6508,7 @@ textarea.form-control {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  background: 
+  background:
     radial-gradient(ellipse 65% 55% at 88% 45%, rgba(219, 234, 254, 0.48) 0%, rgba(239, 246, 255, 0.2) 60%, transparent 80%),
     radial-gradient(ellipse 60% 50% at 12% 78%, rgba(224, 237, 255, 0.42) 0%, rgba(240, 246, 255, 0.15) 50%, transparent 75%),
     #f8fafc;
@@ -6562,7 +6562,7 @@ textarea.form-control {
   background: #ffffff;
   border-radius: 26px;
   padding: 38px 42px;
-  box-shadow: 
+  box-shadow:
     0 20px 48px -12px rgba(29, 104, 242, 0.09),
     0 10px 22px -8px rgba(15, 23, 42, 0.04),
     0 0 0 1px rgba(226, 232, 240, 0.65);
@@ -14346,7 +14346,7 @@ textarea.form-control {
       rgba(20, 25, 33, 0.25) 80%,
       rgba(20, 25, 33, 0.08) 100%
     ),
-    url('./assets/dashboard/start-live-background.png') !important;
+    none !important;
   background-size: cover !important;
   background-repeat: no-repeat !important;
   background-position: right center !important;
@@ -18620,4 +18620,8 @@ textarea.form-control {
 [data-theme="light"] .profile-edit-note strong {
   color: #0F172A;
 }
-
+
+.settings-auto-process-row input:focus-visible + .toggle-slider { outline: 2px solid var(--brand-primary); outline-offset: 3px; }
+.settings-auto-process-row input:disabled + .toggle-slider { cursor: wait; opacity: 0.65; }
+.session-list-status { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; color: var(--text-secondary); }
+.session-list-status p { margin: 0; }

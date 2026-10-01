@@ -1,624 +1,124 @@
-import React, { useRef } from 'react'
-import { getSessionHierarchy, deriveSessionDisplayStatus } from '../sessions/SessionDetailView'
+import React, { useEffect, useRef, useState } from 'react'
+import { Icon } from '../common/Icon'
+import { SourceAudio } from '../common/SourceAudio'
+import { SessionListStatus } from '../sessions/SessionListStatus'
+import { sessionWorkflow, hasReviewableReport } from '../sessions/sessionWorkflow'
+import { getApiUrl, authFetch } from '../../config'
 
-/* =========================================================================
-   SVG Icons (Clean, crisp vectors matching reference design)
-   ========================================================================= */
-
-function MicIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-      <line x1="12" y1="19" x2="12" y2="22" />
-      <line x1="8" y1="22" x2="16" y2="22" />
-    </svg>
-  )
-}
-
-function YouTubeIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M21.582 6.186a2.806 2.806 0 0 0-1.974-1.99C17.868 3.75 12 3.75 12 3.75s-5.868 0-7.608.446a2.806 2.806 0 0 0-1.974 1.99C2 7.94 2 12 2 12s0 4.06.418 5.814a2.806 2.806 0 0 0 1.974 1.99c1.74.446 7.608.446 7.608.446s5.868 0 7.608-.446a2.806 2.806 0 0 0 1.974-1.99C22 16.06 22 12 22 12s0-4.06-.418-5.814ZM10 15.5v-7l6 3.5-6 3.5Z" />
-    </svg>
-  )
-}
-
-function UploadTrayIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="17 8 12 3 7 8" />
-      <line x1="12" y1="3" x2="12" y2="15" />
-    </svg>
-  )
-}
-
-function ArrowRightIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <line x1="5" y1="12" x2="19" y2="12" />
-      <polyline points="12 5 19 12 12 19" />
-    </svg>
-  )
-}
-
-function DocumentItemIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-    </svg>
-  )
-}
-
-function CalendarIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  )
-}
-
-function ClockIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  )
-}
-
-function ClockHeaderIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0b1329" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  )
-}
-
-/**
- * Determines whether a session qualifies for operator attention.
- * A session counts once if it has any actionable incomplete state.
- */
-export function isActionableAttentionSession(s) {
-  if (!s) return false
-  if (s.is_interrupted) return true
-  if (s.final_report_status === 'complete' || s.report_processing_status === 'completed') return false
-
-  const isVerified = s.verification_status === 'completed' || !!s.verified_text || !!s.verified_at
-  const needsVerification = !isVerified && (s.flag_count > 0 || s.verification_status === 'in_progress')
-  const needsProcessing = isVerified && s.final_report_status !== 'complete' && s.report_processing_status !== 'completed'
-
-  return needsVerification || needsProcessing
-}
-
-/**
- * Calculates the total number of sessions that require attention (not the flag sum).
- */
-export function calculateTotalAttentionSessions(sessionsList) {
-  if (!Array.isArray(sessionsList)) return 0
-  return sessionsList.filter(isActionableAttentionSession).length
-}
-
-// Retain alias for any existing imports
+export const isActionableAttentionSession = session => !session?.is_archived && sessionWorkflow(session).attention
+export const calculateTotalAttentionSessions = sessions => Array.isArray(sessions) ? sessions.filter(isActionableAttentionSession).length : 0
 export const calculateTotalAttentionItems = calculateTotalAttentionSessions
 
-/**
- * DashboardView — Polished production dashboard matching the authoritative reference.
- */
-export function DashboardView({
-  sessions = [],
-  isLoading = false,
-  error = null,
-  onRetry = null,
-  onStartLiveSession,
-  onStartYouTubeSession,
-  onOpenSession,
-  onViewAllSessions,
-  onViewNeedsVerification,
-  onFileSelect,
-}) {
-  const fileInputRef = useRef(null)
-
-  // Filter sessions needing immediate operator action:
-  // 1. Interrupted sessions requiring intervention
-  // 2. Unverified sessions with flagged items or in-progress review
-  // 3. Reports ready, pending editorial synthesis
-  // 4. Editing complete, pending proofreading review
-  const allAttentionSessions = sessions.filter(isActionableAttentionSession)
-  const attentionSessions = allAttentionSessions.slice(0, 3)
-  const totalAttentionCount = allAttentionSessions.length
-
-  // Recent 6 sessions
-  const recentSessions = [...sessions].sort((a, b) => {
-    return new Date(b.date_created || 0) - new Date(a.date_created || 0)
-  }).slice(0, 6)
-
-  const formatDuration = (totalSeconds) => {
-    if (!totalSeconds && totalSeconds !== 0) return '00:00:00'
-    const hours = Math.floor(totalSeconds / 3600)
-    const mins = Math.floor((totalSeconds % 3600) / 60)
-    const secs = Math.floor(totalSeconds % 60)
-    const pad = (n) => String(n).padStart(2, '0')
-    return `${pad(hours)}:${pad(mins)}:${pad(secs)}`
-  }
-
-  const formatAttentionDuration = (totalSeconds) => {
-    if (!totalSeconds && totalSeconds !== 0) return ''
-    const secs = Math.round(totalSeconds)
-    const hours = Math.floor(secs / 3600)
-    const mins = Math.floor((secs % 3600) / 60)
-    const remSecs = secs % 60
-    if (hours > 0) {
-      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
-    }
-    if (mins > 0) {
-      return remSecs > 0 ? `${mins}m ${remSecs}s` : `${mins}m`
-    }
-    return `${remSecs}s`
-  }
-
-  const formatAttentionDate = (isoStr) => {
-    if (!isoStr) return '—'
-    try {
-      const d = new Date(isoStr)
-      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    } catch {
-      return isoStr
-    }
-  }
-
-  const formatRecentDate = (isoStr) => {
-    if (!isoStr) return '—'
-    try {
-      const d = new Date(isoStr)
-      const month = d.toLocaleDateString('en-US', { month: 'short' })
-      const day = d.getDate()
-      const year = d.getFullYear()
-      const hours = String(d.getHours()).padStart(2, '0')
-      const mins = String(d.getMinutes()).padStart(2, '0')
-      return `${month} ${day}, ${year} ${hours}:${mins}`
-    } catch {
-      return isoStr
-    }
-  }
-
-  const handleDrop = (e) => {
-    e.preventDefault()
-    if (e.dataTransfer.files && e.dataTransfer.files[0] && onFileSelect) {
-      onFileSelect(e.dataTransfer.files[0])
-    }
-  }
-
-  const handleDragOver = (e) => {
-    e.preventDefault()
-  }
-
-  return (
-    <div className="dashboard-view-container">
-      {/* ------------------------------------------------------------- */}
-      {/* 1. SESSION CREATION AREA (Order: Start Live, YouTube, Upload)   */}
-      {/* ------------------------------------------------------------- */}
-      <section className="dashboard-creation-area" aria-label="Session Creation Actions">
-        {/* Top Row: Start Live Session (dominant) & YouTube Session */}
-        <div className="creation-cards-grid">
-          {/* Card 1: Start Live Session (Dominant Hero Card) */}
-          <div
-            className="creation-card creation-card--live"
-            onClick={onStartLiveSession}
-            role="button"
-            tabIndex={0}
-            id="hero-card-start-live"
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStartLiveSession(); } }}
-          >
-            <div className="creation-card-body">
-              <div className="creation-card-icon-box creation-card-icon-box--gradient">
-                <MicIcon />
-              </div>
-
-              <div className="creation-card-text">
-                <h2 className="creation-card-title">Start Live Session</h2>
-                <p className="creation-card-desc">
-                  Record and transcribe live audio via microphone or USB input.
-                </p>
-              </div>
-            </div>
-
-            <div className="creation-card-action-slot">
-              <div className="action-circle-btn action-circle-btn--primary" aria-hidden="true">
-                <ArrowRightIcon />
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: YouTube Session (Secondary) */}
-          <div
-            className="creation-card creation-card--youtube"
-            onClick={onStartYouTubeSession}
-            role="button"
-            tabIndex={0}
-            id="hero-card-youtube"
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStartYouTubeSession(); } }}
-          >
-            <div className="creation-card-body">
-              <div className="creation-card-icon-box creation-card-icon-box--ice-blue">
-                <YouTubeIcon />
-              </div>
-
-              <div className="creation-card-text">
-                <h2 className="creation-card-title">YouTube Session</h2>
-                <p className="creation-card-desc">
-                  Paste the URL of a YouTube live broadcast or recorded sermon message to transcribe.
-                </p>
-              </div>
-            </div>
-
-            <div className="creation-card-action-slot">
-              <div className="action-circle-btn action-circle-btn--ice" aria-hidden="true">
-                <ArrowRightIcon />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Row: Simple Upload Recording Text Link */}
-        <div className="dashboard-upload-link-row">
-          <input
-            type="file"
-            ref={fileInputRef}
-            style={{ display: 'none' }}
-            accept="audio/*,video/*,.wav,.mp3,.mp4,.m4a"
-            onChange={(e) => {
-              if (e.target.files && e.target.files[0] && onFileSelect) {
-                onFileSelect(e.target.files[0])
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="dashboard-upload-text-link"
-            onClick={() => fileInputRef.current?.click()}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            id="hero-link-upload"
-          >
-            Upload recording →
-          </button>
-        </div>
-      </section>
-
-      {/* ------------------------------------------------------------- */}
-      {/* 2. NEEDS YOUR ATTENTION SECTION (ALWAYS BELOW UPLOAD)         */}
-      {/* ------------------------------------------------------------- */}
-      {allAttentionSessions.length > 0 && (
-        <section className="dashboard-section dashboard-attention-section" aria-label="Actionable Sessions">
-          <div className="dashboard-section-header">
-            <div className="section-title-wrapper">
-              <h2 className="dashboard-section-title">Needs Your Attention</h2>
-              <span className="attention-counter-badge">{totalAttentionCount}</span>
-            </div>
-
-            <button
-              type="button"
-              className="dashboard-view-all-btn"
-              onClick={onViewNeedsVerification || onViewAllSessions}
-              id="btn-attention-view-more"
-            >
-              View all <span aria-hidden="true">→</span>
-            </button>
-          </div>
-
-          {/* ONE premium floating parent surface for all attention sessions */}
-          <div className="attention-parent-surface">
-            {attentionSessions.map((sess) => {
-              const isInterrupted = !!sess.is_interrupted
-              const isVerified = sess.verification_status === 'completed' || !!sess.verified_text || !!sess.verified_at
-              const needsVerify = !isVerified && (sess.flag_count > 0 || sess.verification_status === 'in_progress')
-              const needsProcessing = isVerified && sess.final_report_status !== 'complete' && sess.report_processing_status !== 'completed'
-
-              let stageLabel = `${sess.flag_count || 1} to verify`
-              let stagePillClass = 'stage-pill--verification'
-              let actionBtnText = 'Review'
-              let targetStage = 'verification'
-
-              if (isInterrupted) {
-                stageLabel = 'Interrupted'
-                stagePillClass = 'stage-pill--interrupted'
-                actionBtnText = 'Review'
-                targetStage = 'overview'
-              } else if (needsProcessing) {
-                stageLabel = null
-                stagePillClass = ''
-                actionBtnText = 'Process with AI →'
-                targetStage = 'report_processing'
-              }
-
-              const { sessionTitle } = getSessionHierarchy(sess)
-              const sessionDate = formatAttentionDate(sess.date_created)
-              const sessionDuration = formatAttentionDuration(sess.duration_seconds || sess.audio_duration_seconds)
-
-              return (
-                <div
-                  key={sess.session_id}
-                  className="attention-list-row"
-                  onClick={() => onOpenSession(sess.session_id, 'overview')}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      onOpenSession(sess.session_id, 'overview')
-                    }
-                  }}
-                >
-                  <div className="attention-row-left">
-                    <div className="attention-doc-box">
-                      <DocumentItemIcon />
-                    </div>
-                    <div className="attention-info-stack">
-                      <h3 className="attention-session-title">{sessionTitle}</h3>
-                      <div className="attention-meta-row">
-                        {sessionDate && (
-                          <span className="attention-meta-chip">
-                            <span>{sessionDate}</span>
-                          </span>
-                        )}
-                        {sessionDuration && (
-                          <>
-                            <span className="attention-meta-separator" aria-hidden="true">·</span>
-                            <span className="attention-meta-chip attention-meta-chip--duration">
-                              <span>{sessionDuration}</span>
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="attention-row-right">
-                    {stageLabel && (
-                      <span className={`attention-stage-pill ${stagePillClass}`}>
-                        <span className="pill-dot">●</span>
-                        <span className="pill-label">{stageLabel}</span>
-                      </span>
-                    )}
-
-                    <button
-                      type="button"
-                      className="attention-action-btn"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onOpenSession(sess.session_id, targetStage)
-                      }}
-                    >
-                      {actionBtnText}
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* ------------------------------------------------------------- */}
-      {/* 3. RECENT SESSIONS TABLE & COMPACT MOBILE LIST                */}
-      {/* ------------------------------------------------------------- */}
-      <section className="dashboard-section dashboard-recent-section" aria-label="Recent Sessions">
-        <div className="dashboard-section-header">
-          <div className="section-title-wrapper">
-            <span className="recent-clock-badge"><ClockHeaderIcon /></span>
-            <h2 className="dashboard-section-title">Recent Sessions</h2>
-          </div>
-
-          <button
-            type="button"
-            className="dashboard-view-all-btn"
-            onClick={onViewAllSessions}
-            id="btn-view-all-sessions"
-          >
-            View all <span aria-hidden="true">→</span>
-          </button>
-        </div>
-
-        <div className="recent-sessions-card-surface">
-          {/* Desktop Table */}
-          <table className="recent-sessions-data-table">
-            <thead>
-              <tr>
-                <th scope="col">SESSION</th>
-                <th scope="col">DATE</th>
-                <th scope="col">DURATION</th>
-                <th scope="col">STATUS</th>
-                <th scope="col">ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading && (!sessions || sessions.length === 0) ? (
-                <tr>
-                  <td colSpan={5} className="empty-sessions-cell">
-                    <div className="sessions-state-box">
-                      <span className="sessions-state-spinner" aria-hidden="true" />
-                      <span>Loading sessions...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : error && (!sessions || sessions.length === 0) ? (
-                <tr>
-                  <td colSpan={5} className="empty-sessions-cell empty-sessions-cell--error">
-                    <div className="sessions-state-box">
-                      <span className="sessions-state-text">⚠️ Sessions could not be loaded.</span>
-                      {onRetry && (
-                        <button
-                          type="button"
-                          className="btn btn--small btn--outline btn-retry-load"
-                          onClick={onRetry}
-                        >
-                          Retry
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : recentSessions.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="empty-sessions-cell">
-                    No recorded sessions found. Click <strong>Start Live Session</strong> above to begin your first service recording.
-                  </td>
-                </tr>
-              ) : (
-                recentSessions.map((sess) => {
-                  const { statusText, statusPillClass, actionText, targetStage } = deriveSessionDisplayStatus(sess)
-                  const { programme: progName, sessionTitle: sessName } = getSessionHierarchy(sess)
-
-                  return (
-                    <tr
-                      key={sess.session_id}
-                      className="recent-table-row"
-                      onClick={() => onOpenSession(sess.session_id, 'overview')}
-                      title="Open session workspace"
-                    >
-                      <td className="cell-session-name">
-                        <div className="session-name-flex">
-                          <div className="table-doc-icon">
-                            <DocumentItemIcon />
-                          </div>
-                          <div className="session-hierarchy-stack">
-                            {progName && (
-                              <span className="session-event-eyebrow">{progName}</span>
-                            )}
-                            <span className="session-dominant-name">
-                              {sessName || sess.title || 'Untitled Session'}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="cell-session-date">
-                        {formatRecentDate(sess.date_created)}
-                      </td>
-
-                      <td className="cell-session-duration">
-                        {formatDuration(sess.duration_seconds || sess.audio_duration_seconds)}
-                      </td>
-
-                      <td className="cell-session-status">
-                        <span className={`recent-status-pill ${statusPillClass}`}>
-                          <span className="status-dot">●</span>
-                          <span className="status-label">{statusText}</span>
-                        </span>
-                      </td>
-
-                      <td className="cell-session-actions">
-                        <div className="table-actions-cluster">
-                          <button
-                            type="button"
-                            className="table-view-btn"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onOpenSession(sess.session_id, targetStage)
-                            }}
-                          >
-                            {actionText}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-
-          {/* Mobile Clean Compact Cards (Displayed only under 768px to prevent horizontal blowout) */}
-          <div className="recent-sessions-mobile-list" aria-hidden="true">
-            {isLoading && (!sessions || sessions.length === 0) ? (
-              <div className="sessions-state-box">
-                <span className="sessions-state-spinner" aria-hidden="true" />
-                <span>Loading sessions...</span>
-              </div>
-            ) : error && (!sessions || sessions.length === 0) ? (
-              <div className="sessions-state-box">
-                <span className="sessions-state-text">⚠️ Sessions could not be loaded.</span>
-                {onRetry && (
-                  <button
-                    type="button"
-                    className="btn btn--small btn--outline btn-retry-load"
-                    onClick={onRetry}
-                  >
-                    Retry
-                  </button>
-                )}
-              </div>
-            ) : recentSessions.length === 0 ? (
-              <div className="sessions-empty-card">
-                <p>No recorded sessions found. Click Start Live Session to begin.</p>
-              </div>
-            ) : (
-              recentSessions.map((sess) => {
-                const { statusText, statusPillClass, actionText: mobileActionBtnText, targetStage: mobileTargetStage } = deriveSessionDisplayStatus(sess)
-                const { programme: progName, sessionTitle: sessName } = getSessionHierarchy(sess)
-
-                return (
-                  <div
-                    key={sess.session_id}
-                    className="recent-mobile-item"
-                    onClick={() => onOpenSession(sess.session_id, 'overview')}
-                  >
-                    <div className="mobile-item-top">
-                      <div className="mobile-item-title-flex">
-                        <div className="table-doc-icon">
-                          <DocumentItemIcon />
-                        </div>
-                        <div className="session-hierarchy-stack">
-                          {progName && (
-                            <span className="session-event-eyebrow">{progName}</span>
-                          )}
-                          <span className="session-dominant-name">
-                            {sessName || sess.title || 'Untitled Session'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <span className={`recent-status-pill ${statusPillClass}`}>
-                        <span className="status-dot">●</span>
-                        <span className="status-label">{statusText}</span>
-                      </span>
-                    </div>
-
-                    <div className="mobile-item-bottom">
-                      <div className="mobile-item-meta">
-                        <span>{formatRecentDate(sess.date_created)}</span>
-                        <span>•</span>
-                        <span>{formatDuration(sess.duration_seconds || sess.audio_duration_seconds)}</span>
-                      </div>
-
-                      <button
-                        type="button"
-                        className="table-view-btn"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onOpenSession(sess.session_id, mobileTargetStage)
-                        }}
-                      >
-                        {mobileActionBtnText}
-                      </button>
-                    </div>
-                  </div>
-                )
-              })
-            )}
-          </div>
-        </div>
-      </section>
-    </div>
-  )
+function dateLabel(value) {
+  if (!value || Number.isNaN(new Date(value).getTime())) return 'Date not recorded'
+  return new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+function durationLabel(seconds) {
+  return Number.isFinite(seconds) && seconds > 0 ? `${Math.floor(seconds / 60)} min` : 'Duration not recorded'
 }
 
+export function DashboardView({ sessions = [], isLoading, sessionsLoaded, sessionsError, onRefresh, onStartLiveSession, onStartYouTubeSession, onOpenSession, onViewAllSessions, onFileSelect }) {
+  const inputRef = useRef(null)
+  const cache = useRef(new Map())
+  const [selectedId, setSelectedId] = useState(null)
+  const [mobilePanel, setMobilePanel] = useState('list')
+  const previewRef = useRef(null)
+  const listHeadingRef = useRef(null)
+  const previousPanelRef = useRef(mobilePanel)
+  const [attentionOnly, setAttentionOnly] = useState(false)
+  const [preview, setPreview] = useState(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState(null)
+  const [reload, setReload] = useState(0)
+  const work = [...sessions].filter(s => !s.is_archived && (!attentionOnly || isActionableAttentionSession(s))).sort((a, b) => new Date(b.date_created || 0) - new Date(a.date_created || 0))
+  const selected = work.find(s => s.session_id === selectedId) || work[0]
+
+  const selectedSessionId = selected?.session_id
+  useEffect(() => {
+    if (!selectedSessionId) { setPreview(null); setPreviewLoading(false); setPreviewError(null); return }
+    const controller = new AbortController()
+    const id = selectedSessionId
+    setPreview(cache.current.get(id) || null)
+    setPreviewLoading(true)
+    setPreviewError(null)
+    const load = async () => {
+      try {
+        const res = await authFetch(getApiUrl(`/api/sessions/${encodeURIComponent(id)}`), { signal: controller.signal })
+        if (!res.ok) throw new Error(`Session preview unavailable (${res.status}).`)
+        const result = await res.json()
+        if (!result.session || result.session.session_id !== id) throw new Error('Session preview response is invalid.')
+        const source = result.session
+        let artifact = { title: source.title || 'Untitled session', label: 'No transcript available', text: '', source }
+        if (hasReviewableReport(source)) {
+          const reportRes = await authFetch(getApiUrl(`/api/final-report/sessions/${encodeURIComponent(id)}`), { signal: controller.signal })
+          if (!reportRes.ok) throw new Error(`Saved report preview unavailable (${reportRes.status}).`)
+          const reportData = await reportRes.json()
+          const active = reportData.active_final_report
+          if (active?.report_text) artifact = { title: active.report_title || artifact.title, text: active.report_text, source, label: reportData.can_export === true && active.approval_status === 'approved' ? 'Approved report' : 'Draft · needs review' }
+          else if (reportData.source_proofread_report?.proofread_text) artifact = { title: reportData.source_proofread_report.proofread_title || artifact.title, text: reportData.source_proofread_report.proofread_text, source, label: 'Accepted proofread source · final review required' }
+        } else if (source.verified_text) {
+          artifact = { ...artifact, label: 'Verified transcript', text: source.verified_text }
+        } else {
+          const raw = source.raw_text || source.segments?.map(s => s.text || '').join('\n\n')
+          if (raw) artifact = { ...artifact, label: 'Raw transcript · not verified', text: raw }
+        }
+        if (controller.signal.aborted) return
+        cache.current.set(id, artifact)
+        setPreview(artifact)
+      } catch (error) {
+        if (!controller.signal.aborted) setPreviewError(error.message)
+      } finally {
+        if (!controller.signal.aborted) setPreviewLoading(false)
+      }
+    }
+    load()
+    return () => controller.abort()
+  }, [selectedSessionId, selected?.final_report_status, selected?.verification_status, reload])
+
+  useEffect(() => {
+    if (previousPanelRef.current !== mobilePanel && window.matchMedia('(max-width: 760px)').matches) {
+      if (mobilePanel === 'document') previewRef.current?.focus()
+      else listHeadingRef.current?.focus()
+    }
+    previousPanelRef.current = mobilePanel
+  }, [mobilePanel])
+
+  const file = event => { const chosen = event.target.files?.[0]; if (chosen) onFileSelect?.(chosen); event.target.value = '' }
+  const drop = event => { event.preventDefault(); if (event.dataTransfer.files?.[0]) onFileSelect?.(event.dataTransfer.files[0]) }
+  const workflow = sessionWorkflow(selected)
+
+  return <div className="editorial-desk" onDragOver={event => event.preventDefault()} onDrop={drop}>
+    <div className="desk-workspace-toolbar"><h1>Workspace</h1><div className="desk-intake-actions">
+      <button className="btn btn--primary" id="hero-card-live" onClick={onStartLiveSession}><Icon name="mic" />Record live</button>
+      <button className="btn btn--secondary" id="hero-link-upload" onClick={() => inputRef.current?.click()}><Icon name="upload" />Import recording</button>
+      <details className="desk-source-menu"><summary><Icon name="caret" /><span>More sources</span></summary><button onClick={onStartYouTubeSession} id="hero-card-youtube"><Icon name="play" />Open YouTube session</button></details>
+      <input ref={inputRef} hidden type="file" accept="audio/*,video/*,.wav,.mp3,.mp4,.m4a" onChange={file} />
+    </div></div>
+    <div className="desk-mobile-view-switch" aria-label="Workspace view"><button aria-pressed={mobilePanel === 'list'} onClick={() => setMobilePanel('list')}>Session list</button><button aria-pressed={mobilePanel === 'document'} onClick={() => setMobilePanel('document')} disabled={!selected}>Selected document</button></div>
+    <div className="desk-workspace-grid" data-mobile-panel={mobilePanel}>
+      <section className="desk-session-list" aria-label="Session work list">
+        <div className="desk-list-heading"><h2 ref={listHeadingRef} tabIndex={-1}>Continue your work</h2><button className="desk-text-action" onClick={onViewAllSessions}>View all <Icon name="arrow" size={16} /></button></div>
+        <div className="desk-list-filter"><button aria-pressed={!attentionOnly} onClick={() => setAttentionOnly(false)}>All work</button><button aria-pressed={attentionOnly} onClick={() => setAttentionOnly(true)}>Needs attention ({calculateTotalAttentionSessions(sessions)})</button></div>
+        <SessionListStatus isLoading={isLoading} hasLoaded={sessionsLoaded} error={sessionsError} onRefresh={onRefresh} />
+        {sessionsLoaded && !isLoading && work.length === 0 && <div className="desk-empty-list"><Icon name="sessions" size={28} /><h3>{attentionOnly ? 'No work needs attention' : 'No recorded sessions found.'}</h3><p>{attentionOnly ? 'Choose All work to browse saved sessions.' : 'Record live or import an existing recording to start a session. Set up audio input before live capture.'}</p></div>}
+        <div className="desk-work-items">{work.slice(0, 12).map(session => {
+          const stage = sessionWorkflow(session)
+          return <button className={`desk-work-item ${selected?.session_id === session.session_id ? 'is-selected' : ''}`} key={session.session_id} aria-pressed={selected?.session_id === session.session_id} onClick={() => { setSelectedId(session.session_id); if (window.matchMedia('(max-width: 760px)').matches) setMobilePanel('document') }}>
+            <Icon name="document" size={24} /><span className="desk-work-copy"><strong>{session.title || 'Untitled session'}</strong><span>{durationLabel(session.duration_seconds)} · {dateLabel(session.date_created)}</span><span className={`desk-stage desk-stage--${stage.label === 'Approved' ? 'approved' : 'review'}`}><span aria-hidden="true" />{stage.label}</span></span><Icon name="arrow" size={18} />
+          </button>
+        })}</div>
+      </section>
+      <section className="desk-document-preview" aria-label="Selected session preview" ref={previewRef} tabIndex={-1} key={selected?.session_id || 'empty'}>
+        {selected ? <>
+          <div className="desk-preview-tools"><span><Icon name="document" />{preview?.label || 'Session source'}</span><button className="desk-text-action" onClick={() => onOpenSession(selected.session_id, workflow.stage)}>{workflow.action}<Icon name="arrow" size={16} /></button></div>
+          <h2 className="desk-document-title">{preview?.title || selected.title || 'Untitled session'}</h2>
+          <p className="desk-preview-metadata">{selected.minister || 'Minister not recorded'}{selected.programme ? ` · ${selected.programme}` : ''}</p>
+          {previewLoading && <p className="desk-preview-notice">{preview ? 'Refreshing source preview…' : 'Loading selected source…'}</p>}
+          {previewError && <div className="error-banner" role="alert">{previewError}{preview ? ' Showing previously loaded content.' : ''}<button className="btn btn--secondary" onClick={() => setReload(value => value + 1)}>Retry preview</button></div>}
+          {preview?.text ? <article className="desk-document-prose"><pre>{preview.text}</pre></article> : !previewLoading && !previewError ? <div className="desk-document-empty"><h3>No transcript available yet</h3><p>Open the session to inspect its source and current work. A report will appear here only after it has been saved.</p></div> : null}
+          {preview && <div className="desk-preview-source"><SourceAudio source={preview.source} /></div>}
+        </> : <div className="desk-document-empty"><Icon name="document" size={32} /><h2>{sessionsError && !sessionsLoaded ? 'Your saved work is unavailable' : isLoading && !sessionsLoaded ? 'Loading your workspace' : 'A clear place to review the message'}</h2><p>{sessionsError && !sessionsLoaded ? 'Retry the session list to reconnect. Recording and import remain available.' : 'Select a saved session to read its available transcript or report alongside the original source.'}</p></div>}
+      </section>
+    </div>
+  </div>
+}

@@ -35,6 +35,7 @@ import { ResetPasswordView } from './views/ResetPasswordView'
 import { OnboardingView } from './views/OnboardingView'
 import { ProfileView } from './components/profile/ProfileView'
 import './App.css'
+import './styles/editorial.css'
 
 function App() {
   const parseRoute = (rawHash) => {
@@ -132,13 +133,7 @@ function App() {
   // Phase 4: Persistent Church Sessions Hook
   const sessionsHook = useSessions()
 
-  useEffect(() => {
-    if (user && isOnboarded) {
-      sessionsHook.fetchSessions()
-    }
-  }, [user, isOnboarded])
-
-  // Global background processing job tracker (Verification & Report Processing)
+// Global background processing job tracker (Verification & Report Processing)
   const { activeProcess, clearActiveProcess } = useActiveProcess()
 
   const applyRoute = (rawHash, isPop = false) => {
@@ -274,13 +269,14 @@ function App() {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
-  // Auto-load session if direct URL loaded
+  // Auto-load session only after account access is ready.
   useEffect(() => {
+    if (!user || !isOnboarded) return
     const route = parseRoute(window.location.hash)
     if (route.sessionId && (!sessionsHook.activeSession || sessionsHook.activeSession.session_id !== route.sessionId)) {
       sessionsHook.loadSession(route.sessionId)
     }
-  }, [sessionsHook.sessions])
+  }, [sessionsHook.sessions, user?.id, isOnboarded])
 
   // Synchronize modal and minimized state when recording starts/stops
   useEffect(() => {
@@ -593,10 +589,11 @@ function App() {
         /* VIEW 1: DASHBOARD                                           */
         /* ----------------------------------------------------------- */
         <DashboardView
-          sessions={sessionsHook.sessions}
-          isLoading={sessionsHook.isLoading}
-          error={sessionsHook.error}
-          onRetry={sessionsHook.fetchSessions}
+          sessions={sessionsHook.sessions.filter(s => !s.is_archived)}
+          isLoading={sessionsHook.isListLoading}
+          sessionsLoaded={sessionsHook.sessionsLoaded}
+          sessionsError={sessionsHook.listError}
+          onRefresh={sessionsHook.fetchSessions}
           onStartLiveSession={() => {
             if (liveAudio.isRecording) {
               setIsRecorderMinimized(false)
@@ -618,7 +615,7 @@ function App() {
             navigateTo('sessions')
           }}
           onViewNeedsVerification={() => {
-            setSessionsStatusFilter('needs_verification')
+            setSessionsStatusFilter('attention')
             navigateTo('sessions')
           }}
           onFileSelect={handleDashboardFileSelect}
@@ -662,6 +659,7 @@ function App() {
               navigateTo(`session/${sessionId}${initialStage && initialStage !== 'overview' ? `/${initialStage}` : ''}`)
             }}
             onDeleteSession={sessionsHook.deleteSession}
+            onRestoreSession={sessionsHook.restoreSession}
             onRefresh={sessionsHook.fetchSessions}
             onRetry={sessionsHook.fetchSessions}
             onStartNewSession={() => {
@@ -671,8 +669,9 @@ function App() {
                 navigateTo('new_live')
               }
             }}
-            isLoading={sessionsHook.isLoading}
-            error={sessionsHook.error}
+            isLoading={sessionsHook.isListLoading}
+            sessionsLoaded={sessionsHook.sessionsLoaded}
+            sessionsError={sessionsHook.listError}
             initialStatusFilter={sessionsStatusFilter}
           />
         ) : (
@@ -680,6 +679,7 @@ function App() {
             session={sessionsHook.activeSession}
             initialStage={sessionInitialStage}
             onBack={handleInAppBack}
+            onRefreshSession={() => sessionsHook.loadSession(sessionsHook.activeSession.session_id)}
             onUpdateTitle={sessionsHook.updateSessionTitle}
             onUpdateDetails={sessionsHook.updateSessionDetails}
             onSubViewChange={setSessionSubViewInfo}
@@ -806,6 +806,11 @@ function App() {
         /* VIEW 8: EVENTS / PROGRAMMES SESSIONS                        */
         /* ----------------------------------------------------------- */
         <SessionHistoryList
+          sessions={sessionsHook.sessions}
+          isLoading={sessionsHook.isListLoading}
+          sessionsLoaded={sessionsHook.sessionsLoaded}
+          sessionsError={sessionsHook.listError}
+          onRefresh={sessionsHook.fetchSessions}
           onOpenSession={(sessionId) => navigateTo(`session/${sessionId}`)}
           onStartLiveSession={handleStartLiveRecording}
           onOpenTranscribe={() => navigateTo('transcribe')}

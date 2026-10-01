@@ -1,3 +1,4 @@
+import { Icon } from './common/Icon'
 import React from 'react'
 
 export function ErrorBanner({ error, onDismiss }) {
@@ -6,7 +7,7 @@ export function ErrorBanner({ error, onDismiss }) {
   return (
     <div className="error-banner" role="alert">
       <div className="error-content">
-        <span className="error-icon">⚠️</span>
+        <span className="error-icon"><Icon name="alert" /></span>
         <div className="error-text">
           <strong>Notice:</strong> {error}
         </div>

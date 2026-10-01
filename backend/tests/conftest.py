@@ -81,3 +81,24 @@ def isolated_test_database():
         os.unlink(tmp_path)
     except OSError:
         pass
+
+
+@pytest.fixture(autouse=True)
+def legacy_resource_auth_context(request):
+    if request.node.module.__name__.endswith(("test_auth_and_isolation", "test_upgrade_account_boundaries")):
+        yield
+        return
+    from app.main import app
+    from app.auth.auth_context import AuthContext
+    from app.auth.dependencies import get_auth_context
+    async def legacy_account():
+        return AuthContext(user_id="fixture-user", supabase_user_id="fixture-sub", email="fixture@example.test", account_id="legacy_default_account", account={}, is_onboarded=True, role="owner")
+    previous = app.dependency_overrides.get(get_auth_context)
+    app.dependency_overrides[get_auth_context] = legacy_account
+    try:
+        yield
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_auth_context, None)
+        else:
+            app.dependency_overrides[get_auth_context] = previous

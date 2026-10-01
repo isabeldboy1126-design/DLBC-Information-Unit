@@ -147,7 +147,11 @@ async def test_final_report_persistence_and_revision_history():
     assert final_rev1["report_title"] == "Sermon on the Mount"
 
     sess1 = await session_repo.get_session(session_id)
-    assert sess1["final_report_status"] == "complete"
+    assert sess1["final_report_status"] == "needs_review"
+    assert not final_rev1["can_export"]
+    await proofreading_repo.accept_revision(session_id, proofread_rev["revision_id"])
+    approved = await final_report_repo.approve_report(session_id, final_rev1["id"])
+    assert approved["can_export"]
     assert sess1["final_report_id"] == final_rev1["id"]
 
     # 4. Save Human Adjustment (Revision 2) post-finalization
@@ -201,7 +205,7 @@ def test_final_report_and_editing_export_endpoints():
         standard_version_label="v1",
         report_title="Test Download Sermon",
     ))
-    asyncio.run(proofreading_repo.save_proofread_revision(
+    proofread = asyncio.run(proofreading_repo.save_proofread_revision(
         session_id=session_id,
         proofread_text="# Test Proofread Final\n\nContent for final download test.",
         revision_source="ai_proofread",
@@ -210,6 +214,8 @@ def test_final_report_and_editing_export_endpoints():
         proofread_title="Test Download Sermon",
         is_accepted=True,
     ))
+
+    asyncio.run(proofreading_repo.accept_revision(session_id, proofread["revision_id"]))
 
     # 1. Test Edited Report Export (.docx)
     edit_res = client.get(f"/api/editing/sessions/{session_id}/export-docx")
@@ -223,14 +229,14 @@ def test_final_report_and_editing_export_endpoints():
     finalize_res = client.post(f"/api/final-report/sessions/{session_id}/finalize", json={})
     assert finalize_res.status_code == 200
     data = finalize_res.json()
-    assert data["status"] == "complete"
+    assert data["status"] == "approved"
     assert "final_report" in data
 
     # 3. Test Final Report Details Endpoint
     get_res = client.get(f"/api/final-report/sessions/{session_id}")
     assert get_res.status_code == 200
     get_data = get_res.json()
-    assert get_data["final_report_status"] == "complete"
+    assert get_data["final_report_status"] == "approved"
     assert get_data["active_final_report"] is not None
 
     # 4. Test Final Report Download Endpoint (.docx)

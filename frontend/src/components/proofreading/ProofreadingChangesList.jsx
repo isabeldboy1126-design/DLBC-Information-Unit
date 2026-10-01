@@ -6,9 +6,9 @@ export function ProofreadingChangesList({ changes, reviewNotes }) {
       <div className="card proofreading-changes-card">
         <div className="no-changes-box">
           <span className="no-changes-icon">✨</span>
-          <h4>No Corrections Needed</h4>
+          <h4>No corrections proposed</h4>
           <p>
-            The conservative AI Proofreader checked the Edited Report and confirmed that spelling, grammar, punctuation, and Scripture formatting adhere to editorial standards without requiring alterations.
+            The proofreader returned no proposed corrections. Review the report and source context before accepting this revision.
           </p>
         </div>
       </div>
@@ -36,7 +36,7 @@ export function ProofreadingChangesList({ changes, reviewNotes }) {
     <div className="card proofreading-changes-card">
       <div className="card-header">
         <div>
-          <h3>🔍 Suggested Proofreading Corrections</h3>
+          <h3> Suggested Proofreading Corrections</h3>
           <p className="card-subtitle">
             {changes.length} {changes.length === 1 ? 'correction' : 'corrections'} identified
           </p>
@@ -45,7 +45,7 @@ export function ProofreadingChangesList({ changes, reviewNotes }) {
 
       {reviewNotes && reviewNotes.length > 0 && (
         <div className="review-notes-box" style={{ marginBottom: '1rem' }}>
-          <strong>💡 Human Review Notes:</strong>
+          <strong> Human Review Notes:</strong>
           <ul>
             {reviewNotes.map((note, idx) => (
               <li key={idx}>{note}</li>

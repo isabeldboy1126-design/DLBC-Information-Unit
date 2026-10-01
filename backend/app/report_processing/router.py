@@ -112,6 +112,9 @@ async def start_report_processing(payload: StartProcessingRequest, auth: AuthCon
             detail=f"Session {payload.session_id} not found",
         )
 
+    if session.get("is_archived"):
+        raise HTTPException(status_code=409, detail="Restore the archived session before processing.")
+
     run = await report_processing_engine.start_processing(
         session_id=payload.session_id,
         force_new=payload.force_new,
@@ -138,8 +141,11 @@ async def get_report_processing_status(session_id: str, auth: AuthContext = Depe
 
 
 @router.post("/cancel/{run_id}", response_model=Dict[str, Any])
-async def cancel_report_processing(run_id: str):
+async def cancel_report_processing(run_id: str, auth: AuthContext = Depends(require_account)):
     """Cancels an in-progress report processing run."""
+    run = await report_processing_repo.get_run(run_id)
+    if not run or not await session_repo.get_session(run["session_id"], account_id=auth.account_id):
+        raise HTTPException(status_code=404, detail="Run not found")
     success = await report_processing_repo.cancel_run(run_id)
     if not success:
         raise HTTPException(
@@ -150,7 +156,7 @@ async def cancel_report_processing(run_id: str):
 
 
 @router.get("/result/{run_id}", response_model=Dict[str, Any])
-async def get_report_processing_result(run_id: str):
+async def get_report_processing_result(run_id: str, auth: AuthContext = Depends(require_account)):
     """Retrieves the full durable result and JSON artifacts of a completed run."""
     run = await report_processing_repo.get_run(run_id)
     if not run:
@@ -158,6 +164,9 @@ async def get_report_processing_result(run_id: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Run {run_id} not found",
         )
+
+    if not await session_repo.get_session(run["session_id"], account_id=auth.account_id):
+        raise HTTPException(status_code=404, detail="Run not found")
 
     # Unpack JSON strings for frontend convenience
     unpacked = dict(run)
@@ -200,16 +209,16 @@ async def generate_report_docx(session_id: str, auth: AuthContext = Depends(requ
             detail="No finalized report exists for this session yet. Complete report processing first.",
         )
 
+    if not active_final.get("can_export"):
+        raise HTTPException(status_code=409, detail="Review and approve the current saved revision before export.")
+
     title = active_final.get("report_title") or session.get("title") or "DLBC Information Unit Report"
-    programme = active_final.get("programme") or "Sunday Worship Service"
-    minister = active_final.get("minister") or session.get("minister") or "Pastor (Dr) W.F. Kumuyi"
-    service_date = active_final.get("service_date") or session.get("date_created", "")[:10]
+    programme = active_final.get("programme") or ""
+    minister = active_final.get("minister") or ""
+    service_date = active_final.get("service_date") or ""
     report_text = active_final.get("report_text") or ""
 
     filename = document_service.generate_filename(title, programme, service_date)
-    os.makedirs(STORAGE_DOCUMENTS_DIR, exist_ok=True)
-    file_path = os.path.join(STORAGE_DOCUMENTS_DIR, filename)
-
     docx_stream = document_service.generate_final_report_docx(
         report_title=title,
         report_text=report_text,
@@ -222,31 +231,10 @@ async def generate_report_docx(session_id: str, auth: AuthContext = Depends(requ
     )
     file_bytes = docx_stream.getvalue()
 
-    with open(file_path, "wb") as f:
-        f.write(file_bytes)
-
     file_size = len(file_bytes)
-
-    # Update final_reports record with filename and size
-    from app.database.connection import get_db_connection
-    async with get_db_connection() as conn:
-        await conn.execute(
-            """
-            UPDATE final_reports
-            SET docx_filename = ?, docx_file_size = ?
-            WHERE id = ?
-            """,
-            (filename, file_size, active_final["id"]),
-        )
-        await conn.commit()
-
-    return {
-        "status": "success",
-        "session_id": session_id,
-        "filename": filename,
-        "file_size": file_size,
-        "download_url": f"/api/report-processing/download-docx/{session_id}",
-    }
+    await final_report_repo.update_docx_metadata(active_final["id"], filename, file_size)
+    return {"status": "success", "session_id": session_id, "filename": filename,
+            "file_size": file_size, "download_url": f"/api/report-processing/download-docx/{session_id}"}
 
 
 @router.get("/download-docx/{session_id}")
@@ -266,33 +254,23 @@ async def download_report_docx(session_id: str, auth: AuthContext = Depends(requ
             detail="No finalized report exists for this session.",
         )
 
+    if not active_final.get("can_export"):
+        raise HTTPException(status_code=409, detail="Review and approve the current saved revision before export.")
+
     title = active_final.get("report_title") or "DLBC Information Unit Report"
-    programme = active_final.get("programme") or "Sunday Worship Service"
+    programme = active_final.get("programme") or ""
     service_date = active_final.get("service_date") or ""
     filename = active_final.get("docx_filename") or document_service.generate_filename(
         title, programme, service_date
     )
     filename = document_service.sanitize_filename(filename.replace(".docx", "")) + ".docx"
 
-    file_path = os.path.join(STORAGE_DOCUMENTS_DIR, filename)
-    if os.path.isfile(file_path):
-        with open(file_path, "rb") as f:
-            content = f.read()
-    else:
-        # Generate on the fly
-        report_text = active_final.get("report_text") or ""
-        minister = active_final.get("minister") or "Pastor (Dr) W.F. Kumuyi"
-        stream = document_service.generate_final_report_docx(
-            report_title=title,
-            report_text=report_text,
-            session_metadata={
-                "title": title,
-                "programme": programme,
-                "minister": minister,
-                "date_created": service_date,
-            },
-        )
-        content = stream.getvalue()
+    stream = document_service.generate_final_report_docx(
+        report_title=title, report_text=active_final["report_text"],
+        session_metadata={"title": title, "programme": programme,
+                          "minister": active_final.get("minister"), "date_created": service_date},
+    )
+    content = stream.getvalue()
 
     encoded_filename = urllib.parse.quote(filename)
     headers = {

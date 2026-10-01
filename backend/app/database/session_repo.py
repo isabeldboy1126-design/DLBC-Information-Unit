@@ -105,6 +105,8 @@ class SessionRepository:
                         await conn.execute(alter_sql)
                     except Exception:
                         pass  # Column already exists
+            from app.database.review_integrity import migrate_review_integrity
+            await migrate_review_integrity(conn)
             await conn.commit()
         self._initialized = True
 
@@ -167,42 +169,14 @@ class SessionRepository:
 
         async with get_db_connection() as conn:
             cursor = await conn.execute(
-                "SELECT session_id FROM sessions WHERE session_id = ?",
+                "SELECT session_id, account_id FROM sessions WHERE session_id = ?",
                 (session_id,),
             )
             existing = await cursor.fetchone()
             if existing:
-                await conn.execute(
-                    """
-                    UPDATE sessions SET
-                        title = ?,
-                        date_created = ?,
-                        start_time = ?,
-                        status = ?,
-                        provider_name = ?,
-                        language_code = ?,
-                        raw_text = ?,
-                        verified_text = ?,
-                        verification_status = ?,
-                        metadata_json = ?,
-                        account_id = COALESCE(account_id, ?)
-                    WHERE session_id = ?
-                    """,
-                    (
-                        session_record["title"],
-                        session_record["date_created"],
-                        session_record["start_time"],
-                        session_record["status"],
-                        session_record["provider_name"],
-                        session_record["language_code"],
-                        session_record["raw_text"],
-                        session_record["verified_text"],
-                        session_record["verification_status"],
-                        session_record["metadata_json"],
-                        target_account_id,
-                        session_id,
-                    ),
-                )
+                if dict(existing).get("account_id") not in (None, target_account_id):
+                    raise ValueError("Session belongs to a different account")
+                # Idempotent initialization never overwrites protected or reviewed text.
             else:
                 await conn.execute(
                     """
@@ -424,7 +398,7 @@ class SessionRepository:
             if transcript_summary:
                 transcript_dur = transcript_summary.get("duration_seconds", 0.0)
                 duration = max(duration, transcript_dur)
-                if transcript_summary.get("raw_text"):
+                if transcript_summary.get("raw_text") and (not row["end_time"] or not raw_text.strip()):
                     raw_text = transcript_summary["raw_text"]
                 if transcript_summary.get("provider_name"):
                     provider = transcript_summary["provider_name"]
@@ -625,220 +599,52 @@ class SessionRepository:
 
             return session
 
-    async def list_sessions(self, account_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Lists all sessions for an account ordered by creation date descending."""
+    async def list_sessions(self, archived: bool = False, include_archived: bool = False, account_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Lists all sessions ordered by creation date descending."""
         await self.init_db()
         async with get_db_connection() as conn:
-            if account_id:
-                cursor = await conn.execute(
-                    """
-                    SELECT session_id, title, date_created, duration_seconds, status,
-                           recording_id, audio_filename, audio_file_size, audio_duration_seconds,
-                           transcript_id, provider_name, language_code, segment_count,
-                           flag_count, is_interrupted, recovery_notes,
-                           verification_status, verification_items_total,
-                           verification_items_resolved, verified_at,
-                           reporting_status, reporting_completed_at,
-                           reporting_standard_version,
-                           editing_status, editing_completed_at,
-                           editing_standard_version,
-                           proofreading_status, proofreading_completed_at,
-                           proofreading_standard_version, accepted_proofread_revision_id,
-                           final_report_status, final_report_completed_at, final_report_id,
-                           ai_verification_status, ai_verification_completed_at, event_id,
-                           account_id
-                    FROM sessions
-                    WHERE account_id = ?
-                    ORDER BY date_created DESC
-                    """,
-                    (account_id,),
-                )
-            else:
-                cursor = await conn.execute(
-                    """
-                    SELECT session_id, title, date_created, duration_seconds, status,
-                           recording_id, audio_filename, audio_file_size, audio_duration_seconds,
-                           transcript_id, provider_name, language_code, segment_count,
-                           flag_count, is_interrupted, recovery_notes,
-                           verification_status, verification_items_total,
-                           verification_items_resolved, verified_at,
-                           reporting_status, reporting_completed_at,
-                           reporting_standard_version,
-                           editing_status, editing_completed_at,
-                           editing_standard_version,
-                           proofreading_status, proofreading_completed_at,
-                           proofreading_standard_version, accepted_proofread_revision_id,
-                           final_report_status, final_report_completed_at, final_report_id,
-                           ai_verification_status, ai_verification_completed_at, event_id,
-                           account_id
-                    FROM sessions
-                    ORDER BY date_created DESC
-                    """
-                )
+            cursor = await conn.execute(
+                """
+                SELECT session_id, title, date_created, duration_seconds, status,
+                       recording_id, audio_filename, audio_file_size, audio_duration_seconds,
+                       transcript_id, provider_name, language_code, segment_count,
+                       flag_count, is_interrupted, recovery_notes,
+                       verification_status, verification_items_total,
+                       verification_items_resolved, verified_at,
+                       reporting_status, reporting_completed_at,
+                       reporting_standard_version,
+                       editing_status, editing_completed_at,
+                       editing_standard_version,
+                       proofreading_status, proofreading_completed_at,
+                       proofreading_standard_version, accepted_proofread_revision_id,
+                       final_report_status, final_report_completed_at, final_report_id,
+                       ai_verification_status, ai_verification_completed_at, event_id,
+                       account_id, is_archived, archived_at, report_processing_status, report_processing_run_id
+                FROM sessions
+                WHERE (? = 1 OR is_archived = ?) AND (? IS NULL OR account_id = ?)
+                ORDER BY date_created DESC
+                """,
+                (int(include_archived), int(archived), account_id, account_id),
+            )
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
 
     async def delete_session(self, session_id: str, account_id: Optional[str] = None) -> bool:
-        """
-        Authoritative hard deletion:
-        1. Query session details to obtain recording_id, transcript_id, audio_filename, docx_file_path.
-        2. Insert session_id and recording_id into deleted_session_tombstones.
-        3. Cascading delete from child tables:
-           - session_segments
-           - verification_items
-           - report_human_diffs
-           - report_processing_runs
-           - final_reports
-           - proofread_reports
-           - edited_reports
-           - reports
-           - sessions
-        4. Clean up disk files (.wav, .pcm, .json, .docx).
-        5. Remove matching entries from recordings_manifest.json and transcripts_manifest.json.
-        """
-        sess_dict = None
-        deleted_rows = 0
+        """Compatibility removal archives; protected sources are never deleted."""
+        return await self.set_archived(session_id, True, account_id=account_id)
 
+    async def set_archived(self, session_id: str, archived: bool, account_id: Optional[str] = None) -> bool:
+        await self.init_db()
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         async with get_db_connection() as conn:
-            if account_id:
-                cursor = await conn.execute(
-                    "SELECT session_id, recording_id, transcript_id, audio_filename FROM sessions WHERE session_id = ? AND account_id = ?",
-                    (session_id, account_id),
-                )
-            else:
-                cursor = await conn.execute(
-                    "SELECT session_id, recording_id, transcript_id, audio_filename FROM sessions WHERE session_id = ?",
-                    (session_id,),
-                )
-            row = await cursor.fetchone()
-            if not row:
+            cursor = await conn.execute("SELECT session_id FROM sessions WHERE session_id=? AND (? IS NULL OR account_id=?)", (session_id, account_id, account_id))
+            if not await cursor.fetchone():
                 return False
-            sess_dict = dict(row)
-
-            try:
-                cur_doc = await conn.execute(
-                    "SELECT docx_file_path FROM final_reports WHERE session_id = ?",
-                    (session_id,),
-                )
-                doc_row = await cur_doc.fetchone()
-                if doc_row and doc_row[0] and sess_dict:
-                    sess_dict["docx_file_path"] = doc_row[0]
-            except Exception:
-                pass
-
-            rec_id = sess_dict.get("recording_id") if sess_dict else None
-            now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-
-            # 2. Insert tombstone
-            try:
-                ids_to_tombstone = [session_id]
-                if rec_id:
-                    ids_to_tombstone.extend([f"session_{rec_id}", rec_id])
-                for tid in ids_to_tombstone:
-                    cur = await conn.execute(
-                        "SELECT session_id FROM deleted_session_tombstones WHERE session_id = ?",
-                        (tid,),
-                    )
-                    if not await cur.fetchone():
-                        await conn.execute(
-                            "INSERT INTO deleted_session_tombstones (session_id, deleted_at) VALUES (?, ?)",
-                            (tid, now_iso),
-                        )
-            except Exception as e:
-                print(f"Tombstone insertion notice: {e}")
-
-            # 3. Cascading hard delete
-            child_tables = [
-                "session_segments",
-                "verification_items",
-                "report_human_diffs",
-                "report_processing_runs",
-                "final_reports",
-                "proofread_reports",
-                "edited_reports",
-                "reports",
-                "sessions",
-            ]
-            for tbl in child_tables:
-                try:
-                    c = await conn.execute(f"DELETE FROM {tbl} WHERE session_id = ?", (session_id,))
-                    if tbl == "sessions":
-                        deleted_rows = c.rowcount
-                except Exception:
-                    pass
+            await conn.execute("""UPDATE sessions SET is_archived=?,
+                archived_at=CASE WHEN ?=1 THEN COALESCE(archived_at, ?) ELSE NULL END
+                WHERE session_id=?""", (int(archived), int(archived), now, session_id))
             await conn.commit()
-
-        # 4. Remove physical files
-        try:
-            if sess_dict:
-                audio_fn = sess_dict.get("audio_filename")
-                if audio_fn:
-                    p = os.path.join(STORAGE_AUDIO_DIR, audio_fn)
-                    if os.path.exists(p):
-                        try:
-                            os.remove(p)
-                        except Exception:
-                            pass
-                if rec_id:
-                    for ext in [".wav", ".pcm", ".json"]:
-                        p = os.path.join(STORAGE_AUDIO_DIR, f"{rec_id}{ext}")
-                        if os.path.exists(p):
-                            try:
-                                os.remove(p)
-                            except Exception:
-                                pass
-                docx_path = sess_dict.get("docx_file_path")
-                if docx_path and os.path.exists(docx_path):
-                    try:
-                        os.remove(docx_path)
-                    except Exception:
-                        pass
-                tr_id = sess_dict.get("transcript_id")
-                if tr_id:
-                    p = os.path.join(STORAGE_TRANSCRIPTS_DIR, f"{tr_id}.json")
-                    if os.path.exists(p):
-                        try:
-                            os.remove(p)
-                        except Exception:
-                            pass
-        except Exception as e:
-            print(f"File cleanup notice for {session_id}: {e}")
-
-        # 5. Remove from manifests
-        try:
-            audio_manifest_path = os.path.join(STORAGE_AUDIO_DIR, "recordings_manifest.json")
-            if os.path.exists(audio_manifest_path):
-                with open(audio_manifest_path, "r", encoding="utf-8") as f:
-                    manifest = json.load(f)
-                if isinstance(manifest, list):
-                    filtered = [
-                        r for r in manifest
-                        if r.get("recording_id") != rec_id
-                        and r.get("session_id") != session_id
-                        and f"session_{r.get('recording_id')}" != session_id
-                    ]
-                    if len(filtered) != len(manifest):
-                        with open(audio_manifest_path, "w", encoding="utf-8") as f:
-                            json.dump(filtered, f, indent=2)
-
-            transcripts_manifest_path = os.path.join(STORAGE_TRANSCRIPTS_DIR, "transcripts_manifest.json")
-            if os.path.exists(transcripts_manifest_path):
-                with open(transcripts_manifest_path, "r", encoding="utf-8") as f:
-                    manifest = json.load(f)
-                if isinstance(manifest, list):
-                    filtered = [
-                        t for t in manifest
-                        if t.get("transcript_id") != (sess_dict.get("transcript_id") if sess_dict else None)
-                        and t.get("recording_id") != rec_id
-                        and t.get("session_id") != session_id
-                    ]
-                    if len(filtered) != len(manifest):
-                        with open(transcripts_manifest_path, "w", encoding="utf-8") as f:
-                            json.dump(filtered, f, indent=2)
-        except Exception as e:
-            print(f"Manifest cleanup notice for {session_id}: {e}")
-
-        return deleted_rows > 0 or sess_dict is not None
+        return True
 
     async def index_existing_storage_files(self):
         """
@@ -943,7 +749,7 @@ class SessionRepository:
 
                 # Check if session already has this transcript
                 cursor = await conn.execute(
-                    "SELECT session_id, recording_id FROM sessions WHERE session_id = ? OR recording_id = ?",
+                    "SELECT session_id, recording_id, transcript_id FROM sessions WHERE session_id = ? OR recording_id = ?",
                     (linked_session_id, rec_ref),
                 )
                 existing = await cursor.fetchone()
@@ -953,13 +759,15 @@ class SessionRepository:
                 flags_count = sum(len(s.get("flags", [])) for s in segments)
 
                 if existing:
+                    if existing["transcript_id"] and existing["transcript_id"] != tr_id:
+                        continue  # Preserve the established raw-source linkage and segments.
                     # Update existing session with transcript reference & text
                     s_id = existing["session_id"]
                     await conn.execute(
                         """
                         UPDATE sessions
                         SET transcript_id = ?,
-                            raw_text = ?,
+                            raw_text = CASE WHEN raw_text IS NULL OR raw_text='' THEN ? ELSE raw_text END,
                             provider_name = ?,
                             segment_count = ?,
                             flag_count = ?
@@ -1296,6 +1104,8 @@ class SessionRepository:
                 """,
                 (resolved_count, session_id),
             )
+            from app.database.review_integrity import invalidate_approval
+            await invalidate_approval(conn, session_id)
             await conn.commit()
 
         return await self.get_verification_state(session_id)
@@ -1352,6 +1162,8 @@ class SessionRepository:
                 """,
                 (resolved_count, session_id),
             )
+            from app.database.review_integrity import invalidate_approval
+            await invalidate_approval(conn, session_id)
             await conn.commit()
 
         return await self.get_verification_state(session_id)
@@ -1521,6 +1333,8 @@ class SessionRepository:
                 """,
                 (verified_full_text, now_iso, session_id),
             )
+            from app.database.review_integrity import invalidate_approval
+            await invalidate_approval(conn, session_id)
             await conn.commit()
 
         # Save to storage/verified_transcripts/ JSON file
@@ -1613,6 +1427,8 @@ class SessionRepository:
                 """,
                 (verified_full_text, now_iso, session_id),
             )
+            from app.database.review_integrity import invalidate_approval
+            await invalidate_approval(conn, session_id)
             await conn.commit()
 
         # Save JSON file
