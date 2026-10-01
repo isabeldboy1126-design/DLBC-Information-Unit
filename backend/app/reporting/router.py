@@ -1,3 +1,4 @@
+from app.auth.dependencies import require_session_access
 """
 Reporting API Router (Phase 6)
 
@@ -11,12 +12,12 @@ import asyncio
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from app.database.reporting_repo import reporting_repo
 from app.database.session_repo import session_repo
 from app.services.reporting_provider import gemini_reporting_provider
 
-router = APIRouter(prefix="/api/reporting", tags=["AI Reporting (Phase 6)"])
+router = APIRouter(dependencies=[Depends(require_session_access)], prefix="/api/reporting", tags=["AI Reporting (Phase 6)"])
 
 
 class StandardCreateRequest(BaseModel):

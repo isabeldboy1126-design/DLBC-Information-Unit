@@ -340,21 +340,8 @@ async def download_recording(recording_id: str):
 
 @router.delete("/recordings/{recording_id}")
 async def delete_recording(recording_id: str, auth: AuthContext = Depends(require_account)):
-    """Deletes a recording from disk and updates the manifest."""
-    if getattr(auth, "is_demo", False):
-        raise HTTPException(
-            status_code=403,
-            detail="Recording deletion is disabled in Demo mode to protect shared sample data.",
-        )
-    file_path = os.path.join(STORAGE_AUDIO_DIR, f"{recording_id}.wav")
-    if os.path.exists(file_path):
-        try:
-            os.remove(file_path)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to delete file: {e}")
-
-    manifest = load_manifest()
-    manifest = [item for item in manifest if item.get("recording_id") != recording_id]
-    save_manifest(manifest)
-
-    return {"status": "deleted", "recordingId": recording_id}
+    """Original recordings are protected; archive their linked session instead."""
+    if auth.is_demo:
+        raise HTTPException(status_code=403, detail="Recording deletion is disabled in Demo mode.")
+    raise HTTPException(status_code=409,
+                        detail="Original recordings are preserved. Archive the linked session to remove it from active work.")

@@ -1,3 +1,4 @@
+from app.auth.dependencies import require_session_access
 """
 Editing API Router (Phase 7)
 
@@ -14,7 +15,7 @@ import urllib.parse
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from app.database.editing_repo import editing_repo
 from app.database.reporting_repo import reporting_repo
@@ -22,7 +23,7 @@ from app.database.session_repo import session_repo
 from app.services.editing_provider import gemini_editing_provider
 from app.services.document_service import document_service
 
-router = APIRouter(prefix="/api/editing", tags=["AI Editing (Phase 7)"])
+router = APIRouter(dependencies=[Depends(require_session_access)], prefix="/api/editing", tags=["AI Editing (Phase 7)"])
 
 
 class EditorStandardCreateRequest(BaseModel):

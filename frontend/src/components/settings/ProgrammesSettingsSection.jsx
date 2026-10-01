@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { getApiUrl, API_BASE_URL } from '../../config'
+import { getApiUrl, API_BASE_URL, authFetch } from '../../config'
 
 export function ProgrammesSettingsSection() {
   const [programmes, setProgrammes] = useState([])
@@ -33,7 +33,7 @@ export function ProgrammesSettingsSection() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch(getApiUrl('/api/programmes?include_archived=true'))
+      const res = await authFetch(getApiUrl('/api/programmes?include_archived=true'))
       if (res.ok) {
         const data = await res.json()
         setProgrammes(data)
@@ -71,7 +71,7 @@ export function ProgrammesSettingsSection() {
     if (!newProgName.trim()) return
     try {
       setError(null)
-      const res = await fetch(getApiUrl('/api/programmes'), {
+      const res = await authFetch(getApiUrl('/api/programmes'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newProgName.trim() }),
@@ -99,7 +99,7 @@ export function ProgrammesSettingsSection() {
     if (!editingProgName.trim()) return
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${progId}`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${progId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editingProgName.trim() }),
@@ -123,7 +123,7 @@ export function ProgrammesSettingsSection() {
     const actionName = prog.is_archived ? 'unarchive' : 'archive'
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${prog.id}`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${prog.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_archived: !prog.is_archived }),
@@ -146,7 +146,7 @@ export function ProgrammesSettingsSection() {
     if (!newSessionName.trim()) return
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${progId}/sessions`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${progId}/sessions`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newSessionName.trim() }),
@@ -171,7 +171,7 @@ export function ProgrammesSettingsSection() {
     if (!editingSessionName.trim()) return
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editingSessionName.trim() }),
@@ -194,7 +194,7 @@ export function ProgrammesSettingsSection() {
   const handleArchiveSession = async (progId, sessionId) => {
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
         method: 'DELETE',
       })
       if (res.ok) {
@@ -223,7 +223,7 @@ export function ProgrammesSettingsSection() {
     const sessionIds = newOrder.map((s) => s.id)
 
     try {
-      const res = await fetch(getApiUrl(`/api/programmes/${prog.id}/sessions/reorder`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${prog.id}/sessions/reorder`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_ids: sessionIds }),
@@ -243,7 +243,7 @@ export function ProgrammesSettingsSection() {
     <div className="card settings-card">
       <div className="card-header settings-card-header">
         <div className="settings-card-header-title">
-          <span className="settings-icon">📅</span>
+          <span className="settings-icon"></span>
           <h3>Programmes &amp; Sessions</h3>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -264,7 +264,7 @@ export function ProgrammesSettingsSection() {
         {error && (
           <div className="settings-alert settings-alert--error" style={{ margin: '0.75rem 0' }} role="alert">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '1rem' }}>
-              <span>⚠️ {error}</span>
+              <span>{error}</span>
               <button
                 type="button"
                 className="btn btn--small btn--outline btn-retry-load"
@@ -419,7 +419,7 @@ export function ProgrammesSettingsSection() {
                           title="Rename programme"
                           style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }}
                         >
-                          ✏️ Rename
+                          ✏ Rename
                         </button>
                       )}
 
@@ -430,7 +430,7 @@ export function ProgrammesSettingsSection() {
                         title={prog.is_archived ? 'Restore programme' : 'Archive programme'}
                         style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }}
                       >
-                        {prog.is_archived ? '♻️ Restore' : '📁 Archive'}
+                        {prog.is_archived ? '♻ Restore' : ' Archive'}
                       </button>
 
                       <button

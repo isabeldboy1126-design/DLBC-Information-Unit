@@ -51,11 +51,11 @@ export function TranscriptionProgress({ uploadStatus, jobStatus, error, configSt
         </div>
 
         {/* Progress bar */}
-        {uploadStatus !== 'error' && uploadStatus !== 'completed' && (
+        {uploadStatus !== 'error' && uploadStatus !== 'completed' && Number.isFinite(jobStatus?.progress_percent) && (
           <div className="progress-bar-container">
             <div
               className="progress-bar-fill"
-              style={{ width: `${Math.max(10, jobStatus?.progress_percent || (uploadStatus === 'uploading' ? 25 : 50))}%` }}
+              style={{ width: `${Math.min(100, Math.max(0, jobStatus.progress_percent))}%` }}
             ></div>
           </div>
         )}
@@ -73,7 +73,7 @@ export function TranscriptionProgress({ uploadStatus, jobStatus, error, configSt
         {/* Diagnostic Error Help */}
         {error && (
           <div className="error-resolution-box">
-            <h4>⚠️ Notice: Transcription Provider Setup</h4>
+            <h4>⚠ Notice: Transcription Provider Setup</h4>
             <p className="error-details">{error}</p>
 
             {configStatus && !configStatus.is_configured && (

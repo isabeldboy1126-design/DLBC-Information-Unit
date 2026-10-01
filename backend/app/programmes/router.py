@@ -149,4 +149,3 @@ async def reorder_programme_sessions(programme_id: str, req: ReorderSessionsRequ
     if not prog:
         raise HTTPException(status_code=404, detail="Programme not found")
     return prog
-

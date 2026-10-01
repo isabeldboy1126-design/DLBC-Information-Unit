@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { getApiUrl, API_BASE_URL } from '../../config'
+import { ReadinessSummary } from './ReadinessSummary'
+import { Icon } from '../common/Icon'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { getApiUrl, API_BASE_URL, authFetch } from '../../config'
 import { useAuth } from '../../context/AuthContext'
 import { ProgrammesSettingsSection } from './ProgrammesSettingsSection'
 
@@ -7,14 +9,14 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
   const { account, demoMode } = useAuth()
   const [instruction, setInstruction] = useState('')
   const [instructionLoaded, setInstructionLoaded] = useState(false)
-  const [autoProcessAfterVerification, setAutoProcessAfterVerification] = useState(false)
-  const [isAutoProcessLoaded, setIsAutoProcessLoaded] = useState(false)
-  const [isSavingAutoProcess, setIsSavingAutoProcess] = useState(false)
+  const [autoProcessAfterVerification, setAutoProcessAfterVerification] = useState(null)
+  const [autoStatus, setAutoStatus] = useState('loading')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState(null)
   const [error, setError] = useState(null)
   const [lastRefreshed, setLastRefreshed] = useState(null)
+  const settingsRequest = useRef(0)
   const [hasDemoDraft, setHasDemoDraft] = useState(() => {
     try {
       return Boolean(localStorage.getItem('dlbc_demo_onboarding_draft'))
@@ -35,23 +37,26 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
   }
 
   const fetchSettingsData = useCallback(async () => {
+    const request = ++settingsRequest.current
     setIsLoading(true)
     setError(null)
+    setAutoProcessAfterVerification(null)
+    setAutoStatus('loading')
     try {
       // 1. Fetch settings (auto-process after verification)
       try {
-        const setRes = await fetch(getApiUrl('/api/report-processing/settings'))
-        if (setRes.ok) {
-          const setData = await setRes.json()
-          const autoVal = setData.auto_process_after_verification
-          setAutoProcessAfterVerification(autoVal !== false && autoVal !== 'false')
-          setIsAutoProcessLoaded(true)
-        } else {
-          setIsAutoProcessLoaded(false)
-        }
+        const setRes = await authFetch(getApiUrl('/api/report-processing/settings'))
+        if (!setRes.ok) throw new Error(`Settings request failed: ${setRes.status}`)
+        const setData = await setRes.json()
+        const autoVal = setData.auto_process_after_verification
+        if (![true, false, 'true', 'false'].includes(autoVal)) throw new Error('Automation value is missing or invalid')
+        if (request !== settingsRequest.current) return
+        setAutoProcessAfterVerification(autoVal === true || autoVal === 'true')
+        setAutoStatus('loaded')
       } catch (e) {
+        if (request !== settingsRequest.current) return
         console.warn('Failed to load settings:', e)
-        setIsAutoProcessLoaded(false)
+        setAutoStatus('unavailable')
       }
 
       // 2. Fetch authoritative instruction with multi-endpoint fallback
@@ -59,7 +64,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
 
       // Primary: /api/report-processing/instruction
       try {
-        const instRes = await fetch(getApiUrl('/api/report-processing/instruction'))
+        const instRes = await authFetch(getApiUrl('/api/report-processing/instruction'))
         if (instRes.ok) {
           const instData = await instRes.json()
           if (instData && (instData.instruction || instData.unified_instructions)) {
@@ -75,7 +80,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
       // Fallback 1: /api/report-processing/settings
       if (!loadedInstruction) {
         try {
-          const setRes2 = await fetch(getApiUrl('/api/report-processing/settings'))
+          const setRes2 = await authFetch(getApiUrl('/api/report-processing/settings'))
           if (setRes2.ok) {
             const setData2 = await setRes2.json()
             if (setData2 && (setData2.instruction || setData2.unified_instructions)) {
@@ -90,7 +95,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
       // Fallback 2: /api/report-processing/standards/active
       if (!loadedInstruction) {
         try {
-          const stdRes = await fetch(getApiUrl('/api/report-processing/standards/active'))
+          const stdRes = await authFetch(getApiUrl('/api/report-processing/standards/active'))
           if (stdRes.ok) {
             const stdData = await stdRes.json()
             if (stdData && (stdData.instruction || stdData.unified_instructions)) {
@@ -123,6 +128,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
         }
       }
 
+      if (request !== settingsRequest.current) return
       if (loadedInstruction && typeof loadedInstruction === 'string' && loadedInstruction.trim()) {
         setInstruction(loadedInstruction)
         setInstructionLoaded(true)
@@ -135,11 +141,12 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
 
       setLastRefreshed(new Date().toLocaleTimeString())
     } catch (err) {
+      if (request !== settingsRequest.current) return
       console.error(`Error connecting to backend server at ${API_BASE_URL}:`, err)
       setInstructionLoaded(false)
       setError('AI Processing Instructions could not be loaded.')
     } finally {
-      setIsLoading(false)
+      if (request === settingsRequest.current) setIsLoading(false)
     }
   }, [])
 
@@ -161,7 +168,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
     setFeedback(null)
     setError(null)
     try {
-      const res = await fetch(getApiUrl('/api/report-processing/instruction'), {
+      const res = await authFetch(getApiUrl('/api/report-processing/instruction'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instruction: trimmed, unified_instructions: trimmed }),
@@ -188,36 +195,29 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
   }
 
   const handleToggleAutoProcess = async () => {
-    if (!isAutoProcessLoaded || isSavingAutoProcess) return
-    const prevVal = autoProcessAfterVerification
-    const nextVal = !prevVal
+    if (autoProcessAfterVerification === null || isLoading || isSaving || autoStatus === 'saving') return
+    const previous = autoProcessAfterVerification
+    const nextVal = !autoProcessAfterVerification
     setAutoProcessAfterVerification(nextVal)
-    setIsSavingAutoProcess(true)
-    setError(null)
+    setAutoStatus('saving')
     try {
-      const res = await fetch(getApiUrl('/api/report-processing/settings'), {
+      const response = await authFetch(getApiUrl('/api/report-processing/settings'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ auto_process_after_verification: nextVal }),
       })
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`)
-      }
-      const data = await res.json().catch(() => ({}))
-      if (typeof data.auto_process_after_verification === 'boolean') {
-        setAutoProcessAfterVerification(data.auto_process_after_verification)
-      }
+      if (!response.ok) throw new Error(`Automation save failed: ${response.status}`)
+      setAutoStatus('saved')
     } catch (err) {
       console.error('Failed to toggle auto_process_after_verification:', err)
-      setAutoProcessAfterVerification(prevVal)
-      setError('Settings could not be saved.')
-    } finally {
-      setIsSavingAutoProcess(false)
+      setAutoProcessAfterVerification(previous)
+      setAutoStatus('failed')
     }
   }
 
   return (
     <div className="settings-page-container">
+      <ReadinessSummary />
       {/* Top Header */}
       <div className="settings-page-header">
         <div className="settings-header-left">
@@ -234,7 +234,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
             type="button"
             className="btn btn--outline btn--small"
             onClick={fetchSettingsData}
-            disabled={isLoading || isSaving || isSavingAutoProcess}
+            disabled={isLoading || isSaving || autoStatus === 'saving'}
           >
             {isLoading ? 'Checking...' : '↻ Refresh'}
           </button>
@@ -244,12 +244,12 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
       {error && (
         <div className="settings-alert settings-alert--error" role="alert">
           <div className="settings-alert-content">
-            <span className="settings-alert-text">⚠️ {error}</span>
+            <span className="settings-alert-text">⚠ {error}</span>
             <button
               type="button"
               className="btn btn--small btn--outline btn-retry-load"
               onClick={fetchSettingsData}
-              disabled={isLoading}
+              disabled={isLoading || isSaving || autoStatus === 'saving'}
             >
               {isLoading ? 'Retrying...' : 'Retry'}
             </button>
@@ -267,7 +267,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
       <div className="settings-card editorial-standards-card">
         <div className="settings-card-header">
           <div className="settings-card-title-group">
-            <span className="settings-card-icon">📋</span>
+            <span className="settings-card-icon"><Icon name="copy" /></span>
             <div>
               <h2 className="settings-card-title">Editorial Standards &amp; Instruction Management</h2>
             </div>
@@ -277,27 +277,34 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
         <div className="settings-card-body">
           {/* Simple Auto-Process Row */}
           <div className="settings-auto-process-row">
-            <div className="settings-auto-process-label-group">
-              <span className="settings-auto-process-label">Auto-Process After Verification</span>
-              {!isAutoProcessLoaded && !isLoading && (
-                <span className="settings-field-unavailable-hint" style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #888)', marginLeft: '0.5rem' }}>
-                  (unavailable)
-                </span>
-              )}
-            </div>
-            <label
-              className={`toggle-switch ${(!isAutoProcessLoaded || isLoading || isSavingAutoProcess) ? 'toggle-switch--disabled' : ''}`}
-              aria-label="Auto-Process After Verification"
-            >
+            <span className="settings-auto-process-label">Auto-Process After Verification</span>
+            {autoProcessAfterVerification === null ? (
+              <span>{autoStatus === 'loading' ? 'Loading…' : 'Unknown'}</span>
+            ) : <label className="toggle-switch">
               <input
                 type="checkbox"
                 checked={autoProcessAfterVerification}
                 onChange={handleToggleAutoProcess}
-                disabled={!isAutoProcessLoaded || isLoading || isSavingAutoProcess}
+                aria-label="Auto-Process After Verification"
+                aria-describedby="automation-status"
+                disabled={isLoading || isSaving || autoStatus === 'saving'}
               />
               <span className="toggle-slider"></span>
-            </label>
+            </label>}
           </div>
+          <p id="automation-status" role={autoStatus === 'unavailable' || autoStatus === 'failed' ? 'alert' : 'status'}>
+            {autoStatus === 'loading' ? 'Loading saved automation setting…'
+              : autoStatus === 'unavailable' ? 'Saved automation setting is unknown. Retry loading before making changes.'
+              : autoStatus === 'saving' ? 'Saving automation setting…'
+              : autoStatus === 'failed' ? 'Automation setting could not be saved. Restored the last confirmed value. Toggle again to retry.'
+              : autoStatus === 'saved' ? 'Automation setting saved.'
+              : 'Saved automation setting loaded.'}
+          </p>
+          {autoStatus === 'unavailable' && (
+            <button type="button" className="btn btn--outline btn--small" onClick={fetchSettingsData} disabled={isLoading || isSaving}>
+              Retry automation settings
+            </button>
+          )}
 
           {/* AI Processing Instructions Area */}
           <div className="unified-instructions-group">
@@ -328,7 +335,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
                 type="button"
                 className="btn btn--primary btn-save-instructions"
                 onClick={handleSaveInstructions}
-                disabled={isSaving || isLoading || !instructionLoaded || !instruction.trim()}
+                disabled={isSaving || isLoading || autoStatus === 'saving' || !instructionLoaded || !instruction.trim()}
               >
                 {isSaving ? 'Saving Instructions...' : 'Save Instructions'}
               </button>

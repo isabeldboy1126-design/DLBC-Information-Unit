@@ -157,4 +157,3 @@ async def test_programmes_api_endpoints():
         del_res = await ac.delete(f"/api/programmes/{prog_id}", headers=headers)
         assert del_res.status_code == 200
         assert del_res.json()["is_archived"] is True
-

@@ -75,10 +75,10 @@ export function RecordingControls({
           {isRecording && (
             <div className="progressive-stats">
               <span className="stat-pill">
-                📦 Chunks Streamed: <strong>{recordingStats.chunks}</strong>
+                 Chunks Streamed: <strong>{recordingStats.chunks}</strong>
               </span>
               <span className="stat-pill">
-                💾 Saved to Disk: <strong>{formatBytes(recordingStats.bytes)}</strong>
+                 Saved to Disk: <strong>{formatBytes(recordingStats.bytes)}</strong>
               </span>
               <span className="stat-pill stat-pill--safe">
                 ✓ Progressively preserved in FastAPI

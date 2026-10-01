@@ -1,5 +1,6 @@
+import { Icon } from '../common/Icon'
 import React, { useState, useEffect, useCallback } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 import { EditorStandardsModal } from './EditorStandardsModal'
 import { SourceReferenceDrawer } from './SourceReferenceDrawer'
 import { ConfirmationModal } from '../common/ConfirmationModal'
@@ -48,7 +49,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(getApiUrl('/api/editing/status'))
+      const res = await authFetch(getApiUrl('/api/editing/status'))
       if (res.ok) {
         const data = await res.json()
         setAiStatus(data)
@@ -61,7 +62,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
   const fetchEditingReport = useCallback(async () => {
     if (!sessionId) return
     try {
-      const res = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/report`))
+      const res = await authFetch(getApiUrl(`/api/editing/sessions/${sessionId}/report`))
       if (res.ok) {
         const data = await res.json()
         setEditingData(data)
@@ -103,7 +104,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
       setIsGenerating(true)
       setShowRegenConfirm(false)
 
-      const res = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/generate`), {
+      const res = await authFetch(getApiUrl(`/api/editing/sessions/${sessionId}/generate`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -133,7 +134,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
     try {
       setErrorBanner(null)
       setIsSaving(true)
-      const res = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/save`), {
+      const res = await authFetch(getApiUrl(`/api/editing/sessions/${sessionId}/save`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -160,7 +161,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
 
   const handleActivateRevision = async (revId) => {
     try {
-      const res = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/revisions/${revId}/activate`), {
+      const res = await authFetch(getApiUrl(`/api/editing/sessions/${sessionId}/revisions/${revId}/activate`), {
         method: 'POST',
       })
       if (res.ok) {
@@ -175,7 +176,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
 
   const executeCompleteEditing = async () => {
     try {
-      const res = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/complete`), {
+      const res = await authFetch(getApiUrl(`/api/editing/sessions/${sessionId}/complete`), {
         method: 'POST',
       })
       if (res.ok) {
@@ -251,18 +252,18 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
           </button>
           <div className="editing-header-text-block">
             <h2 className="editing-header-title">
-              {session?.title || 'Sunday Morning Worship & Sermon'}
+              {session?.title || 'Untitled session'}
             </h2>
             <div className="editing-header-meta-row">
-              <span>👤 Minister: <strong>{session?.minister_name || session?.speaker || 'Pst. Williams'}</strong></span>
-              <span>📅 {session?.date_created ? new Date(session.date_created).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Oct 24, 2023'}</span>
+              <span> Minister: <strong>{session?.minister || session?.minister_name || session?.speaker || 'Minister not recorded'}</strong></span>
+              <span> {session?.date_created ? new Date(session.date_created).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date not recorded'}</span>
             </div>
           </div>
         </div>
 
         <div className="editing-header-badge-group">
           <span className="badge badge-editing-phase">
-            🏷️ EDITING PHASE
+             EDITING PHASE
           </span>
           <div className="session-breadcrumbs">
             <span className="breadcrumb-item breadcrumb-item--done">1</span>
@@ -276,11 +277,11 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
       {errorBanner && (
         <div className="error-banner" role="alert">
           <div className="error-content">
-            <span className="error-icon">⚠️</span>
+            <span className="error-icon"><Icon name="alert" /></span>
             <div className="error-text">{errorBanner}</div>
           </div>
-          <button type="button" className="error-dismiss" onClick={() => setErrorBanner(null)}>
-            ✕
+          <button type="button" className="error-dismiss" aria-label="Dismiss editing error" onClick={() => setErrorBanner(null)}>
+            <Icon name="close" />
           </button>
         </div>
       )}
@@ -294,7 +295,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
       {/* Editing Subheader Action Bar Matching editing-workspace.png */}
       <div className="editing-top-subbar">
         <div className="editing-standard-label-group">
-          <span style={{ color: '#163e73', fontWeight: 700 }}>✦ AI Editor Standard:</span>
+          <span style={{ color: '#163e73', fontWeight: 700 }}><Icon name="settings" /> AI Editor Standard:</span>
           <strong>{aiStatus.active_standard_version || 'v2'}</strong>
           <button
             type="button"
@@ -374,7 +375,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
           {!activeRev && !isGenerating && (
             <div className="card editor-empty-card">
               <div className="editor-empty-content">
-                <h3>📝 Synthesize & Compile Report</h3>
+                <h3> Synthesize & Compile Report</h3>
                 <p>
                   The AI Editor will intelligently reconcile Reporter A (Structure) and Reporter B (Details & Omissions) against the authoritative Verified Transcript.
                 </p>
@@ -382,7 +383,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
                 {!canEdit && (
                   <div className="notice-card" style={{ margin: '1rem 0' }}>
                     <p className="text-warning">
-                      ⚠️ Both Reporter A and Reporter B drafts must be generated in the Reporting stage before Editing can begin.
+                      ⚠ Both Reporter A and Reporter B drafts must be generated in the Reporting stage before Editing can begin.
                     </p>
                   </div>
                 )}
@@ -412,6 +413,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
             <div className="editing-paper-surface">
               <input
                 id="report-title-input"
+                aria-label="Edited report title"
                 type="text"
                 className="editing-paper-title-input"
                 value={reportTitle}
@@ -421,6 +423,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
 
               <textarea
                 id="report-text-textarea"
+                aria-label="Edited report text"
                 className="editing-paper-textarea"
                 value={reportText}
                 onChange={handleTextChange}
@@ -433,7 +436,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
                   onClick={handleCopyReport}
                   title="Copy full markdown report"
                 >
-                  📋 {copied ? 'Copied!' : 'Copy'}
+                   {copied ? 'Copied!' : 'Copy'}
                 </button>
 
                 <button
@@ -441,7 +444,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
                   onClick={() => setShowRevisionsDrawer(!showRevisionsDrawer)}
                   title="View revision history"
                 >
-                  🕒 Revisions ({editingData.revisions_count || 1})
+                   Revisions ({editingData.revisions_count || 1})
                 </button>
 
                 <button
@@ -449,7 +452,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
                   onClick={() => setShowRegenConfirm(true)}
                   title="Regenerate a new AI revision"
                 >
-                  ↻ Regenerate
+                  <Icon name="refresh" /> Regenerate
                 </button>
               </div>
             </div>
@@ -460,37 +463,8 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
         <div className="editing-right-sidebar-panel">
           <SourceReferenceDrawer sources={editingData.sources} />
 
-          {/* AI Review Notes Alert Box Matching editing-workspace.png */}
-          {activeRev && (
-            <div className="ai-review-notes-alert-card">
-              <div className="review-notes-header">
-                <span>⚠️ AI Review Notes</span>
-                <span className="badge" style={{ background: '#fee2e2', color: '#b91c1c', fontSize: '0.72rem' }}>
-                  {activeRev.source_uncertainties?.length || 1} Issue
-                </span>
-              </div>
-              <p className="review-note-desc">
-                {activeRev.source_uncertainties && activeRev.source_uncertainties.length > 0
-                  ? activeRev.source_uncertainties[0]
-                  : 'Scripture Reference Check: Ensure Bible references match the preacher citations exactly.'}
-              </p>
-              <div className="review-note-actions">
-                <button type="button" className="btn-note-dismiss" onClick={() => {}}>
-                  Dismiss
-                </button>
-                <button
-                  type="button"
-                  className="btn-note-insert"
-                  onClick={() => {
-                    setReportText((prev) => prev + '\n\n*Scripture Citation: Verified against Biblical standard.*')
-                    setIsDirty(true)
-                  }}
-                >
-                  Insert Citation
-                </button>
-              </div>
-            </div>
-          )}
+          {activeRev?.source_uncertainties?.length > 0 && <div className="ai-review-notes-alert-card"><h4>Source review notes</h4><p>Check these concerns against the verified transcript before completing editing.</p><ul>{activeRev.source_uncertainties.map((note, i) => <li key={i}>{typeof note === 'string' ? note : note.description || note.reason || 'Review source context'}</li>)}</ul></div>}
+
         </div>
       </div>
 
@@ -501,9 +475,9 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
         <div className="modal-backdrop" onClick={() => setShowRevisionsDrawer(false)}>
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>🕒 Edited Report Revisions History</h3>
-              <button type="button" className="btn-close" onClick={() => setShowRevisionsDrawer(false)}>
-                ✕
+              <h3> Edited Report Revisions History</h3>
+              <button type="button" className="btn-close" aria-label="Close edited report revisions" onClick={() => setShowRevisionsDrawer(false)}>
+                <Icon name="close" />
               </button>
             </div>
             <div className="modal-body">
@@ -517,7 +491,7 @@ export function EditingView({ session, onBack, onNavigateToProofreading }) {
                       <strong>Revision {rev.revision_number}</strong>{' '}
                       <span className="badge badge--secondary">
                         {rev.revision_source === 'human_edited'
-                          ? '👤 Human Edited'
+                          ? ' Human Edited'
                           : rev.revision_source === 'ai_regenerated'
                           ? '↻ AI Regenerated'
                           : '⚡ AI Generated'}

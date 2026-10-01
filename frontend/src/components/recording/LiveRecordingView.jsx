@@ -1,3 +1,4 @@
+import { Icon } from '../common/Icon'
 import React, { useRef, useEffect } from 'react'
 
 /**
@@ -101,13 +102,13 @@ export function LiveRecordingView({
               })}
             </div>
             <span className="live-signal-badge">
-              {hasAudioSignal ? '📶 STRONG' : '📶 IDLE'}
+              {hasAudioSignal ? 'Signal detected' : 'No input signal'}
             </span>
           </div>
 
           {/* Compact Session / Programme Details */}
           <div className="live-bar-metadata" title={compactMetadataString}>
-            <span className="live-meta-icon">{sessionMetadata.source_type === 'youtube_tab' ? '📺' : '🏛️'}</span>
+            <span className="live-meta-icon"><Icon name="mic" /></span>
             <span className="live-meta-text">{compactMetadataString}</span>
           </div>
         </div>
@@ -122,7 +123,7 @@ export function LiveRecordingView({
               id="btn-minimize-live-recording"
               title="Minimize recorder to floating widget and use other app features"
             >
-              <span className="minimize-icon">🗕</span>
+              <span className="minimize-icon"><Icon name="minimize" /></span>
               <span>Minimize</span>
             </button>
           )}
@@ -132,8 +133,8 @@ export function LiveRecordingView({
             onClick={onStopRecording}
             id="btn-stop-live-recording"
           >
-            <span className="stop-icon">⏹</span>
-            <span>STOP SESSION</span>
+            <span className="stop-icon"><Icon name="stop" /></span>
+            <span>Stop and save</span>
           </button>
         </div>
       </div>
@@ -145,7 +146,7 @@ export function LiveRecordingView({
         <div className="transcript-stream-container" ref={transcriptContainerRef}>
           {segments.length === 0 && !interimText ? (
             <div className="transcript-waiting-placeholder">
-              <span className="waiting-spinner">⏳</span>
+              <span className="waiting-spinner"><Icon name="clock" /></span>
               <p className="waiting-text">
                 {sessionMetadata.source_type === 'youtube_tab'
                   ? 'Capturing audio from shared YouTube tab... Live transcript will stream here.'
@@ -170,7 +171,7 @@ export function LiveRecordingView({
                     <div className="segment-body">
                       {isFlagged && (
                         <span className="flag-alert-icon" title="Flagged for verification review">
-                          ⚠️
+                          <Icon name="alert" />
                         </span>
                       )}
                       <span className="segment-text">{seg.text}</span>
@@ -181,9 +182,10 @@ export function LiveRecordingView({
                         type="button"
                         className={`btn-flag-toggle ${isFlagged ? 'btn-flag--active' : ''}`}
                         onClick={() => onToggleManualFlag(idx)}
+                        aria-label={isFlagged ? 'Remove verification flag' : 'Flag section for human review'}
                         title={isFlagged ? 'Remove verification flag' : 'Flag section for human review'}
                       >
-                        🚩
+                        <Icon name="flag" />
                       </button>
                     )}
                   </div>
@@ -219,18 +221,18 @@ export function LiveRecordingView({
         <div className="recording-status-subbar">
           <div className="subbar-left">
             <div className="status-chip chip--optimal">
-              <span>☁️ STORAGE: OPTIMAL</span>
+              <span>Audio capture active • save completes after stopping</span>
             </div>
             <div className="status-chip chip--ai">
-              <span>👂 AI TRANSCRIPTION: {transcriptStatus.toUpperCase()}</span>
+              <span>Transcription: {transcriptStatus.toUpperCase()}</span>
             </div>
           </div>
 
           <div className="subbar-right">
             <span className="engine-model-text">
               {sessionMetadata.source_type === 'youtube_tab'
-                ? 'Azure Speech (en-NG) • YouTube Tab Audio • Lossless PCM Archive'
-                : 'Azure Speech (en-NG) • Lossless PCM Archive'}
+                ? 'YouTube tab audio • original capture retained'
+                : 'Live audio • original capture retained'}
             </span>
           </div>
         </div>

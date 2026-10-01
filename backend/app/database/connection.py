@@ -212,6 +212,16 @@ def _get_engine():
 
 
 @asynccontextmanager
+async def connection_scope(connection=None):
+    """Borrow a caller's transaction without committing or closing it."""
+    if connection is not None:
+        yield connection
+    else:
+        async with get_db_connection() as conn:
+            yield conn
+
+
+@asynccontextmanager
 async def get_db_connection():
     """
     Asynchronous context manager returning an SQLite connection (local/tests)
