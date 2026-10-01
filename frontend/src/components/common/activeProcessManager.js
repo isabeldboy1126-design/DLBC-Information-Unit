@@ -22,6 +22,7 @@ export function setActiveProcess(job) {
       ? job.isMinimized
       : (current && current.sessionId === job.sessionId ? !!current.isMinimized : false)
 
+    const currentDeviceUid = typeof localStorage !== 'undefined' ? localStorage.getItem('dlbc_device_uid') : null
     const payload = {
       jobType: job.jobType || current?.jobType || 'report_processing',
       sessionId: job.sessionId,
@@ -30,6 +31,9 @@ export function setActiveProcess(job) {
       isCompleted: !!job.isCompleted,
       isMinimized,
       runId: job.runId || current?.runId || null,
+      uiHostDeviceId: job.uiHostDeviceId || current?.uiHostDeviceId || currentDeviceUid,
+      totalItems: typeof job.totalItems === 'number' ? job.totalItems : current?.totalItems ?? 0,
+      completedItems: typeof job.completedItems === 'number' ? job.completedItems : current?.completedItems ?? 0,
       updatedAt: Date.now(),
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))

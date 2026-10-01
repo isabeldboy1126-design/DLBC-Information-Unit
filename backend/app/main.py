@@ -23,6 +23,7 @@ from app.database.session_repo import session_repo
 from app.database.programmes_repo import programmes_repo
 from app.database.interruption_recovery import recover_interrupted_sessions
 from app.database.account_repo import account_repo
+from app.database.device_repo import device_repo
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,6 +34,7 @@ async def lifespan(app: FastAPI):
         await account_repo.init_db()
         await session_repo.init_db()
         await programmes_repo.init_db()
+        await device_repo.init_db()
         from app.database.report_processing_repo import report_processing_repo
         await report_processing_repo.init_db()
         await session_repo.index_existing_storage_files()
@@ -89,6 +91,7 @@ from app.final_report.router import router as final_report_router
 from app.programmes.router import router as programmes_router
 from app.youtube.router import router as youtube_router
 from app.report_processing.router import router as report_processing_router
+from app.remote.router import router as remote_router
 
 app.include_router(auth_router)
 app.include_router(audio_router)
@@ -102,6 +105,7 @@ app.include_router(final_report_router)
 app.include_router(programmes_router)
 app.include_router(youtube_router)
 app.include_router(report_processing_router)
+app.include_router(remote_router)
 
 
 

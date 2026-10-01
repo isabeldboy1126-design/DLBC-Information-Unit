@@ -124,8 +124,26 @@ export function DashboardView({
   onViewAllSessions,
   onViewNeedsVerification,
   onFileSelect,
+  remoteControl = null,
+  onOpenRemoteControl = null,
 }) {
   const fileInputRef = useRef(null)
+
+  const [remoteElapsed, setRemoteElapsed] = React.useState(0)
+  React.useEffect(() => {
+    const startedAt = remoteControl?.activeRecording?.started_at
+    if (!startedAt) {
+      setRemoteElapsed(0)
+      return
+    }
+    const startMs = new Date(startedAt).getTime()
+    const tick = () => {
+      setRemoteElapsed(Math.max(0, Math.floor((Date.now() - startMs) / 1000)))
+    }
+    tick()
+    const timer = setInterval(tick, 1000)
+    return () => clearInterval(timer)
+  }, [remoteControl?.activeRecording?.started_at])
 
   // Filter sessions needing immediate operator action:
   // 1. Interrupted sessions requiring intervention
@@ -197,12 +215,68 @@ export function DashboardView({
     }
   }
 
+  function formatElapsed(seconds) {
+    if (isNaN(seconds) || seconds < 0) return '00:00:00'
+    const hrs = Math.floor(seconds / 3600)
+    const mins = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`
+  }
+
   const handleDragOver = (e) => {
     e.preventDefault()
   }
 
   return (
     <div className="dashboard-view-container">
+      {/* Remote Recording Banner if another device on account is recording */}
+      {remoteControl?.isRemoteRecordingActive && remoteControl?.activeRecording && (
+        <div
+          className="remote-recording-banner"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '14px 20px',
+            marginBottom: '24px',
+            borderRadius: '10px',
+            background: 'rgba(16, 185, 129, 0.08)',
+            border: '1px solid rgba(16, 185, 129, 0.25)',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span
+              style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: '#10b981',
+                boxShadow: '0 0 8px #10b981',
+                flexShrink: 0,
+              }}
+            />
+            <div style={{ fontSize: '14px', color: 'var(--color-text-primary)' }}>
+              <strong>{remoteControl.activeRecording.owner_device_name || 'Media Device'}</strong>
+              {' is recording '}
+              <strong>{remoteControl.activeRecording.session_title || 'Live Worship Service'}</strong>
+              <span style={{ color: 'var(--color-text-secondary)', marginLeft: '6px', fontFamily: 'monospace' }}>
+                ({formatElapsed(remoteElapsed)})
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn--primary btn--small"
+            style={{ padding: '6px 14px', fontSize: '13px', fontWeight: 600, flexShrink: 0 }}
+            onClick={onOpenRemoteControl}
+          >
+            Open Remote Control →
+          </button>
+        </div>
+      )}
+
       {/* ------------------------------------------------------------- */}
       {/* 1. SESSION CREATION AREA (Order: Start Live, YouTube, Upload)   */}
       {/* ------------------------------------------------------------- */}

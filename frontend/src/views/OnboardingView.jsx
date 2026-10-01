@@ -33,6 +33,63 @@ export function OnboardingView({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationError, setValidationError] = useState(null)
 
+  // Reconstruct visited step path based on target step and branching choices
+  const deriveHistoryForStep = (targetStep, draft) => {
+    const hist = [1]
+    if (targetStep <= 1) return hist
+    hist.push(2)
+    if (targetStep === 2) return hist
+    const term = draft?.terminal_level || 'state_headquarters'
+    if (term === 'state_headquarters') {
+      hist.push(7)
+      return hist
+    }
+    hist.push(3)
+    if (targetStep === 3) return hist
+    if (term === 'region_headquarters') {
+      hist.push(7)
+      return hist
+    }
+    hist.push(4)
+    if (targetStep === 4) return hist
+    if (term === 'old_group_headquarters') {
+      hist.push(7)
+      return hist
+    }
+    hist.push(5)
+    if (targetStep === 5) return hist
+    if (term === 'group_headquarters') {
+      hist.push(7)
+      return hist
+    }
+    hist.push(6)
+    if (targetStep === 6) return hist
+    hist.push(7)
+    return hist
+  }
+
+  const handleRestartTest = () => {
+    try {
+      localStorage.removeItem('dlbc_demo_onboarding_draft')
+    } catch (e) {
+      console.warn('Error clearing demo draft:', e)
+    }
+    setSector('Adult')
+    setCustomSector('')
+    setChurchState('')
+    setStateBranch('state_headquarters')
+    setRegion('')
+    setRegionBranch('region_headquarters')
+    setOldGroup('')
+    setOldGroupBranch('old_group_headquarters')
+    setGroupName('')
+    setGroupBranch('group_headquarters')
+    setDistrict('')
+    setStep(1)
+    setHistory([1])
+    setValidationError(null)
+  }
+
   // Initialize from existing account profile or local demo draft
   useEffect(() => {
     if (isDemoTest) {
@@ -78,6 +135,11 @@ export function OnboardingView({
           }
           if (draft.step && draft.step >= 1 && draft.step <= 7) {
             setStep(draft.step)
+            if (Array.isArray(draft.history) && draft.history.length > 0) {
+              setHistory(draft.history)
+            } else {
+              setHistory(deriveHistoryForStep(draft.step, draft))
+            }
           }
           return
         }
@@ -282,7 +344,7 @@ export function OnboardingView({
         const payload = buildPayload()
         if (isDemoTest) {
           try {
-            localStorage.setItem('dlbc_demo_onboarding_draft', JSON.stringify({ ...payload, step: 7, completed: true }))
+            localStorage.setItem('dlbc_demo_onboarding_draft', JSON.stringify({ ...payload, step: 7, history, completed: true }))
           } catch (e) {
             console.warn('Error saving completed demo draft:', e)
           }
@@ -306,13 +368,22 @@ export function OnboardingView({
   }
 
   const navigateNext = (nextStep) => {
-    setHistory((prev) => [...prev, nextStep])
+    let nextHist = []
+    setHistory((prev) => {
+      const idx = prev.indexOf(step)
+      const base = idx >= 0 ? prev.slice(0, idx + 1) : prev
+      nextHist = [...base, nextStep]
+      return nextHist
+    })
     setStep(nextStep)
 
     if (isDemoTest) {
       try {
         const payload = buildPayload()
-        localStorage.setItem('dlbc_demo_onboarding_draft', JSON.stringify({ ...payload, step: nextStep }))
+        localStorage.setItem(
+          'dlbc_demo_onboarding_draft',
+          JSON.stringify({ ...payload, step: nextStep, history: nextHist.length > 0 ? nextHist : [...history, nextStep] })
+        )
       } catch (e) {
         // Non-blocking localStorage save
       }
@@ -328,20 +399,30 @@ export function OnboardingView({
     }
   }
 
-  // Back Navigation
+  // Back Navigation: Unlimited back through dynamic visited path
   const handleBack = () => {
     setValidationError(null)
-    if (history.length > 1) {
-      const newHistory = [...history]
+    setHistory((prev) => {
+      if (prev.length <= 1) return prev
+      const newHistory = [...prev]
       newHistory.pop()
       const prevStep = newHistory[newHistory.length - 1]
-      setHistory(newHistory)
       setStep(prevStep)
-    }
+      if (isDemoTest) {
+        try {
+          const payload = buildPayload()
+          localStorage.setItem(
+            'dlbc_demo_onboarding_draft',
+            JSON.stringify({ ...payload, step: prevStep, history: newHistory })
+          )
+        } catch (e) {}
+      }
+      return newHistory
+    })
   }
 
-  // Calculate dynamic step index for the display badge (e.g. "Step 1", "Step 2", etc.)
-  const currentStepNumber = history.length
+  // Calculate dynamic step index for data-entry steps
+  const currentStepNumber = history.indexOf(step) !== -1 ? history.indexOf(step) + 1 : history.length
 
   return (
     <div className="onboarding-page-container">
@@ -357,7 +438,20 @@ export function OnboardingView({
             </div>
           </div>
           <div className="onboarding-progress-badge">
-            <span className="progress-step-pill">Step {currentStepNumber}</span>
+            <span className="progress-step-pill">
+              {step === 7 ? 'Review' : `Step ${currentStepNumber}`}
+            </span>
+            {isDemoTest && (
+              <button
+                type="button"
+                className="onboarding-restart-btn"
+                onClick={handleRestartTest}
+                title="Reset test onboarding draft and start again from step 1"
+                id="btn-restart-demo-test"
+              >
+                Restart test
+              </button>
+            )}
             {isReplay && onReplayCancel && (
               <button
                 type="button"
@@ -374,6 +468,7 @@ export function OnboardingView({
                 className="onboarding-cancel-btn"
                 onClick={onDemoTestCancel}
                 title="Exit demo test onboarding"
+                id="btn-exit-demo-test"
               >
                 Exit Test
               </button>
@@ -456,7 +551,16 @@ export function OnboardingView({
                   <button
                     type="button"
                     className={`hierarchy-choice-btn ${stateBranch === 'state_headquarters' ? 'hierarchy-choice-btn--selected' : ''}`}
-                    onClick={() => setStateBranch('state_headquarters')}
+                    onClick={() => {
+                      setStateBranch('state_headquarters')
+                      setRegion('')
+                      setRegionBranch(null)
+                      setOldGroup('')
+                      setOldGroupBranch(null)
+                      setGroupName('')
+                      setGroupBranch(null)
+                      setDistrict('')
+                    }}
                   >
                     State Headquarters
                   </button>
@@ -495,7 +599,14 @@ export function OnboardingView({
                   <button
                     type="button"
                     className={`hierarchy-choice-btn ${regionBranch === 'region_headquarters' ? 'hierarchy-choice-btn--selected' : ''}`}
-                    onClick={() => setRegionBranch('region_headquarters')}
+                    onClick={() => {
+                      setRegionBranch('region_headquarters')
+                      setOldGroup('')
+                      setOldGroupBranch(null)
+                      setGroupName('')
+                      setGroupBranch(null)
+                      setDistrict('')
+                    }}
                   >
                     Region Headquarters
                   </button>
@@ -534,7 +645,12 @@ export function OnboardingView({
                   <button
                     type="button"
                     className={`hierarchy-choice-btn ${oldGroupBranch === 'old_group_headquarters' ? 'hierarchy-choice-btn--selected' : ''}`}
-                    onClick={() => setOldGroupBranch('old_group_headquarters')}
+                    onClick={() => {
+                      setOldGroupBranch('old_group_headquarters')
+                      setGroupName('')
+                      setGroupBranch(null)
+                      setDistrict('')
+                    }}
                   >
                     Old Group Headquarters
                   </button>
@@ -573,7 +689,10 @@ export function OnboardingView({
                   <button
                     type="button"
                     className={`hierarchy-choice-btn ${groupBranch === 'group_headquarters' ? 'hierarchy-choice-btn--selected' : ''}`}
-                    onClick={() => setGroupBranch('group_headquarters')}
+                    onClick={() => {
+                      setGroupBranch('group_headquarters')
+                      setDistrict('')
+                    }}
                   >
                     Group Headquarters
                   </button>

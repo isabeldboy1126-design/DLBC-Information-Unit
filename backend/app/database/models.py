@@ -401,6 +401,68 @@ CREATE TABLE IF NOT EXISTS account_settings (
     updated_at TEXT NOT NULL,
     PRIMARY KEY(account_id, setting_key)
 );
+
+-- Multi-Device Remote Control & Device State (SQLite)
+CREATE TABLE IF NOT EXISTS registered_devices (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    device_uid TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    platform TEXT DEFAULT 'web',
+    device_type TEXT DEFAULT 'desktop',
+    last_seen_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_account_uid ON registered_devices(account_id, device_uid);
+CREATE INDEX IF NOT EXISTS idx_devices_account ON registered_devices(account_id);
+
+CREATE TABLE IF NOT EXISTS active_recording_state (
+    account_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    owner_device_id TEXT NOT NULL,
+    recording_status TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    title TEXT,
+    programme TEXT,
+    minister TEXT,
+    last_heartbeat_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_act_rec_account ON active_recording_state(account_id);
+
+CREATE TABLE IF NOT EXISTS device_commands (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    target_device_id TEXT NOT NULL,
+    command_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    acknowledged_at TEXT,
+    completed_at TEXT,
+    expires_at TEXT NOT NULL,
+    failure_reason TEXT,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_cmd_account_target ON device_commands(account_id, target_device_id, status);
+CREATE INDEX IF NOT EXISTS idx_cmd_session ON device_commands(session_id);
+
+CREATE TABLE IF NOT EXISTS active_workflow_state (
+    account_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    workflow_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    ui_host_device_id TEXT NOT NULL,
+    progress_label TEXT,
+    items_total INTEGER DEFAULT 0,
+    items_resolved INTEGER DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_act_wf_account ON active_workflow_state(account_id);
 """
 
 # Phase 5 migration: add verification columns to sessions table.
@@ -947,6 +1009,84 @@ CREATE TABLE account_settings (
     updated_at VARCHAR(255) NOT NULL,
     PRIMARY KEY(account_id, setting_key)
 );
+
+-- Multi-Device Remote Control & Device State (MSSQL)
+IF OBJECT_ID(N'registered_devices', N'U') IS NULL
+CREATE TABLE registered_devices (
+    id VARCHAR(255) PRIMARY KEY,
+    account_id VARCHAR(255) NOT NULL,
+    device_uid VARCHAR(255) NOT NULL,
+    display_name NVARCHAR(255) NOT NULL,
+    platform VARCHAR(100) DEFAULT 'web',
+    device_type VARCHAR(100) DEFAULT 'desktop',
+    last_seen_at VARCHAR(255) NOT NULL,
+    created_at VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(255) NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_devices_account_uid')
+CREATE UNIQUE INDEX idx_devices_account_uid ON registered_devices(account_id, device_uid);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_devices_account')
+CREATE INDEX idx_devices_account ON registered_devices(account_id);
+
+IF OBJECT_ID(N'active_recording_state', N'U') IS NULL
+CREATE TABLE active_recording_state (
+    account_id VARCHAR(255) PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    owner_device_id VARCHAR(255) NOT NULL,
+    recording_status VARCHAR(50) NOT NULL,
+    started_at VARCHAR(255) NOT NULL,
+    title NVARCHAR(MAX),
+    programme NVARCHAR(MAX),
+    minister NVARCHAR(MAX),
+    last_heartbeat_at VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(255) NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_act_rec_account')
+CREATE INDEX idx_act_rec_account ON active_recording_state(account_id);
+
+IF OBJECT_ID(N'device_commands', N'U') IS NULL
+CREATE TABLE device_commands (
+    id VARCHAR(255) PRIMARY KEY,
+    account_id VARCHAR(255) NOT NULL,
+    session_id VARCHAR(255) NOT NULL,
+    target_device_id VARCHAR(255) NOT NULL,
+    command_type VARCHAR(100) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    created_at VARCHAR(255) NOT NULL,
+    acknowledged_at VARCHAR(255),
+    completed_at VARCHAR(255),
+    expires_at VARCHAR(255) NOT NULL,
+    failure_reason NVARCHAR(MAX),
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_cmd_account_target')
+CREATE INDEX idx_cmd_account_target ON device_commands(account_id, target_device_id, status);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_cmd_session')
+CREATE INDEX idx_cmd_session ON device_commands(session_id);
+
+IF OBJECT_ID(N'active_workflow_state', N'U') IS NULL
+CREATE TABLE active_workflow_state (
+    account_id VARCHAR(255) PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    workflow_type VARCHAR(100) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    ui_host_device_id VARCHAR(255) NOT NULL,
+    progress_label NVARCHAR(MAX),
+    items_total INT DEFAULT 0,
+    items_resolved INT DEFAULT 0,
+    updated_at VARCHAR(255) NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_act_wf_account')
+CREATE INDEX idx_act_wf_account ON active_workflow_state(account_id);
 """
 
 PHASE5_MIGRATION_COLUMNS_MSSQL = [

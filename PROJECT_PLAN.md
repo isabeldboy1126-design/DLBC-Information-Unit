@@ -616,6 +616,7 @@ Scope additions after approval are recorded here:
 | 2026-08-16 | Clarified V1 distribution | V1 produces downloadable document; no WhatsApp automation | No new implementation needed; scope boundary clarified | Project owner |
 | 2026-08-16 | Clarified offline capability | Offline transcription not mandatory for V1 | Removes offline from V1 scope; architecture remains extensible | Project owner |
 | 2026-08-16 | Added DLBC visual brand direction | Application should align with church identity | Palette documented; detailed UI design deferred to Phase 10 | Project owner |
+| 2026-10-01 | Added Multi-Device Remote Control V1, Capacitor Android setup, and Demo Onboarding hierarchy fixes | Cross-device recording control, Android companion support, and onboarding UX integrity | Backend device/command/workflow state tables & polling routes, frontend useRemoteControl hook & RemoteControlView, Capacitor Android integration with 10.0.2.2 emulator routing, dynamic onboarding step derivation | Project owner |
 
 ---
 

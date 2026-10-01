@@ -17,6 +17,11 @@ const resolveApiBaseUrl = () => {
   // Automatic production fallback for client-side environments not on localhost
   if (typeof window !== 'undefined' && window.location) {
     const hostname = (window.location.hostname || '').toLowerCase()
+    // Android emulator host loopback
+    if (hostname === '10.0.2.2' || (typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) && (hostname === 'localhost' || window.location.protocol === 'capacitor:'))) {
+      return 'http://10.0.2.2:8000'
+    }
+
     const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0' || hostname === '::1'
     if (!isLocal && hostname) {
       return PRODUCTION_API_URL

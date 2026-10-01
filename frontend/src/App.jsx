@@ -35,6 +35,8 @@ import { ForgotPasswordView } from './views/ForgotPasswordView'
 import { ResetPasswordView } from './views/ResetPasswordView'
 import { OnboardingView } from './views/OnboardingView'
 import { ProfileView } from './components/profile/ProfileView'
+import { useRemoteControl } from './hooks/useRemoteControl'
+import { RemoteControlView } from './components/remote/RemoteControlView'
 import './App.css'
 
 function App() {
@@ -70,7 +72,7 @@ function App() {
     if (clean === 'verification_workspace') {
       return { view: 'sessions', sessionId: null, stage: 'verification', subAction: null }
     }
-    if (['new_live', 'transcribe', 'youtube', 'settings', 'live_recording', 'reports', 'events', 'profile'].includes(clean)) {
+    if (['new_live', 'transcribe', 'youtube', 'settings', 'live_recording', 'reports', 'events', 'profile', 'remote_control'].includes(clean)) {
       return { view: clean, sessionId: null, stage: null, subAction: null }
     }
     return { view: 'dashboard', sessionId: null, stage: null, subAction: null }
@@ -142,6 +144,20 @@ function App() {
 
   // Phase 4: Persistent Church Sessions Hook
   const sessionsHook = useSessions()
+
+  const handleStopRecordingRef = useRef(null)
+
+  // Multi-Device Remote Control & Account Presence Hook
+  const remoteControl = useRemoteControl({
+    isRecording: liveAudio.isRecording,
+    onRemoteStopRequested: async () => {
+      if (handleStopRecordingRef.current) {
+        return await handleStopRecordingRef.current()
+      }
+      return null
+    },
+    isAuthenticated: Boolean(user) || Boolean(demoMode),
+  })
 
   useEffect(() => {
     if (user && isOnboarded) {
@@ -309,6 +325,11 @@ function App() {
     const success = await liveAudio.startRecording(meta.title, meta)
     if (success) {
       setIsRecorderMinimized(false)
+      await remoteControl.startRecordingSync({
+        title: meta.title,
+        minister: meta.minister,
+        eventType: meta.eventType,
+      })
     }
   }
 
@@ -322,6 +343,9 @@ function App() {
       recordingResult?.session?.session_id ||
       liveAudio.latestSession?.session_id ||
       liveAudio.latestRecording?.session_id
+
+    await remoteControl.stopRecordingSync(targetId)
+
     if (targetId) {
       setCompletedSessionId(targetId)
       await sessionsHook.loadSession(targetId)
@@ -329,7 +353,9 @@ function App() {
     } else {
       setShowCompletionModal(true)
     }
+    return recordingResult
   }
+  handleStopRecordingRef.current = handleStopRecording
 
   // Navigation Handler for AppShell Sidebar
   const handleNavigate = (view) => {
@@ -392,6 +418,12 @@ function App() {
     if (currentView === 'profile') {
       return {
         title: 'Account Profile',
+        onBack: handleInAppBack,
+      }
+    }
+    if (currentView === 'remote_control') {
+      return {
+        title: 'Remote Control',
         onBack: handleInAppBack,
       }
     }
@@ -519,6 +551,7 @@ function App() {
             : currentView
         }
       isLiveRecordingActive={liveAudio.isRecording}
+      isRemoteRecordingActive={remoteControl.isRemoteRecordingActive}
       onNavigate={handleNavigate}
       screenTitle={currentScreenTitle}
       onBack={currentScreenBack}
@@ -641,6 +674,8 @@ function App() {
             navigateTo('sessions')
           }}
           onFileSelect={handleDashboardFileSelect}
+          remoteControl={remoteControl}
+          onOpenRemoteControl={() => navigateTo('remote_control')}
         />
       ) : currentView === 'new_live' ? (
         /* ----------------------------------------------------------- */
@@ -837,6 +872,15 @@ function App() {
         <ProfileView
           onBack={handleInAppBack}
           onEditChurchDetails={() => setReplayOnboardingActive(true)}
+        />
+      ) : currentView === 'remote_control' ? (
+        /* ----------------------------------------------------------- */
+        /* VIEW 10: MULTI-DEVICE REMOTE CONTROL                        */
+        /* ----------------------------------------------------------- */
+        <RemoteControlView
+          remoteControl={remoteControl}
+          onNavigate={navigateTo}
+          onBack={handleInAppBack}
         />
       ) : null}
       </ErrorBoundary>

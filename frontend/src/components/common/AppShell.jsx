@@ -89,6 +89,7 @@ function SidebarToggleIcon() {
 export function AppShell({
   activeView, // 'dashboard' | 'sessions' | 'reports' | 'settings' | 'new_live' | 'transcribe' | 'live_recording'
   isLiveRecordingActive = false,
+  isRemoteRecordingActive = false,
   onNavigate,
   screenTitle = 'Dashboard',
   onBack = null,
@@ -319,7 +320,26 @@ export function AppShell({
             </div>
           )}
 
-          {/* Main Navigation Links: Dashboard and Sessions ONLY */}
+          {/* Remote Recording Alert (Displayed when another device is recording) */}
+          {isRemoteRecordingActive && !isLiveRecordingActive && (
+            <div className="sidebar-recording-alert" style={{ borderColor: 'rgba(16, 185, 129, 0.4)' }}>
+              <button
+                type="button"
+                className="sidebar-recording-alert-btn"
+                onClick={() => {
+                  onNavigate('remote_control')
+                  closeMobileNav()
+                }}
+                id="sidebar-btn-remote-recording"
+                title="Remote recording active on account"
+              >
+                <span className="live-pulse-dot" style={{ background: '#10b981', boxShadow: '0 0 8px #10b981' }}>●</span>
+                {isEffectivelyExpanded && <span className="live-btn-text" style={{ color: '#10b981' }}>REMOTE ACTIVE</span>}
+              </button>
+            </div>
+          )}
+
+          {/* Main Navigation Links: Dashboard, Sessions, Remote Control */}
           <nav className="sidebar-nav">
             <button
               type="button"
@@ -347,6 +367,25 @@ export function AppShell({
             >
               <span className="nav-icon"><SessionsIcon /></span>
               {isEffectivelyExpanded && <span className="nav-label">Sessions</span>}
+            </button>
+
+            <button
+              type="button"
+              className={`sidebar-nav-item ${activeView === 'remote_control' ? 'sidebar-nav-item--active' : ''}`}
+              onClick={() => {
+                onNavigate('remote_control')
+                closeMobileNav()
+              }}
+              id="nav-link-remote-control"
+              title={!isEffectivelyExpanded ? 'Remote Control' : undefined}
+            >
+              <span className="nav-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                  <line x1="12" y1="18" x2="12.01" y2="18" />
+                </svg>
+              </span>
+              {isEffectivelyExpanded && <span className="nav-label">Remote Control</span>}
             </button>
           </nav>
         </div>
