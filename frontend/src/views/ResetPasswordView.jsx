@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { AuthBrandPanel } from '../components/auth/AuthBrandPanel'
 
 export function ResetPasswordView({ onComplete }) {
   const { updatePassword, error, clearError } = useAuth()
@@ -41,15 +42,14 @@ export function ResetPasswordView({ onComplete }) {
   }
 
   return (
-    <div className="auth-page-container">
-      <div className="auth-card">
-        <div className="auth-header">
-          <div className="auth-brand">
-            <div className="auth-logo-badge">DLBC</div>
-            <div className="auth-brand-title">Information Unit</div>
+    <div className="auth-split-layout">
+      <AuthBrandPanel />
+      <div className="auth-form-side">
+        <div className="auth-card">
+          <div className="auth-header">
+            <h1 className="auth-title">Set new password</h1>
+            <p className="auth-subtitle">Choose a secure password for your Information Unit account</p>
           </div>
-          <h1 className="auth-title">Set new password</h1>
-        </div>
 
         {success ? (
           <div className="auth-form">
@@ -116,6 +116,7 @@ export function ResetPasswordView({ onComplete }) {
             </button>
           </form>
         )}
+      </div>
       </div>
     </div>
   )

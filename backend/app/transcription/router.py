@@ -13,7 +13,7 @@ Provides REST endpoints for:
 import os
 from typing import Optional
 
-from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from app.audio.stream_manager import STORAGE_AUDIO_DIR
@@ -171,11 +171,28 @@ async def upload_recorded_file(file: UploadFile = File(...)):
     }
 
 
+from pydantic import BaseModel
+from app.auth.auth_context import AuthContext
+from app.auth.dependencies import get_optional_account
+
+
+class StartTranscriptionRequest(BaseModel):
+    language_code: Optional[str] = "en-US"
+    provider_id: Optional[str] = None
+    title: Optional[str] = None
+    programme: Optional[str] = None
+    session_name: Optional[str] = None
+    minister: Optional[str] = None
+    day_number: Optional[int] = None
+
+
 @router.post("/transcribe/{upload_id}")
 async def start_transcription(
     upload_id: str,
-    language_code: str = Query("en-US", description="Language code"),
+    language_code: Optional[str] = Query(None, description="Language code"),
     provider_id: Optional[str] = Query(None, description="Optional provider identifier"),
+    payload: Optional[StartTranscriptionRequest] = None,
+    auth: Optional[AuthContext] = Depends(get_optional_account),
 ):
     """Initiates a background transcription job for an uploaded file."""
     # Find uploaded file in storage/uploads/
@@ -192,6 +209,16 @@ async def start_transcription(
     processing_audio_path = proc_wav_path if os.path.exists(proc_wav_path) else saved_path
     is_video = os.path.splitext(saved_filename)[1].lower() == ".mp4"
 
+    req_lang = (payload.language_code if payload and payload.language_code else None) or language_code or "en-US"
+    req_provider = (payload.provider_id if payload and payload.provider_id else None) or provider_id
+
+    custom_title = payload.title if payload else None
+    programme = payload.programme if payload else None
+    session_name = payload.session_name if payload else None
+    minister = payload.minister if payload else None
+    day_number = payload.day_number if payload else None
+    account_id = auth.account_id if auth else "legacy_default_account"
+
     upload_meta = {
         "upload_id": upload_id,
         "original_filename": saved_filename,
@@ -199,12 +226,18 @@ async def start_transcription(
         "file_path": saved_path,
         "processing_audio_path": processing_audio_path,
         "is_video": is_video,
+        "account_id": account_id,
+        "title": custom_title,
+        "programme": programme,
+        "session_name": session_name,
+        "minister": minister,
+        "day_number": day_number,
     }
 
     job = transcription_manager.create_job(
         upload_meta=upload_meta,
-        language_code=language_code,
-        provider_id=provider_id,
+        language_code=req_lang,
+        provider_id=req_provider,
     )
     return {"status": "job_started", "job": job.to_dict()}
 

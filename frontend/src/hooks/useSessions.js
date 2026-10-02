@@ -86,8 +86,8 @@ export function useSessions() {
     }
   }, [])
 
-  // Update full session details (programme, session title, minister)
-  const updateSessionDetails = useCallback(async (sessionId, { programme, sessionTitle, minister }) => {
+  // Update full session details (programme, session title, minister, day_number)
+  const updateSessionDetails = useCallback(async (sessionId, { programme, sessionTitle, minister, day_number }) => {
     setError(null)
     try {
       const res = await authFetch(`${API_BASE}/${encodeURIComponent(sessionId)}`, {
@@ -97,6 +97,7 @@ export function useSessions() {
           programme: programme !== undefined ? programme.trim() : undefined,
           session_title: sessionTitle !== undefined ? sessionTitle.trim() : undefined,
           minister: minister !== undefined ? minister.trim() : undefined,
+          day_number: day_number !== undefined ? day_number : undefined,
         }),
       })
       if (!res.ok) throw new Error(`Failed to update session details: ${res.status}`)

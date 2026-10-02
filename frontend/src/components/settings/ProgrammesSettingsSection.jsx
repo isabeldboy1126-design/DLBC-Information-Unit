@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { getApiUrl, API_BASE_URL } from '../../config'
+import { getApiUrl, API_BASE_URL, authFetch } from '../../config'
+import { ConfirmationModal } from '../common/ConfirmationModal'
 
 export function ProgrammesSettingsSection() {
   const [programmes, setProgrammes] = useState([])
@@ -29,11 +30,15 @@ export function ProgrammesSettingsSection() {
   const [editingSessionId, setEditingSessionId] = useState(null)
   const [editingSessionName, setEditingSessionName] = useState('')
 
+  // Permanent Delete State
+  const [itemToDelete, setItemToDelete] = useState(null) // { type: 'programme' | 'session', id: string, name: string, progId?: string }
+  const [isDeleting, setIsDeleting] = useState(false)
+
   const fetchProgrammes = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch(getApiUrl('/api/programmes?include_archived=true'))
+      const res = await authFetch(getApiUrl('/api/programmes?include_archived=true'))
       if (res.ok) {
         const data = await res.json()
         setProgrammes(data)
@@ -71,7 +76,7 @@ export function ProgrammesSettingsSection() {
     if (!newProgName.trim()) return
     try {
       setError(null)
-      const res = await fetch(getApiUrl('/api/programmes'), {
+      const res = await authFetch(getApiUrl('/api/programmes'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newProgName.trim() }),
@@ -85,7 +90,7 @@ export function ProgrammesSettingsSection() {
         setExpandedProgIds((prev) => ({ ...prev, [newProg.id]: true }))
         await fetchProgrammes()
       } else {
-        const errData = await res.json()
+        const errData = await res.json().catch(() => ({}))
         setError(errData.detail || 'Failed to create programme.')
       }
     } catch (err) {
@@ -99,7 +104,7 @@ export function ProgrammesSettingsSection() {
     if (!editingProgName.trim()) return
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${progId}`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${progId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editingProgName.trim() }),
@@ -123,7 +128,7 @@ export function ProgrammesSettingsSection() {
     const actionName = prog.is_archived ? 'unarchive' : 'archive'
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${prog.id}`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${prog.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_archived: !prog.is_archived }),
@@ -146,7 +151,7 @@ export function ProgrammesSettingsSection() {
     if (!newSessionName.trim()) return
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${progId}/sessions`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${progId}/sessions`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newSessionName.trim() }),
@@ -171,7 +176,7 @@ export function ProgrammesSettingsSection() {
     if (!editingSessionName.trim()) return
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editingSessionName.trim() }),
@@ -194,7 +199,7 @@ export function ProgrammesSettingsSection() {
   const handleArchiveSession = async (progId, sessionId) => {
     try {
       setError(null)
-      const res = await fetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${progId}/sessions/${sessionId}`), {
         method: 'DELETE',
       })
       if (res.ok) {
@@ -207,6 +212,45 @@ export function ProgrammesSettingsSection() {
     } catch (err) {
       console.error('Error archiving session:', err)
       setError('Could not archive session. Please check your connection.')
+    }
+  }
+
+  // Handle Permanent Delete confirmation execution
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return
+    setIsDeleting(true)
+    setError(null)
+    try {
+      if (itemToDelete.type === 'programme') {
+        const res = await authFetch(getApiUrl(`/api/programmes/${itemToDelete.id}?permanent=true`), {
+          method: 'DELETE',
+        })
+        if (res.ok) {
+          showNotification(`✓ Programme "${itemToDelete.name}" permanently deleted.`)
+          setItemToDelete(null)
+          await fetchProgrammes()
+        } else {
+          const errData = await res.json().catch(() => ({}))
+          setError(errData.detail || 'Failed to delete programme.')
+        }
+      } else if (itemToDelete.type === 'session') {
+        const res = await authFetch(getApiUrl(`/api/programmes/${itemToDelete.progId}/sessions/${itemToDelete.id}?permanent=true`), {
+          method: 'DELETE',
+        })
+        if (res.ok) {
+          showNotification(`✓ Section "${itemToDelete.name}" permanently deleted.`)
+          setItemToDelete(null)
+          await fetchProgrammes()
+        } else {
+          const errData = await res.json().catch(() => ({}))
+          setError(errData.detail || 'Failed to delete section.')
+        }
+      }
+    } catch (err) {
+      console.error('Error during deletion:', err)
+      setError('Could not delete item. Please check your connection.')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -223,7 +267,7 @@ export function ProgrammesSettingsSection() {
     const sessionIds = newOrder.map((s) => s.id)
 
     try {
-      const res = await fetch(getApiUrl(`/api/programmes/${prog.id}/sessions/reorder`), {
+      const res = await authFetch(getApiUrl(`/api/programmes/${prog.id}/sessions/reorder`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_ids: sessionIds }),
@@ -435,6 +479,16 @@ export function ProgrammesSettingsSection() {
 
                       <button
                         type="button"
+                        className="btn btn--outline btn--small btn-prog-action btn-prog-delete"
+                        onClick={() => setItemToDelete({ type: 'programme', id: prog.id, name: prog.name })}
+                        title="Permanently delete programme"
+                        style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem', color: '#e11d48' }}
+                      >
+                        🗑️ Delete
+                      </button>
+
+                      <button
+                        type="button"
                         className="btn btn-toggle-sessions btn--small"
                         onClick={() => toggleExpand(prog.id)}
                         id={`btn-toggle-prog-${prog.id}`}
@@ -627,9 +681,19 @@ export function ProgrammesSettingsSection() {
                                       className="btn-link-small"
                                       onClick={() => handleArchiveSession(prog.id, sess.id)}
                                       title="Archive section"
+                                      style={{ fontSize: '0.75rem', color: '#64748b' }}
+                                    >
+                                      Archive
+                                    </button>
+                                    <span style={{ color: '#cbd5e1' }}>&bull;</span>
+                                    <button
+                                      type="button"
+                                      className="btn-link-small"
+                                      onClick={() => setItemToDelete({ type: 'session', progId: prog.id, id: sess.id, name: sess.name })}
+                                      title="Permanently delete section"
                                       style={{ fontSize: '0.75rem', color: '#e11d48' }}
                                     >
-                                      Remove
+                                      Delete
                                     </button>
                                   </div>
                                 )}
@@ -646,6 +710,31 @@ export function ProgrammesSettingsSection() {
           </div>
         )}
       </div>
+
+      {/* Permanent Deletion Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={!!itemToDelete}
+        onCancel={() => setItemToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title={itemToDelete?.type === 'programme' ? 'Permanently Delete Programme' : 'Permanently Delete Section'}
+        message={
+          itemToDelete?.type === 'programme' ? (
+            <>
+              Are you sure you want to permanently delete <strong>&ldquo;{itemToDelete?.name}&rdquo;</strong>?
+              This will permanently remove the programme and all its configured sections.
+            </>
+          ) : (
+            <>
+              Are you sure you want to permanently delete section <strong>&ldquo;{itemToDelete?.name}&rdquo;</strong>?
+            </>
+          )
+        }
+        supportingText="This action is permanent and cannot be undone."
+        confirmLabel="Permanently Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   )
 }

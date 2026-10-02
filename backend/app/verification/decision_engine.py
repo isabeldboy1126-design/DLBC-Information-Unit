@@ -996,7 +996,12 @@ Return a JSON array of decision objects matching this schema:
         elif remaining_pending == 0:
             final_status = "completed_verified"
             await session_repo.finalise_verification(session_id)
-            # Stage 7: Auto-process after verification if enabled
+        else:
+            final_status = "completed_needs_review"
+            await session_repo.finalise_verification(session_id, allow_partial=True)
+
+        # Stage 7: Auto-process after verification if enabled
+        if final_status in ("completed_verified", "completed_needs_review"):
             try:
                 from app.database.report_processing_repo import report_processing_repo
                 is_auto = await report_processing_repo.get_setting("auto_process_after_verification", default="true")
@@ -1007,8 +1012,6 @@ Return a JSON array of decision objects matching this schema:
             except Exception as e:
                 import logging
                 logging.getLogger("app.verification.decision_engine").warning(f"Auto-process trigger error: {e}")
-        else:
-            final_status = "completed_needs_review"
 
         logger.info(
             "[%s] AI verification complete: status=%s, verified=%d, corrected=%d, remaining_unresolved=%d",

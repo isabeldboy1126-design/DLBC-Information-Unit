@@ -25,35 +25,34 @@ from app.audio.stream_manager import (
 from app.database.session_repo import session_repo
 from app.transcription.live_transcription import LiveTranscriptionSession
 from app.verification.decision_engine import verification_decision_engine
+from app.auth.token_verifier import token_verifier
+from app.database.account_repo import account_repo
 
 router = APIRouter(prefix="/api/audio", tags=["Audio Capture"])
+
+
+async def resolve_ws_account_id(token_str: Optional[str]) -> str:
+    if not token_str:
+        return "legacy_default_account"
+    try:
+        payload = token_verifier.verify_token(token_str)
+        sub = payload.get("sub")
+        email = payload.get("email") or f"{sub}@dlbc.org"
+        if sub:
+            user = await account_repo.create_or_update_user(sub, email)
+            account, _ = await account_repo.get_user_account(user["id"])
+            if account and account.get("id"):
+                return account["id"]
+    except Exception:
+        pass
+    return "legacy_default_account"
 
 
 @router.websocket("/stream")
 async def audio_stream_websocket(websocket: WebSocket):
     """
     WebSocket endpoint for progressive audio capture & live transcription (Phase 4 Session).
-
-    Protocol:
-    1. Client connects.
-    2. Client sends initial JSON message:
-       {"type": "init", "sampleRate": 48000, "channels": 1, "deviceName": "Microphone", "sessionId": "...", "sessionTitle": "..."}
-    3. Server replies with JSON:
-       {"status": "ready", "recordingId": "...", "sessionId": "..."}
-    4. Client progressively streams binary messages containing raw LINEAR16 Int16 PCM chunks.
-       Server appends each chunk directly to disk (primary capture path) and feeds a copy
-       to the non-blocking LiveTranscription worker.
-    5. Server pushes real-time events:
-       - live_transcript_interim
-       - live_transcript_segment
-       - live_transcription_status
-    6. Client can send manual flag control:
-       {"type": "toggle_flag", "segment_idx": 3}
-    7. Client sends termination message:
-       {"type": "stop"}
-       Server finalizes the WAV file, raw transcript, and SQLite session, then returns completion payload:
-       {"status": "finalized", "recording": {...}, "transcript": {...}, "session": {...}}
-    8. If client disconnects unexpectedly, server auto-finalizes whatever audio, transcript, and session state were received.
+...
     """
     await websocket.accept()
     current_session = None
@@ -105,6 +104,15 @@ async def audio_stream_websocket(websocket: WebSocket):
                         **custom_metadata,
                     }
 
+                    ws_token = payload.get("token") or websocket.query_params.get("token")
+                    ws_account_id = await resolve_ws_account_id(ws_token)
+                    day_num = payload.get("day_number") or custom_metadata.get("day_number")
+                    if day_num is not None:
+                        try:
+                            day_num = int(day_num)
+                        except (ValueError, TypeError):
+                            day_num = None
+
                     # Initialize durable session in SQLite
                     try:
                         await session_repo.create_session(
@@ -116,6 +124,8 @@ async def audio_stream_websocket(websocket: WebSocket):
                             language_code="en-NG",
                             start_time=current_session.start_time,
                             metadata=metadata_to_store,
+                            account_id=ws_account_id,
+                            day_number=day_num,
                         )
                     except Exception as s_err:
                         print(f"Notice: Failed to initialize SQLite session: {s_err}")

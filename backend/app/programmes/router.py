@@ -81,14 +81,34 @@ async def update_programme(programme_id: str, req: UpdateProgrammeRequest, auth:
 
 
 @router.delete("/{programme_id}")
-async def archive_programme(programme_id: str, auth: AuthContext = Depends(require_account)):
-    """Soft-archives a programme (preserves historical references)."""
+async def delete_or_archive_programme(
+    programme_id: str,
+    permanent: bool = False,
+    auth: AuthContext = Depends(require_account),
+):
+    """Deletes or archives a programme."""
     if getattr(auth, "is_demo", False):
         raise HTTPException(status_code=403, detail="Modifying programmes is disabled in Demo mode to protect shared sample data.")
+    if permanent:
+        success = await programmes_repo.delete_programme_permanent(programme_id, account_id=auth.account_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Programme not found")
+        return {"status": "deleted", "programme_id": programme_id}
     prog = await programmes_repo.archive_programme(programme_id, archive=True)
     if not prog:
         raise HTTPException(status_code=404, detail="Programme not found")
     return prog
+
+
+@router.delete("/{programme_id}/permanent")
+async def delete_programme_permanent_endpoint(programme_id: str, auth: AuthContext = Depends(require_account)):
+    """Permanently deletes a programme."""
+    if getattr(auth, "is_demo", False):
+        raise HTTPException(status_code=403, detail="Modifying programmes is disabled in Demo mode to protect shared sample data.")
+    success = await programmes_repo.delete_programme_permanent(programme_id, account_id=auth.account_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Programme not found")
+    return {"status": "deleted", "programme_id": programme_id}
 
 
 @router.post("/{programme_id}/sessions")
@@ -127,14 +147,39 @@ async def update_programme_session(
 
 
 @router.delete("/{programme_id}/sessions/{session_item_id}")
-async def archive_programme_session(programme_id: str, session_item_id: str, auth: AuthContext = Depends(require_account)):
-    """Soft-archives a session/section."""
+async def archive_or_delete_programme_session(
+    programme_id: str,
+    session_item_id: str,
+    permanent: bool = False,
+    auth: AuthContext = Depends(require_account),
+):
+    """Deletes or archives a session/section."""
     if getattr(auth, "is_demo", False):
         raise HTTPException(status_code=403, detail="Modifying programmes is disabled in Demo mode to protect shared sample data.")
+    if permanent:
+        success = await programmes_repo.delete_programme_session_permanent(session_item_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Session/section not found")
+        return {"status": "deleted", "session_id": session_item_id}
     prog = await programmes_repo.archive_programme_session(session_item_id, archive=True)
     if not prog:
         raise HTTPException(status_code=404, detail="Session/section or programme not found")
     return prog
+
+
+@router.delete("/{programme_id}/sessions/{session_item_id}/permanent")
+async def delete_programme_session_permanent_endpoint(
+    programme_id: str,
+    session_item_id: str,
+    auth: AuthContext = Depends(require_account),
+):
+    """Permanently deletes a programme session/section item."""
+    if getattr(auth, "is_demo", False):
+        raise HTTPException(status_code=403, detail="Modifying programmes is disabled in Demo mode to protect shared sample data.")
+    success = await programmes_repo.delete_programme_session_permanent(session_item_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Session/section not found")
+    return {"status": "deleted", "session_id": session_item_id}
 
 
 @router.post("/{programme_id}/sessions/reorder")

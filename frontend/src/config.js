@@ -76,6 +76,12 @@ let _cachedToken = null
 
 export function setAuthToken(token) {
   _cachedToken = token || null
+  if (token) {
+    _isDemoActive = false
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('dlbc_demo_mode')
+    }
+  }
 }
 
 export function getAuthToken() {
@@ -118,6 +124,10 @@ export function setDemoMode(active) {
 }
 
 export function isDemoModeActive() {
+  // A logged-in account always supersedes demo mode
+  if (getAuthToken()) {
+    return false
+  }
   if (!isLocalDemoAllowed()) return false
   if (_isDemoActive) return true
   if (typeof sessionStorage !== 'undefined') {
@@ -128,13 +138,15 @@ export function isDemoModeActive() {
 
 export function getAuthHeaders(customHeaders = {}) {
   const headers = { ...customHeaders }
-  if (isDemoModeActive()) {
-    headers['X-DLBC-Demo'] = '1'
-    return headers
-  }
   const token = getAuthToken()
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
+    delete headers['X-DLBC-Demo']
+    return headers
+  }
+  if (isDemoModeActive()) {
+    headers['X-DLBC-Demo'] = '1'
+    return headers
   }
   return headers
 }

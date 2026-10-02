@@ -344,5 +344,33 @@ class ProgrammesRepository:
             await conn.commit()
         return await self.get_programme_by_id(programme_id)
 
+    async def delete_programme_permanent(self, programme_id: str, account_id: str | None = None) -> bool:
+        """Permanently deletes a programme and its child programme_sessions."""
+        async with get_db_connection() as conn:
+            if account_id:
+                chk = await conn.execute(
+                    "SELECT id FROM programmes WHERE id = ? AND (account_id = ? OR account_id IS NULL)",
+                    (programme_id, account_id),
+                )
+            else:
+                chk = await conn.execute("SELECT id FROM programmes WHERE id = ?", (programme_id,))
+            if not await chk.fetchone():
+                return False
+
+            await conn.execute("DELETE FROM programme_sessions WHERE programme_id = ?", (programme_id,))
+            await conn.execute("DELETE FROM programmes WHERE id = ?", (programme_id,))
+            await conn.commit()
+            return True
+
+    async def delete_programme_session_permanent(self, session_item_id: str) -> bool:
+        """Permanently deletes a programme session item."""
+        async with get_db_connection() as conn:
+            chk = await conn.execute("SELECT id FROM programme_sessions WHERE id = ?", (session_item_id,))
+            if not await chk.fetchone():
+                return False
+            await conn.execute("DELETE FROM programme_sessions WHERE id = ?", (session_item_id,))
+            await conn.commit()
+            return True
+
 
 programmes_repo = ProgrammesRepository()

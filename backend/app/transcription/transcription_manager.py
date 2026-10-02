@@ -255,7 +255,20 @@ class TranscriptionManager:
             try:
                 from app.database.session_repo import session_repo
                 s_id = f"session_{upload_meta['upload_id']}"
-                s_title = f"Uploaded — {upload_meta['original_filename']}"
+                s_title = upload_meta.get("title") or (
+                    upload_meta.get("session_name")
+                    if upload_meta.get("session_name")
+                    else f"Uploaded — {upload_meta['original_filename']}"
+                )
+                session_meta = {
+                    "is_video": upload_meta.get("is_video", False),
+                    "programme": upload_meta.get("programme"),
+                    "session_name": upload_meta.get("session_name"),
+                    "minister": upload_meta.get("minister"),
+                    "day_number": upload_meta.get("day_number"),
+                }
+                session_meta = {k: v for k, v in session_meta.items() if v is not None}
+
                 await session_repo.create_session(
                     session_id=s_id,
                     title=s_title,
@@ -264,7 +277,9 @@ class TranscriptionManager:
                     provider_name=result.provider_name,
                     language_code=language_code,
                     start_time=time.time(),
-                    metadata={"is_video": upload_meta.get("is_video", False)},
+                    metadata=session_meta,
+                    account_id=upload_meta.get("account_id"),
+                    day_number=upload_meta.get("day_number"),
                 )
                 for s_idx, seg in enumerate(result.segments):
                     flags_data = [f.model_dump() if hasattr(f, "model_dump") else f for f in (seg.flags or [])]
@@ -293,6 +308,13 @@ class TranscriptionManager:
                         "provider_name": result.provider_name,
                         "duration_seconds": result.duration_seconds or 0.0,
                     },
+                )
+
+                # Stage 6: Automatic post-upload verification and report generation pipeline
+                from app.verification.decision_engine import verification_decision_engine
+                await session_repo.set_ai_verification_status(s_id, "compiling")
+                asyncio.create_task(
+                    verification_decision_engine.verify_session(s_id, auto_resolve=True)
                 )
             except Exception as db_sync_err:
                 print(f"Notice: Phase 2 session sync notice: {db_sync_err}")

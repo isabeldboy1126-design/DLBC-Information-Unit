@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getWsUrl } from '../config'
+import { getWsUrl, getAuthToken } from '../config'
 
 const WS_BASE_URL = getWsUrl('/api/audio/stream')
 
@@ -13,6 +13,7 @@ export function useAudioCapture() {
   // Status & Mode
   const [isTesting, setIsTesting] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
   const [elapsedTime, setElapsedTime] = useState(0)
   const [recordingStats, setRecordingStats] = useState({ bytes: 0, chunks: 0 })
   const [latestRecording, setLatestRecording] = useState(null)
@@ -48,8 +49,11 @@ export function useAudioCapture() {
   const wsRef = useRef(null)
   const timerIntervalRef = useRef(null)
   const startTimeRef = useRef(0)
+  const segmentStartTimeRef = useRef(0)
+  const accumulatedDurationRef = useRef(0)
   const isStartingRef = useRef(false)
   const isRecordingRef = useRef(false)
+  const isPausedRef = useRef(false)
   const activeSessionIdRef = useRef(null)
 
   // Screen Wake Lock Management (Prevents OS/display sleep from halting long recordings)
@@ -488,6 +492,7 @@ export function useAudioCapture() {
           console.log('WebSocket connected. Initializing live audio capture session...')
           const actualSampleRate = ctx.sampleRate || settings.sampleRate || 48000
           const label = settings.label || trackSettings?.label || 'Input Device'
+          const token = getAuthToken()
 
           ws.send(
             JSON.stringify({
@@ -497,6 +502,8 @@ export function useAudioCapture() {
               deviceName: label,
               sessionTitle: sessionTitle ? sessionTitle.trim() : undefined,
               metadata: sessionMeta || undefined,
+              day_number: sessionMeta?.day_number || undefined,
+              token: token || undefined,
             })
           )
 
@@ -506,6 +513,10 @@ export function useAudioCapture() {
 
           workletNode.port.onmessage = (event) => {
             if (event.data && event.data.type === 'chunk') {
+              // Real hardware recording pause: do NOT send PCM chunks while paused
+              if (isPausedRef.current) {
+                return
+              }
               const buffer = event.data.buffer
               if (ws.readyState === WebSocket.OPEN) {
                 ws.send(buffer)
@@ -529,6 +540,10 @@ export function useAudioCapture() {
 
           // Start elapsed timer
           startTimeRef.current = Date.now()
+          segmentStartTimeRef.current = Date.now()
+          accumulatedDurationRef.current = 0
+          isPausedRef.current = false
+          setIsPaused(false)
           setElapsedTime(0)
           setIsRecording(true)
           setIsTesting(false)
@@ -536,7 +551,8 @@ export function useAudioCapture() {
 
           if (timerIntervalRef.current) clearInterval(timerIntervalRef.current)
           timerIntervalRef.current = setInterval(() => {
-            setElapsedTime(Math.floor((Date.now() - startTimeRef.current) / 1000))
+            const currentSegment = Math.floor((Date.now() - segmentStartTimeRef.current) / 1000)
+            setElapsedTime(accumulatedDurationRef.current + currentSegment)
           }, 200)
 
           resolveStart(true)
@@ -707,11 +723,40 @@ export function useAudioCapture() {
     }
   }, [isRecording, startRecording])
 
+  // 7b. Pause Recording — Pauses PCM streaming and stops elapsed timer without finalizing
+  const pauseRecording = useCallback(() => {
+    if (!isRecordingRef.current || isPausedRef.current) return
+    isPausedRef.current = true
+    setIsPaused(true)
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current)
+      timerIntervalRef.current = null
+    }
+    const currentSegment = Math.floor((Date.now() - segmentStartTimeRef.current) / 1000)
+    accumulatedDurationRef.current += currentSegment
+    setElapsedTime(accumulatedDurationRef.current)
+  }, [])
+
+  // 7c. Resume Recording — Resumes PCM streaming and timer on the SAME session
+  const resumeRecording = useCallback(() => {
+    if (!isRecordingRef.current || !isPausedRef.current) return
+    isPausedRef.current = false
+    setIsPaused(false)
+    segmentStartTimeRef.current = Date.now()
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current)
+    timerIntervalRef.current = setInterval(() => {
+      const currentSegment = Math.floor((Date.now() - segmentStartTimeRef.current) / 1000)
+      setElapsedTime(accumulatedDurationRef.current + currentSegment)
+    }, 200)
+  }, [])
+
   // 8. Stop Recording — Stops media tracks, disconnects audio graph, and resolves with finalized session
   const stopRecording = useCallback(() => {
     return new Promise((resolve) => {
       isRecordingRef.current = false
       isStartingRef.current = false
+      isPausedRef.current = false
+      setIsPaused(false)
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current)
         timerIntervalRef.current = null
@@ -908,6 +953,10 @@ export function useAudioCapture() {
     startAudioTest,
     stopAudioTest,
     isRecording,
+    isPaused,
+    isActiveRecording: isRecording || isPaused,
+    pauseRecording,
+    resumeRecording,
     startRecording,
     startTabCapture,
     stopRecording,

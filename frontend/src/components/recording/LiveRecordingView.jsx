@@ -17,6 +17,9 @@ export function LiveRecordingView({
   liveTranscript = [],
   audioLevel = 0,
   hasAudioSignal = false,
+  isPaused = false,
+  onPauseRecording,
+  onResumeRecording,
   onMinimize,
   onStopRecording,
   onToggleManualFlag,
@@ -63,15 +66,22 @@ export function LiveRecordingView({
     ? metadataParts.join(' • ')
     : (sessionMetadata.title || 'Live Session Recording')
 
+  const dayNumber = sessionMetadata.day_number || sessionMetadata.dayNumber
+
   return (
     <div className="live-recording-view-container">
       {/* ------------------------------------------------------------- */}
       {/* 1. COMPACT TOP RECORDING CONTROL BAR                          */}
       {/* ------------------------------------------------------------- */}
-      <div className="card live-top-recording-bar">
+      <div className={`card live-top-recording-bar ${isPaused ? 'live-top-bar--paused' : ''}`}>
         <div className="live-bar-left">
-          {/* Active Recording Badge */}
-          {sessionMetadata.source_type === 'youtube_tab' ? (
+          {/* Active / Paused Recording Badge */}
+          {isPaused ? (
+            <div className="live-rec-badge-pill" style={{ background: '#fef3c7', borderColor: '#fde68a' }}>
+              <span className="live-rec-dot" style={{ background: '#d97706', animation: 'none' }}>⏸</span>
+              <span className="live-rec-text" style={{ color: '#92400e' }}>PAUSED</span>
+            </div>
+          ) : sessionMetadata.source_type === 'youtube_tab' ? (
             <div className="live-rec-badge-pill" style={{ background: '#fef2f2', borderColor: '#fecaca' }}>
               <span className="live-rec-dot" style={{ background: '#dc2626' }}>●</span>
               <span className="live-rec-text" style={{ color: '#991b1b' }}>YOUTUBE TAB AUDIO</span>
@@ -84,31 +94,41 @@ export function LiveRecordingView({
           )}
 
           {/* Recording Timer */}
-          <div className="live-bar-timer">{formatTimer(elapsedTime)}</div>
+          <div className="live-bar-timer" style={{ opacity: isPaused ? 0.75 : 1 }}>
+            {formatTimer(elapsedTime)}
+          </div>
 
           {/* Audio Waveform & Signal Status */}
           <div className="live-bar-signal-group">
-            <div className="live-waveform-visualizer" title="Live audio signal level">
+            <div className="live-waveform-visualizer" title={isPaused ? 'Recording paused' : 'Live audio signal level'}>
               {[0.2, 0.5, 0.8, 0.4, 0.9, 0.6, 0.3, 0.7, 0.5, 0.8, 0.3].map((height, i) => {
                 const dynamicHeight = Math.max(15, Math.min(100, (audioLevel * (i % 2 === 0 ? 1.2 : 0.8))))
                 return (
                   <div
                     key={i}
                     className="waveform-bar"
-                    style={{ height: `${hasAudioSignal ? dynamicHeight : 15}%` }}
+                    style={{
+                      height: `${(!isPaused && hasAudioSignal) ? dynamicHeight : 15}%`,
+                      opacity: isPaused ? 0.4 : 1,
+                    }}
                   />
                 )
               })}
             </div>
             <span className="live-signal-badge">
-              {hasAudioSignal ? '📶 STRONG' : '📶 IDLE'}
+              {isPaused ? '⏸ PAUSED' : hasAudioSignal ? '📶 STRONG' : '📶 IDLE'}
             </span>
           </div>
 
-          {/* Compact Session / Programme Details */}
+          {/* Compact Session / Programme Details with optional Day badge */}
           <div className="live-bar-metadata" title={compactMetadataString}>
             <span className="live-meta-icon">{sessionMetadata.source_type === 'youtube_tab' ? '📺' : '🏛️'}</span>
             <span className="live-meta-text">{compactMetadataString}</span>
+            {dayNumber && (
+              <span className="session-day-badge" title={`Day ${dayNumber}`}>
+                {dayNumber}
+              </span>
+            )}
           </div>
         </div>
 
@@ -126,11 +146,40 @@ export function LiveRecordingView({
               <span>Minimize</span>
             </button>
           )}
+
+          {/* Pause / Resume Button */}
+          {isPaused ? (
+            <button
+              type="button"
+              className="btn btn--outline btn--resume-recording"
+              onClick={onResumeRecording}
+              id="btn-resume-live-recording"
+              title="Resume recording on the same session"
+              style={{ fontWeight: 600 }}
+            >
+              <span className="btn-icon">▶</span>
+              <span>RESUME</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--outline btn--pause-recording"
+              onClick={onPauseRecording}
+              id="btn-pause-live-recording"
+              title="Pause audio capture without finalizing"
+              style={{ fontWeight: 600 }}
+            >
+              <span className="btn-icon">⏸</span>
+              <span>PAUSE</span>
+            </button>
+          )}
+
           <button
             type="button"
             className="btn btn--danger btn--stop-session"
             onClick={onStopRecording}
             id="btn-stop-live-recording"
+            title={isPaused ? 'Finalize recording captured so far' : 'Stop and finalize session'}
           >
             <span className="stop-icon">⏹</span>
             <span>STOP SESSION</span>

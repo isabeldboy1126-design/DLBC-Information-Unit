@@ -31,6 +31,8 @@ from app.database.models import (
     STAGE6_AI_VERIFICATION_COLUMNS_MSSQL,
     STAGE7_REPORT_PROCESSING_COLUMNS,
     STAGE7_REPORT_PROCESSING_COLUMNS_MSSQL,
+    AUTH_MIGRATION_COLUMNS,
+    AUTH_MIGRATION_COLUMNS_MSSQL,
 )
 from app.config import (
     STORAGE_AUDIO_DIR,
@@ -59,6 +61,7 @@ class SessionRepository:
                     + PHASE9_APPROVAL_COLUMNS_MSSQL
                     + STAGE6_AI_VERIFICATION_COLUMNS_MSSQL
                     + STAGE7_REPORT_PROCESSING_COLUMNS_MSSQL
+                    + AUTH_MIGRATION_COLUMNS_MSSQL
                 ):
                     try:
                         await conn.execute(alter_sql)
@@ -115,6 +118,12 @@ class SessionRepository:
                         await conn.execute(alter_sql)
                     except Exception:
                         pass  # Column already exists
+                # Auth and Day scoping migration
+                for alter_sql in AUTH_MIGRATION_COLUMNS:
+                    try:
+                        await conn.execute(alter_sql)
+                    except Exception:
+                        pass  # Column already exists
             await conn.commit()
         self._initialized = True
 
@@ -131,6 +140,7 @@ class SessionRepository:
         raw_text: Optional[str] = None,
         verified_text: Optional[str] = None,
         account_id: Optional[str] = None,
+        day_number: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Creates a new durable Session record scoped to a church account."""
         await self.init_db()
@@ -147,6 +157,15 @@ class SessionRepository:
 
         v_text = verified_text or (raw_text if verified_text is None and raw_text else None)
         v_status = "complete" if v_text else "not_started"
+
+        meta_dict = dict(metadata or {})
+        resolved_day = day_number if day_number is not None else meta_dict.get("day_number")
+        if resolved_day is not None:
+            try:
+                resolved_day = int(resolved_day)
+                meta_dict["day_number"] = resolved_day
+            except (ValueError, TypeError):
+                resolved_day = None
 
         session_record = {
             "session_id": session_id,
@@ -171,8 +190,9 @@ class SessionRepository:
             "flag_count": 0,
             "is_interrupted": 0,
             "recovery_notes": None,
-            "metadata_json": json.dumps(metadata or {}),
+            "metadata_json": json.dumps(meta_dict),
             "account_id": target_account_id,
+            "day_number": resolved_day,
         }
 
         async with get_db_connection() as conn:
@@ -195,7 +215,8 @@ class SessionRepository:
                         verified_text = ?,
                         verification_status = ?,
                         metadata_json = ?,
-                        account_id = COALESCE(account_id, ?)
+                        account_id = COALESCE(account_id, ?),
+                        day_number = COALESCE(?, day_number)
                     WHERE session_id = ?
                     """,
                     (
@@ -210,6 +231,7 @@ class SessionRepository:
                         session_record["verification_status"],
                         session_record["metadata_json"],
                         target_account_id,
+                        session_record["day_number"],
                         session_id,
                     ),
                 )
@@ -222,14 +244,16 @@ class SessionRepository:
                         audio_file_path, audio_file_size, audio_duration_seconds,
                         transcript_id, raw_text, verified_text, verification_status,
                         provider_name, language_code, segment_count, flag_count,
-                        is_interrupted, recovery_notes, metadata_json, account_id
+                        is_interrupted, recovery_notes, metadata_json, account_id,
+                        day_number
                     ) VALUES (
                         ?, ?, ?, ?, ?,
                         ?, ?, ?, ?,
                         ?, ?, ?,
                         ?, ?, ?, ?,
                         ?, ?, ?, ?,
-                        ?, ?, ?, ?
+                        ?, ?, ?, ?,
+                        ?
                     )
                     """,
                     (
@@ -257,6 +281,7 @@ class SessionRepository:
                         session_record["recovery_notes"],
                         session_record["metadata_json"],
                         session_record["account_id"],
+                        session_record["day_number"],
                     ),
                 )
             await conn.commit()
@@ -514,9 +539,10 @@ class SessionRepository:
         programme: Optional[str] = None,
         session_name: Optional[str] = None,
         minister: Optional[str] = None,
+        day_number: Optional[int] = None,
         account_id: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Updates session metadata (programme, session title, minister) and updates title cleanly."""
+        """Updates session metadata (programme, session title, minister, day_number) and updates title cleanly."""
         current = await self.get_session(session_id, account_id=account_id)
         if not current:
             return None
@@ -548,6 +574,15 @@ class SessionRepository:
         if minister is not None:
             meta["minister"] = minister.strip()
 
+        if day_number is not None:
+            try:
+                resolved_day = int(day_number) if int(day_number) > 0 else None
+            except (ValueError, TypeError):
+                resolved_day = None
+            meta["day_number"] = resolved_day
+        else:
+            resolved_day = current.get("day_number")
+
         # Determine new title
         new_title = current.get("title")
         if title and title.strip():
@@ -558,13 +593,13 @@ class SessionRepository:
         async with get_db_connection() as conn:
             if account_id:
                 await conn.execute(
-                    "UPDATE sessions SET title = ?, metadata_json = ?, event_id = ? WHERE session_id = ? AND account_id = ?",
-                    (new_title, json.dumps(meta), event_id, session_id, account_id),
+                    "UPDATE sessions SET title = ?, metadata_json = ?, event_id = ?, day_number = ? WHERE session_id = ? AND account_id = ?",
+                    (new_title, json.dumps(meta), event_id, resolved_day, session_id, account_id),
                 )
             else:
                 await conn.execute(
-                    "UPDATE sessions SET title = ?, metadata_json = ?, event_id = ? WHERE session_id = ?",
-                    (new_title, json.dumps(meta), event_id, session_id),
+                    "UPDATE sessions SET title = ?, metadata_json = ?, event_id = ?, day_number = ? WHERE session_id = ?",
+                    (new_title, json.dumps(meta), event_id, resolved_day, session_id),
                 )
             await conn.commit()
 
@@ -632,6 +667,11 @@ class SessionRepository:
 
             session["segments"] = segments
             session["metadata"] = json.loads(session.get("metadata_json") or "{}")
+            if session.get("day_number") is None and session["metadata"].get("day_number") is not None:
+                try:
+                    session["day_number"] = int(session["metadata"]["day_number"])
+                except (ValueError, TypeError):
+                    pass
 
             return session
 
@@ -656,7 +696,7 @@ class SessionRepository:
                            proofreading_standard_version, accepted_proofread_revision_id,
                            final_report_status, final_report_completed_at, final_report_id,
                            ai_verification_status, ai_verification_completed_at, event_id,
-                           account_id
+                           account_id, metadata_json, day_number
                     FROM sessions
                     WHERE account_id = ?
                     ORDER BY date_created DESC
@@ -680,13 +720,27 @@ class SessionRepository:
                            proofreading_standard_version, accepted_proofread_revision_id,
                            final_report_status, final_report_completed_at, final_report_id,
                            ai_verification_status, ai_verification_completed_at, event_id,
-                           account_id
+                           account_id, metadata_json, day_number
                     FROM sessions
                     ORDER BY date_created DESC
                     """
                 )
             rows = await cursor.fetchall()
-            return [dict(r) for r in rows]
+            results = []
+            for r in rows:
+                row_dict = dict(r)
+                raw_meta = row_dict.get("metadata_json")
+                try:
+                    row_dict["metadata"] = json.loads(raw_meta) if raw_meta else {}
+                except Exception:
+                    row_dict["metadata"] = {}
+                if row_dict.get("day_number") is None and row_dict["metadata"].get("day_number") is not None:
+                    try:
+                        row_dict["day_number"] = int(row_dict["metadata"]["day_number"])
+                    except (ValueError, TypeError):
+                        pass
+                results.append(row_dict)
+            return results
 
     async def delete_session(self, session_id: str, account_id: Optional[str] = None) -> bool:
         """
@@ -1440,7 +1494,7 @@ class SessionRepository:
 
         return await self.get_verification_state(session_id)
 
-    async def finalise_verification(self, session_id: str) -> Dict[str, Any]:
+    async def finalise_verification(self, session_id: str, allow_partial: bool = False) -> Dict[str, Any]:
         """
         Finalises verification: checks all items are resolved, then constructs
         the complete Verified Transcript by overlaying corrections onto the
@@ -1463,12 +1517,13 @@ class SessionRepository:
             if not sess:
                 return {"error": "Session not found"}
 
-            if sess["verification_items_total"] > 0 and \
-               sess["verification_items_resolved"] < sess["verification_items_total"]:
-                unresolved = sess["verification_items_total"] - sess["verification_items_resolved"]
-                return {
-                    "error": f"Cannot finalise: {unresolved} verification item(s) still pending."
-                }
+            if not allow_partial:
+                if sess["verification_items_total"] > 0 and \
+                   sess["verification_items_resolved"] < sess["verification_items_total"]:
+                    unresolved = sess["verification_items_total"] - sess["verification_items_resolved"]
+                    return {
+                        "error": f"Cannot finalise: {unresolved} verification item(s) still pending."
+                    }
 
             # Get all verification corrections keyed by segment_index
             vi_cursor = await conn.execute(
@@ -1526,16 +1581,22 @@ class SessionRepository:
             )
             vi_count = (await vi_count_cursor.fetchone())["cnt"]
 
+            # If allow_partial is True and items are still pending, retain in_progress status
+            is_fully_resolved = sess["verification_items_total"] == 0 or (
+                sess["verification_items_resolved"] >= sess["verification_items_total"]
+            )
+            target_status = 'complete' if is_fully_resolved else (sess["verification_status"] or 'in_progress')
+
             # Save to sessions table
             await conn.execute(
                 """
                 UPDATE sessions
-                SET verification_status = 'complete',
+                SET verification_status = ?,
                     verified_text = ?,
                     verified_at = ?
                 WHERE session_id = ?
                 """,
-                (verified_full_text, now_iso, session_id),
+                (target_status, verified_full_text, now_iso, session_id),
             )
             await conn.commit()
 

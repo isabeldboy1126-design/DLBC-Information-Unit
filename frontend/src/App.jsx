@@ -15,6 +15,8 @@ import { useActiveProcess, expandActiveProcess } from './components/common/activ
 import { SessionCompletionView } from './components/sessions/SessionCompletionView'
 import { SessionHistoryList } from './components/sessions/SessionHistoryList'
 import { SessionDetailView, getCleanSessionName } from './components/sessions/SessionDetailView'
+import { AutomaticProcessingView } from './components/processing/AutomaticProcessingView'
+import { DesktopUploadRecordingView } from './components/transcription/DesktopUploadRecordingView'
 import { SettingsView } from './components/settings/SettingsView'
 import { YouTubeSessionView } from './components/youtube/YouTubeSessionView'
 import { CompletedReportsView } from './components/reporting/CompletedReportsView'
@@ -61,6 +63,15 @@ function App() {
         sessionId: parts[1] || null,
         stage: parts[2] || 'overview',
         subAction: parts[3] || null,
+      }
+    }
+    if (clean.startsWith('processing/')) {
+      const parts = clean.split('/')
+      return {
+        view: 'processing',
+        sessionId: parts[1] || null,
+        stage: null,
+        subAction: null,
       }
     }
     if (clean.startsWith('completion/')) {
@@ -222,7 +233,16 @@ function App() {
       return
     }
 
-    setShowCompletionModal(false)
+    if (route.view === 'processing') {
+      setCurrentView('processing')
+      if (route.sessionId) {
+        setCompletedSessionId(route.sessionId)
+        if (sessionsHook.activeSession?.session_id !== route.sessionId) {
+          sessionsHook.loadSession(route.sessionId)
+        }
+      }
+      return
+    }
 
     if (route.view === 'sessions') {
       setCurrentView('sessions')
@@ -299,6 +319,8 @@ function App() {
         } else {
           navigateTo('sessions')
         }
+      } else if (clean.startsWith('processing/')) {
+        navigateTo('dashboard')
       } else if (clean.startsWith('completion/')) {
         navigateTo('sessions')
       } else if (['sessions', 'new_live', 'transcribe', 'youtube', 'settings', 'profile'].includes(clean)) {
@@ -376,9 +398,9 @@ function App() {
     if (targetId) {
       setCompletedSessionId(targetId)
       await sessionsHook.loadSession(targetId)
-      navigateTo(`completion/${targetId}`)
+      navigateTo(`processing/${targetId}`)
     } else {
-      setShowCompletionModal(true)
+      navigateTo('dashboard')
     }
     return recordingResult
   }
@@ -430,9 +452,18 @@ function App() {
         onBack: handleInAppBack,
       }
     }
+    if (currentView === 'processing') {
+      const targetSession =
+        sessionsHook.activeSession ||
+        sessionsHook.sessions.find((s) => s.session_id === completedSessionId)
+      return {
+        title: targetSession ? getCleanSessionName(targetSession) : 'Automatic Processing',
+        onBack: handleInAppBack,
+      }
+    }
     if (currentView === 'transcribe') {
       return {
-        title: 'Transcribe Recording File',
+        title: 'Upload Recording',
         onBack: handleInAppBack,
       }
     }
@@ -796,58 +827,28 @@ function App() {
         )
       ) : currentView === 'transcribe' ? (
         /* ----------------------------------------------------------- */
-        /* VIEW 4: FILE TRANSCRIBE PIPELINE                            */
+        /* VIEW 4: DESKTOP UPLOAD RECORDING WORKFLOW                   */
         /* ----------------------------------------------------------- */
-        <div className="transcription-layout">
-          {!recordedTranscription.activeTranscript ? (
-            <div className="dashboard-grid">
-              <div className="grid-left">
-                <RecordedFileUploader
-                  fileType={recordedTranscription.fileType}
-                  setFileType={recordedTranscription.setFileType}
-                  selectedFile={recordedTranscription.selectedFile}
-                  fileMetadata={recordedTranscription.fileMetadata}
-                  onFileSelect={recordedTranscription.handleFileSelect}
-                  onStartTranscription={recordedTranscription.startTranscriptionFlow}
-                  uploadStatus={recordedTranscription.uploadStatus}
-                  configStatus={recordedTranscription.configStatus}
-                  selectedProvider={recordedTranscription.selectedProvider}
-                  setSelectedProvider={recordedTranscription.setSelectedProvider}
-                  disabled={
-                    recordedTranscription.uploadStatus === 'uploading' ||
-                    recordedTranscription.uploadStatus === 'transcribing'
-                  }
-                />
-
-                <TranscriptionProgress
-                  uploadStatus={recordedTranscription.uploadStatus}
-                  jobStatus={recordedTranscription.jobStatus}
-                  error={recordedTranscription.error}
-                  configStatus={recordedTranscription.configStatus}
-                  onRetry={recordedTranscription.startTranscriptionFlow}
-                />
-              </div>
-
-              <div className="grid-right">
-                <TranscriptsHistoryList
-                  transcripts={recordedTranscription.transcriptsList}
-                  activeTranscriptId={recordedTranscription.activeTranscript?.transcript_id}
-                  onSelectTranscript={recordedTranscription.loadTranscriptById}
-                  onRefresh={recordedTranscription.fetchTranscriptsList}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="transcript-fullscreen-view">
-              <RawTranscriptViewer
-                transcript={recordedTranscription.activeTranscript}
-                onNewTranscription={recordedTranscription.resetUpload}
-                mediaElementRef={recordedTranscription.mediaElementRef}
-                onJumpToTime={recordedTranscription.jumpToTime}
-              />
-            </div>
-          )}
-        </div>
+        <DesktopUploadRecordingView
+          onEnterProcessing={(sId) => {
+            setCompletedSessionId(sId)
+            navigateTo(`processing/${sId}`)
+          }}
+          onBack={handleInAppBack}
+          initialFile={recordedTranscription.selectedFile}
+        />
+      ) : currentView === 'processing' ? (
+        /* ----------------------------------------------------------- */
+        /* VIEW 4B: UNIFIED AUTOMATIC PROCESSING EXPERIENCE            */
+        /* ----------------------------------------------------------- */
+        <AutomaticProcessingView
+          sessionId={completedSessionId || sessionsHook.activeSession?.session_id}
+          session={sessionsHook.activeSession}
+          onViewReport={(sId) => navigateTo(`session/${sId}/final_report`)}
+          onOpenSession={(sId) => navigateTo(`session/${sId}`)}
+          onReturnToDashboard={() => navigateTo('dashboard')}
+          onMinimize={() => navigateTo('dashboard')}
+        />
       ) : currentView === 'settings' ? (
         /* ----------------------------------------------------------- */
         /* VIEW 5: SETTINGS & STANDARDS                                */
@@ -927,32 +928,46 @@ function App() {
       />
 
       {/* ------------------------------------------------------------- */}
-      {/* FLOATING PROCESS CONTROLLER: Only visible when explicitly minimized */}
+      {/* DOCKED IN-APP STATUS BAR: Persistent across views when processing */}
       {/* ------------------------------------------------------------- */}
-      {activeProcess && activeProcess.isMinimized && (
-        <FloatingProcessController
-          jobType={activeProcess.jobType}
-          sessionTitle={activeProcess.sessionTitle}
-          stageLabel={activeProcess.stageLabel}
-          isCompleted={activeProcess.isCompleted}
-          onExpand={() => {
-            expandActiveProcess()
-            if (activeProcess.jobType === 'report_processing') {
-              if (activeProcess.isCompleted) {
-                navigateTo(`session/${activeProcess.sessionId}/final_report`)
-              } else {
-                navigateTo(`session/${activeProcess.sessionId}/report_processing`)
-              }
-            } else if (activeProcess.jobType === 'verification') {
-              if (activeProcess.isCompleted) {
-                navigateTo(`session/${activeProcess.sessionId}/verified_transcript`)
-              } else {
-                navigateTo(`session/${activeProcess.sessionId}/verification/processing`)
-              }
-            }
-          }}
-          onDismiss={() => clearActiveProcess()}
-        />
+      {activeProcess && currentView !== 'processing' && (
+        <div className="docked-processing-bar" role="status" aria-live="polite">
+          <div className="docked-processing-content">
+            <span className="docked-processing-dot pill-dot--pulse">●</span>
+            <span className="docked-processing-title">
+              {activeProcess.sessionTitle}
+              {activeProcess.dayNumber && (
+                <span className="session-day-badge" title={`Day ${activeProcess.dayNumber}`}>
+                  {activeProcess.dayNumber}
+                </span>
+              )}
+            </span>
+            <span className="docked-processing-separator">·</span>
+            <span className="docked-processing-stage">{activeProcess.stageLabel}</span>
+          </div>
+          <div className="docked-processing-actions">
+            <button
+              type="button"
+              className="btn btn--small btn--primary docked-open-btn"
+              onClick={() => {
+                navigateTo(`processing/${activeProcess.sessionId}`)
+              }}
+            >
+              Open
+            </button>
+            {activeProcess.isCompleted && (
+              <button
+                type="button"
+                className="btn-close-docked"
+                onClick={() => clearActiveProcess()}
+                aria-label="Dismiss"
+                title="Dismiss"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {/* ------------------------------------------------------------- */}

@@ -22,6 +22,8 @@ class CreateSessionRequest(BaseModel):
     language_code: Optional[str] = "en-NG"
     raw_text: Optional[str] = None
     verified_text: Optional[str] = None
+    metadata: Optional[dict] = None
+    day_number: Optional[int] = None
 
 
 class UpdateSessionRequest(BaseModel):
@@ -30,6 +32,7 @@ class UpdateSessionRequest(BaseModel):
     session_title: Optional[str] = None
     session_name: Optional[str] = None
     minister: Optional[str] = None
+    day_number: Optional[int] = None
 
 
 @router.get("")
@@ -51,6 +54,8 @@ async def create_session(payload: CreateSessionRequest, auth: AuthContext = Depe
         language_code=payload.language_code or "en-NG",
         raw_text=payload.raw_text,
         verified_text=payload.verified_text,
+        metadata=payload.metadata,
+        day_number=payload.day_number,
         account_id=auth.account_id,
     )
     return {"session": session}
@@ -67,13 +72,14 @@ async def get_session(session_id: str, auth: AuthContext = Depends(require_accou
 
 @router.patch("/{session_id}")
 async def update_session(session_id: str, payload: UpdateSessionRequest, auth: AuthContext = Depends(require_account)):
-    """Updates session metadata (programme, session title, minister) or title cleanly."""
+    """Updates session metadata (programme, session title, minister, day_number) or title cleanly."""
     if (
         not payload.title
         and not payload.programme
         and not payload.session_title
         and not payload.session_name
         and payload.minister is None
+        and payload.day_number is None
     ):
         raise HTTPException(status_code=400, detail="No fields provided to update.")
 
@@ -84,6 +90,7 @@ async def update_session(session_id: str, payload: UpdateSessionRequest, auth: A
         programme=payload.programme,
         session_name=sess_title,
         minister=payload.minister,
+        day_number=payload.day_number,
         account_id=auth.account_id,
     )
     if not session:

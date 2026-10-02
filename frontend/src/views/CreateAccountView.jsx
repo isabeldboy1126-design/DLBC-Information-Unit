@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { AuthBrandPanel } from '../components/auth/AuthBrandPanel'
 
 export function CreateAccountView({ onSwitchToLogin }) {
   const { signUp, error, clearError, authNotice } = useAuth()
@@ -49,28 +50,27 @@ export function CreateAccountView({ onSwitchToLogin }) {
 
   if (confirmationSent) {
     return (
-      <div className="auth-page-container">
-        <div className="auth-card">
-          <div className="auth-header">
-            <div className="auth-brand">
-              <div className="auth-logo-badge">DLBC</div>
-              <div className="auth-brand-title">Information Unit</div>
+      <div className="auth-split-layout">
+        <AuthBrandPanel />
+        <div className="auth-form-side">
+          <div className="auth-card">
+            <div className="auth-header">
+              <h1 className="auth-title">Check your email</h1>
             </div>
-            <h1 className="auth-title">Check your email</h1>
-          </div>
 
-          <div className="auth-notice-banner" role="status">
-            We have sent a verification link to <strong>{email.trim()}</strong>. Please check your inbox and verify your email to continue.
-          </div>
+            <div className="auth-notice-banner" role="status">
+              We have sent a verification link to <strong>{email.trim()}</strong>. Please check your inbox and verify your email to continue.
+            </div>
 
-          <div className="auth-footer">
-            <button
-              type="button"
-              className="auth-submit-btn"
-              onClick={onSwitchToLogin}
-            >
-              Back to Sign in →
-            </button>
+            <div className="auth-footer">
+              <button
+                type="button"
+                className="auth-submit-btn"
+                onClick={onSwitchToLogin}
+              >
+                Back to Sign in →
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -78,15 +78,14 @@ export function CreateAccountView({ onSwitchToLogin }) {
   }
 
   return (
-    <div className="auth-page-container">
-      <div className="auth-card">
-        <div className="auth-header">
-          <div className="auth-brand">
-            <div className="auth-logo-badge">DLBC</div>
-            <div className="auth-brand-title">Information Unit</div>
+    <div className="auth-split-layout">
+      <AuthBrandPanel />
+      <div className="auth-form-side">
+        <div className="auth-card">
+          <div className="auth-header">
+            <h1 className="auth-title">Create church account</h1>
+            <p className="auth-subtitle">Register your departmental account for the Information Unit workspace</p>
           </div>
-          <h1 className="auth-title">Create church account</h1>
-        </div>
 
         {authNotice && (
           <div className="auth-notice-banner" role="status">
@@ -197,6 +196,7 @@ export function CreateAccountView({ onSwitchToLogin }) {
             Sign in
           </button>
         </div>
+      </div>
       </div>
     </div>
   )

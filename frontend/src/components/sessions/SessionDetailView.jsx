@@ -379,13 +379,13 @@ export function SessionDetailView({
   React.useEffect(() => {
     if (!onSubViewChange) return
     const titles = {
-      overview: 'Session Workspace',
+      overview: 'Session',
       raw_transcript: 'Raw Transcript',
       verification: 'Verification',
       verified_transcript: 'Verified Transcript',
       final_report: 'Final Report',
     }
-    const title = titles[activeView] || 'Session Workspace'
+    const title = titles[activeView] || 'Session'
     const backFn = activeView === 'overview' ? onBack : () => changeStage('overview')
     onSubViewChange({ title, onBack: backFn })
   }, [activeView, onBack, onSubViewChange])
@@ -394,7 +394,7 @@ export function SessionDetailView({
     return (
       <div className="session-workspace-loading-state" role="status" aria-live="polite">
         <div className="session-loading-spinner" />
-        <p className="session-loading-text">Loading session workspace…</p>
+        <p className="session-loading-text">Loading session…</p>
         <button type="button" className="btn btn--outline btn--small" onClick={onBack}>
           ← Back to Sessions
         </button>
@@ -624,7 +624,14 @@ export function SessionDetailView({
           <div className="session-programme-eyebrow">{progDisplay}</div>
 
           <div className="session-title-row">
-            <h1 className="session-dominant-title">{sessionDisplay}</h1>
+            <h1 className="session-dominant-title">
+              {sessionDisplay}
+              {(session?.day_number || session?.metadata?.day_number) && (
+                <span className="session-day-badge" title={`Day ${session.day_number || session.metadata?.day_number}`}>
+                  {session.day_number || session.metadata?.day_number}
+                </span>
+              )}
+            </h1>
 
             <button
               type="button"
@@ -980,11 +987,13 @@ export function SessionDetailView({
  */
 function EditSessionDetailsModal({ isOpen, session, onClose, onSave }) {
   const { programme: initialProg, sessionTitle: initialSess, preacher: initialPreacher } = getSessionHierarchy(session)
+  const initialDay = session?.day_number || session?.metadata?.day_number || ''
   const [programmes, setProgrammes] = useState([])
   const [selectedProgramme, setSelectedProgramme] = useState(initialProg)
   const [customProgramme, setCustomProgramme] = useState('')
   const [selectedSession, setSelectedSession] = useState(initialSess)
   const [customSession, setCustomSession] = useState('')
+  const [dayNumber, setDayNumber] = useState(initialDay)
   const [minister, setMinister] = useState(initialPreacher)
   const [isSaving, setIsSaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState(null)
@@ -1011,12 +1020,13 @@ function EditSessionDetailsModal({ isOpen, session, onClose, onSave }) {
     if (isOpen) {
       setSelectedProgramme(initialProg)
       setSelectedSession(initialSess)
+      setDayNumber(session?.day_number || session?.metadata?.day_number || '')
       setMinister(initialPreacher)
       setCustomProgramme('')
       setCustomSession('')
       setErrorMsg(null)
     }
-  }, [isOpen, initialProg, initialSess, initialPreacher])
+  }, [isOpen, initialProg, initialSess, initialPreacher, session?.day_number, session?.metadata?.day_number])
 
   if (!isOpen) return null
 
@@ -1066,10 +1076,12 @@ function EditSessionDetailsModal({ isOpen, session, onClose, onSave }) {
 
     try {
       setIsSaving(true)
+      const parsedDay = dayNumber ? parseInt(dayNumber, 10) : null
       const success = await onSave({
         programme: finalProgramme,
         sessionTitle: finalSession,
         minister: finalMinister,
+        day_number: parsedDay && parsedDay > 0 ? parsedDay : null,
       })
       if (success) {
         onClose()
@@ -1220,7 +1232,24 @@ function EditSessionDetailsModal({ isOpen, session, onClose, onSave }) {
             </div>
           )}
 
-          {/* 3. Pastor / Minister */}
+          {/* 3. Day Number (Optional) */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="edit-day-input">
+              Day <span style={{ fontWeight: 'normal', color: 'var(--text-muted)', fontSize: '0.85em' }}>(Optional numeric day e.g. 2)</span>
+            </label>
+            <input
+              id="edit-day-input"
+              type="number"
+              min="1"
+              max="365"
+              className="form-control"
+              placeholder="e.g. 2"
+              value={dayNumber}
+              onChange={(e) => setDayNumber(e.target.value)}
+            />
+          </div>
+
+          {/* 4. Pastor / Minister */}
           <div className="form-group">
             <label className="form-label" htmlFor="edit-minister-input">
               Pastor / Minister

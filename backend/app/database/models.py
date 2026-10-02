@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     flag_count INTEGER DEFAULT 0,
     is_interrupted INTEGER DEFAULT 0,
     recovery_notes TEXT,
-    metadata_json TEXT
+    metadata_json TEXT,
+    day_number INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_created ON sessions(date_created DESC);
@@ -541,6 +542,7 @@ AUTH_MIGRATION_COLUMNS = [
     "ALTER TABLE sessions ADD COLUMN account_id TEXT",
     "ALTER TABLE programmes ADD COLUMN account_id TEXT",
     "ALTER TABLE app_users ADD COLUMN display_name TEXT",
+    "ALTER TABLE sessions ADD COLUMN day_number INTEGER",
 ]
 
 # ---------------------------------------------------------------------------
@@ -569,7 +571,8 @@ CREATE TABLE sessions (
     flag_count INT DEFAULT 0,
     is_interrupted INT DEFAULT 0,
     recovery_notes NVARCHAR(MAX),
-    metadata_json NVARCHAR(MAX)
+    metadata_json NVARCHAR(MAX),
+    day_number INT
 );
 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_sessions_created')
@@ -1156,6 +1159,7 @@ AUTH_MIGRATION_COLUMNS_MSSQL = [
     "IF COL_LENGTH('sessions', 'account_id') IS NULL ALTER TABLE sessions ADD account_id VARCHAR(255)",
     "IF COL_LENGTH('programmes', 'account_id') IS NULL ALTER TABLE programmes ADD account_id VARCHAR(255)",
     "IF COL_LENGTH('app_users', 'display_name') IS NULL ALTER TABLE app_users ADD display_name NVARCHAR(255)",
+    "IF COL_LENGTH('sessions', 'day_number') IS NULL ALTER TABLE sessions ADD day_number INT",
 ]
 
 

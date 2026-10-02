@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 import { getSessionHierarchy, deriveSessionDisplayStatus } from './SessionDetailView'
 import { ConfirmationModal } from '../common/ConfirmationModal'
 
@@ -16,6 +16,30 @@ function FilterIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  )
+}
+
+function ListIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" />
+      <line x1="3" y1="12" x2="3.01" y2="12" />
+      <line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+  )
+}
+
+function GridIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
     </svg>
   )
 }
@@ -70,6 +94,22 @@ export function SessionHistoryList({
   const [configuredProgrammes, setConfiguredProgrammes] = useState([])
   const [sessionToDelete, setSessionToDelete] = useState(null)
   const [isDeletingSession, setIsDeletingSession] = useState(false)
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('dlbc_sessions_view_mode') || 'list'
+    } catch {
+      return 'list'
+    }
+  })
+
+  const handleToggleViewMode = (mode) => {
+    setViewMode(mode)
+    try {
+      localStorage.setItem('dlbc_sessions_view_mode', mode)
+    } catch (e) {
+      console.warn('Failed to persist sessions view mode:', e)
+    }
+  }
 
   const filterRef = useRef(null)
   const eventDropdownRef = useRef(null)
@@ -80,12 +120,12 @@ export function SessionHistoryList({
     }
   }, [initialStatusFilter])
 
-  // Fetch real configured programmes from backend
+  // Fetch real configured programmes from backend using authFetch
   useEffect(() => {
     let isMounted = true
     async function fetchProgrammes() {
       try {
-        const res = await fetch(getApiUrl('/api/programmes?include_archived=false'))
+        const res = await authFetch('/api/programmes?include_archived=false')
         if (res.ok && isMounted) {
           const data = await res.json()
           setConfiguredProgrammes(data)
@@ -463,10 +503,38 @@ export function SessionHistoryList({
             </div>
           )}
         </div>
+
+        {/* Desktop List / Grid Toggle */}
+        <div className="sessions-view-toggle-group" role="radiogroup" aria-label="Sessions view style">
+          <button
+            type="button"
+            className={`btn-view-toggle ${viewMode === 'list' ? 'btn-view-toggle--active' : ''}`}
+            onClick={() => handleToggleViewMode('list')}
+            title="Dense List View"
+            aria-checked={viewMode === 'list'}
+            role="radio"
+            id="btn-sessions-view-list"
+          >
+            <ListIcon />
+            <span className="btn-view-toggle-label">List</span>
+          </button>
+          <button
+            type="button"
+            className={`btn-view-toggle ${viewMode === 'grid' ? 'btn-view-toggle--active' : ''}`}
+            onClick={() => handleToggleViewMode('grid')}
+            title="Card Grid View"
+            aria-checked={viewMode === 'grid'}
+            role="radio"
+            id="btn-sessions-view-grid"
+          >
+            <GridIcon />
+            <span className="btn-view-toggle-label">Grid</span>
+          </button>
+        </div>
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 3. 3-COLUMN RESTRAINED SESSION CARDS GRID                     */}
+      {/* 3. DENSE LIST OR 3-COLUMN RESTRAINED SESSION CARDS GRID       */}
       {/* ------------------------------------------------------------- */}
       {isLoading && (!sessions || sessions.length === 0) ? (
         <div className="sessions-state-box">
@@ -509,7 +577,89 @@ export function SessionHistoryList({
             </button>
           )}
         </div>
+      ) : viewMode === 'list' ? (
+        /* ---------------- DENSE TABLE LIST VIEW ---------------- */
+        <div className="sessions-dense-table-container">
+          <table className="sessions-dense-table">
+            <thead>
+              <tr>
+                <th className="th-session">Session</th>
+                <th className="th-programme">Event / Programme</th>
+                <th className="th-date">Date</th>
+                <th className="th-duration">Duration</th>
+                <th className="th-status">Status</th>
+                <th className="th-actions text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSessions.map((s) => {
+                const { programmeName, sessionName } = getSessionDisplayNames(s)
+                const { statusLabel, cardPillClass, actionText, targetStage } = deriveSessionDisplayStatus(s)
+                const dayNum = s.day_number || s.metadata?.day_number
+                const formattedDate = formatCardDate(s.date_created)
+                const humanDuration = formatHumanDuration(s.duration_seconds || s.audio_duration_seconds)
+
+                return (
+                  <tr
+                    key={s.session_id}
+                    className="sessions-table-row"
+                    onClick={() => onOpenSession && onOpenSession(s.session_id, 'overview')}
+                  >
+                    <td className="td-session">
+                      <span className="table-session-title">
+                        {sessionName}
+                        {dayNum && (
+                          <span className="session-day-badge" title={`Day ${dayNum}`}>
+                            {dayNum}
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="td-programme">
+                      <span className="table-programme-name">{programmeName}</span>
+                    </td>
+                    <td className="td-date">
+                      <span className="table-meta-text">{formattedDate}</span>
+                    </td>
+                    <td className="td-duration">
+                      <span className="table-meta-text">{humanDuration}</span>
+                    </td>
+                    <td className="td-status">
+                      <span className={`session-card-pill ${cardPillClass}`}>
+                        <span className="pill-dot">●</span>
+                        <span className="pill-label">{statusLabel}</span>
+                      </span>
+                    </td>
+                    <td className="td-actions text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="table-actions-cell">
+                        <button
+                          type="button"
+                          className="btn btn--small btn--outline"
+                          onClick={() => onOpenSession && onOpenSession(s.session_id, targetStage)}
+                        >
+                          {actionText}
+                        </button>
+                        {onDeleteSession && (
+                          <button
+                            type="button"
+                            className="session-card-delete-icon-btn"
+                            onClick={() => setSessionToDelete({ id: s.session_id, name: sessionName })}
+                            title="Delete session record"
+                            aria-label="Delete session"
+                          >
+                            <TrashIcon />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       ) : (
+        /* ---------------- CLEAN CARD GRID VIEW ---------------- */
         <div className="sessions-cards-grid">
           {filteredSessions.map((s) => {
             const { sessionName } = getSessionDisplayNames(s)
@@ -519,7 +669,7 @@ export function SessionHistoryList({
               actionText,
               targetStage,
             } = deriveSessionDisplayStatus(s)
-
+            const dayNum = s.day_number || s.metadata?.day_number
             const formattedDate = formatCardDate(s.date_created)
             const humanDuration = formatHumanDuration(s.duration_seconds || s.audio_duration_seconds)
 
@@ -549,6 +699,11 @@ export function SessionHistoryList({
                 <div className="session-card-title-stack">
                   <h2 className="session-card-dominant-title" title={sessionName}>
                     {sessionName}
+                    {dayNum && (
+                      <span className="session-day-badge" title={`Day ${dayNum}`}>
+                        {dayNum}
+                      </span>
+                    )}
                   </h2>
                 </div>
 

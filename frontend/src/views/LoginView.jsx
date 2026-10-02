@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { AuthBrandPanel } from '../components/auth/AuthBrandPanel'
 
 export function LoginView({ onSwitchToCreate, onSwitchToForgot }) {
   const { login, error, clearError, authNotice, isLocalDemoAllowed, enterDemoMode } = useAuth()
@@ -33,15 +34,14 @@ export function LoginView({ onSwitchToCreate, onSwitchToForgot }) {
   const displayedError = localError || error
 
   return (
-    <div className="auth-page-container">
-      <div className="auth-card">
-        <div className="auth-header">
-          <div className="auth-brand">
-            <div className="auth-logo-badge">DLBC</div>
-            <div className="auth-brand-title">Information Unit</div>
+    <div className="auth-split-layout">
+      <AuthBrandPanel />
+      <div className="auth-form-side">
+        <div className="auth-card">
+          <div className="auth-header">
+            <h1 className="auth-title">Sign in to your account</h1>
+            <p className="auth-subtitle">Enter your ministerial credentials to access the workspace</p>
           </div>
-          <h1 className="auth-title">Sign in to your account</h1>
-        </div>
 
         {authNotice && (
           <div className="auth-notice-banner" role="status">
@@ -162,6 +162,7 @@ export function LoginView({ onSwitchToCreate, onSwitchToForgot }) {
             </button>
           </div>
         )}
+      </div>
       </div>
     </div>
   )

@@ -242,6 +242,14 @@ export function AppShell({
     }
   }, [isUserMenuOpen])
 
+  if (activeView === 'settings') {
+    return (
+      <div className="app-shell-settings-bleed">
+        {children}
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell-container">
       {/* ------------------------------------------------------------- */}

@@ -20,6 +20,7 @@ export function NewLiveSessionView({
   const [selectedProgrammeId, setSelectedProgrammeId] = useState('')
   const [selectedSessionId, setSelectedSessionId] = useState('')
   const [minister, setMinister] = useState('')
+  const [dayNumber, setDayNumber] = useState('')
   const [messageTitle, setMessageTitle] = useState('')
   const [validationError, setValidationError] = useState('')
   const [isLoadingProgrammes, setIsLoadingProgrammes] = useState(true)
@@ -75,6 +76,7 @@ export function NewLiveSessionView({
   // Compute default session title
   const progName = currentProgramme?.name || 'Sunday Worship Service'
   const sessName = currentSession?.name || ''
+  const parsedDay = dayNumber ? parseInt(dayNumber, 10) : null
   const computedDefaultTitle = sessName
     ? `${progName} — ${sessName}${messageTitle.trim() ? ': ' + messageTitle.trim() : ''}`
     : `${progName}${messageTitle.trim() ? ': ' + messageTitle.trim() : ''}`
@@ -108,6 +110,7 @@ export function NewLiveSessionView({
       programmeSessionId: selectedSessionId,
       eventType: progName, // Backward compatibility
       minister: minister.trim(),
+      day_number: parsedDay && parsedDay > 0 ? parsedDay : null,
       messageTitle: messageTitle.trim(),
     })
   }
@@ -168,9 +171,9 @@ export function NewLiveSessionView({
               )}
             </div>
 
-            {/* 2. Session / Section Dropdown (Dependent on Programme) & Minister */}
+            {/* 2. Session / Section Dropdown (Dependent on Programme) & Day */}
             <div className="form-row-2col">
-              <div className="form-group">
+              <div className="form-group" style={{ flex: 3 }}>
                 <label className="form-label" htmlFor="select-programme-session">
                   Session / Section
                 </label>
@@ -194,19 +197,36 @@ export function NewLiveSessionView({
                 )}
               </div>
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="input-minister">
-                  Minister / Speaker
+              <div className="form-group" style={{ flex: 1, minWidth: '95px' }}>
+                <label className="form-label" htmlFor="input-day-number">
+                  Day
                 </label>
                 <input
-                  type="text"
-                  id="input-minister"
+                  type="number"
+                  id="input-day-number"
                   className="form-control"
-                  placeholder="e.g. Pastor W.F. Kumuyi"
-                  value={minister}
-                  onChange={(e) => setMinister(e.target.value)}
+                  placeholder="e.g. 2"
+                  min="1"
+                  max="365"
+                  value={dayNumber}
+                  onChange={(e) => setDayNumber(e.target.value.replace(/[^0-9]/g, ''))}
                 />
               </div>
+            </div>
+
+            {/* 3. Minister / Speaker */}
+            <div className="form-group">
+              <label className="form-label" htmlFor="input-minister">
+                Minister / Speaker
+              </label>
+              <input
+                type="text"
+                id="input-minister"
+                className="form-control"
+                placeholder="e.g. Pastor W.F. Kumuyi"
+                value={minister}
+                onChange={(e) => setMinister(e.target.value)}
+              />
             </div>
 
             {/* 3. Message Title (OPTIONAL) */}

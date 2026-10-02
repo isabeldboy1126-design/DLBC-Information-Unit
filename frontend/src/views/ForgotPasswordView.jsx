@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { AuthBrandPanel } from '../components/auth/AuthBrandPanel'
 
 export function ForgotPasswordView({ onSwitchToLogin }) {
   const { resetPassword, error, clearError, authNotice } = useAuth()
@@ -31,15 +32,14 @@ export function ForgotPasswordView({ onSwitchToLogin }) {
   }
 
   return (
-    <div className="auth-page-container">
-      <div className="auth-card">
-        <div className="auth-header">
-          <div className="auth-brand">
-            <div className="auth-logo-badge">DLBC</div>
-            <div className="auth-brand-title">Information Unit</div>
+    <div className="auth-split-layout">
+      <AuthBrandPanel />
+      <div className="auth-form-side">
+        <div className="auth-card">
+          <div className="auth-header">
+            <h1 className="auth-title">Reset your password</h1>
+            <p className="auth-subtitle">Enter your registered email to receive account recovery instructions</p>
           </div>
-          <h1 className="auth-title">Reset your password</h1>
-        </div>
 
         {sent ? (
           <div className="auth-form">
@@ -100,6 +100,7 @@ export function ForgotPasswordView({ onSwitchToLogin }) {
             ← Back to Sign in
           </button>
         </div>
+      </div>
       </div>
     </div>
   )
