@@ -11,26 +11,8 @@ import { APP_VERSION } from '../utils/version';
  * - Responsive: Stacks neatly on narrow mobile screens
  */
 export function DownloadView({ onBackToApp }) {
-  const [downloadNotice, setDownloadNotice] = React.useState(null);
-
-  const windowsDownloadUrl = 'https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC-Information-Unit-Setup-x64.exe';
-  const androidDownloadUrl = 'https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC-Information-Unit-Android.apk';
-
-  const handleWindowsDownload = () => {
-    setDownloadNotice({
-      platform: 'Windows',
-      title: 'Windows Installer Download Started',
-      detail: 'DLBC-Information-Unit-Setup-x64.exe (7.3 MB) is downloading. Check your browser downloads.',
-    });
-  };
-
-  const handleAndroidDownload = () => {
-    setDownloadNotice({
-      platform: 'Android',
-      title: 'Android APK Download Started',
-      detail: 'DLBC-Information-Unit-Android.apk (14.3 MB) is downloading. Check your notification bar or downloads.',
-    });
-  };
+  const windowsDownloadUrl = 'https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/download/v1.0.3/DLBC-Information-Unit-Setup-x64.exe';
+  const androidDownloadUrl = 'https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/download/v1.0.3/DLBC-Information-Unit-Android.apk';
 
   return (
     <div style={{
@@ -82,39 +64,6 @@ export function DownloadView({ onBackToApp }) {
           Reporting, transcription verification, and editorial workflow system. Download the client application for your device.
         </p>
 
-        {/* Real-time Download Confirmation Notice */}
-        {downloadNotice && (
-          <div style={{
-            marginBottom: '20px',
-            padding: '12px 16px',
-            backgroundColor: 'rgba(34, 197, 94, 0.1)',
-            border: '1px solid rgba(34, 197, 94, 0.3)',
-            borderRadius: '10px',
-            textAlign: 'left',
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              color: '#4ade80',
-              fontWeight: 600,
-              fontSize: '14px',
-              marginBottom: '4px',
-            }}>
-              <span>✓</span>
-              <span>{downloadNotice.title}</span>
-            </div>
-            <p style={{
-              margin: 0,
-              fontSize: '12px',
-              color: '#d1d5db',
-              lineHeight: 1.4,
-            }}>
-              {downloadNotice.detail}
-            </p>
-          </div>
-        )}
-
         {/* Side-by-side Download Buttons */}
         <div style={{
           display: 'flex',
@@ -127,7 +76,7 @@ export function DownloadView({ onBackToApp }) {
           <a
             id="download-windows-btn"
             href={windowsDownloadUrl}
-            onClick={handleWindowsDownload}
+            download="DLBC-Information-Unit-Setup-x64.exe"
             style={{
               flex: '1 1 200px',
               maxWidth: '240px',
@@ -159,7 +108,7 @@ export function DownloadView({ onBackToApp }) {
           <a
             id="download-android-btn"
             href={androidDownloadUrl}
-            onClick={handleAndroidDownload}
+            download="DLBC-Information-Unit-Android.apk"
             style={{
               flex: '1 1 200px',
               maxWidth: '240px',
