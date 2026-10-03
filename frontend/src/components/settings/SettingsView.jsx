@@ -173,9 +173,10 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
     setUpdateState('downloading')
     setUpdateError(null)
     try {
-      await downloadAndInstallUpdate((progress) => {
-        if (progress.total && progress.downloaded) {
-          const pct = Math.round((progress.downloaded / progress.total) * 100)
+      await downloadAndInstallUpdate(updateInfo?.updateRef, (progress) => {
+        const total = progress.total || progress.contentLength
+        if (total && progress.downloaded) {
+          const pct = Math.round((progress.downloaded / total) * 100)
           setFeedback(`Downloading update... ${pct}%`)
         }
       })

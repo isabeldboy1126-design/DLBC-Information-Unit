@@ -11,8 +11,8 @@ import { APP_VERSION } from '../utils/version';
  * - Responsive: Stacks neatly on narrow mobile screens
  */
 export function DownloadView({ onBackToApp }) {
-  const windowsDownloadUrl = 'https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/download/v1.0.3/DLBC-Information-Unit-Setup-x64.exe';
-  const androidDownloadUrl = 'https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/download/v1.0.3/DLBC-Information-Unit-Android.apk';
+  const windowsDownloadUrl = 'https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC-Information-Unit-Setup-x64.exe';
+  const androidDownloadUrl = 'https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC-Information-Unit-Android.apk';
 
   return (
     <div style={{

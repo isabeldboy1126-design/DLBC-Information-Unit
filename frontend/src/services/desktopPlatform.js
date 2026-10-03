@@ -138,6 +138,8 @@ export async function sendDesktopNotification(title, body) {
   }
 }
 
+let cachedUpdate = null;
+
 /**
  * Updater API wrapper
  */
@@ -150,6 +152,7 @@ export async function checkForAppUpdates() {
     const { check } = await import('@tauri-apps/plugin-updater');
     const update = await check();
     if (update && update.available) {
+      cachedUpdate = update;
       return {
         isDesktop: true,
         available: true,
@@ -159,6 +162,7 @@ export async function checkForAppUpdates() {
         updateRef: update,
       };
     }
+    cachedUpdate = null;
     return { isDesktop: true, available: false };
   } catch (err) {
     console.warn('[DesktopPlatform] Updater check failed:', err);
@@ -167,20 +171,39 @@ export async function checkForAppUpdates() {
 }
 
 export async function downloadAndInstallUpdate(updateRef, onProgress) {
-  if (!updateRef || typeof updateRef.downloadAndInstall !== 'function') {
-    throw new Error('Invalid update object');
+  // Support flexible argument order: if first argument is a progress callback
+  if (typeof updateRef === 'function') {
+    onProgress = updateRef;
+    updateRef = cachedUpdate;
   }
+
+  // If updateRef is still missing or invalid, resolve from cache or re-check
+  if (!updateRef || typeof updateRef.downloadAndInstall !== 'function') {
+    if (cachedUpdate && typeof cachedUpdate.downloadAndInstall === 'function') {
+      updateRef = cachedUpdate;
+    } else {
+      const checkRes = await checkForAppUpdates();
+      if (checkRes && checkRes.available && checkRes.updateRef) {
+        updateRef = checkRes.updateRef;
+      }
+    }
+  }
+
+  if (!updateRef || typeof updateRef.downloadAndInstall !== 'function') {
+    throw new Error('No update is currently available to install');
+  }
+
   let downloaded = 0;
   let contentLength = 0;
   await updateRef.downloadAndInstall((event) => {
     switch (event.event) {
       case 'Started':
         contentLength = event.data.contentLength || 0;
-        if (onProgress) onProgress({ status: 'started', contentLength });
+        if (onProgress) onProgress({ status: 'started', contentLength, total: contentLength });
         break;
       case 'Progress':
         downloaded += event.data.chunkLength;
-        if (onProgress) onProgress({ status: 'progress', downloaded, contentLength });
+        if (onProgress) onProgress({ status: 'progress', downloaded, contentLength, total: contentLength });
         break;
       case 'Finished':
         if (onProgress) onProgress({ status: 'finished' });
