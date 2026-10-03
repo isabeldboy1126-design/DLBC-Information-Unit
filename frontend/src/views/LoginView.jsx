@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { AuthBrandPanel } from '../components/auth/AuthBrandPanel'
 
-export function LoginView({ onSwitchToCreate, onSwitchToForgot }) {
+export function LoginView({ onSwitchToCreate, onSwitchToForgot, onOpenDownload }) {
   const { login, error, clearError, authNotice, isLocalDemoAllowed, enterDemoMode } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -162,6 +162,34 @@ export function LoginView({ onSwitchToCreate, onSwitchToForgot }) {
               </button>
             </div>
           )}
+
+          <div style={{ marginTop: '20px', textAlign: 'center' }}>
+            <a
+              href="#download"
+              onClick={(e) => {
+                e.preventDefault()
+                if (onOpenDownload) {
+                  onOpenDownload()
+                } else if (typeof window !== 'undefined') {
+                  window.location.hash = '#download'
+                }
+              }}
+              style={{
+                fontSize: '13px',
+                color: '#9ca3af',
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.color = '#60a5fa')}
+              onMouseOut={(e) => (e.currentTarget.style.color = '#9ca3af')}
+              id="link-download-apps"
+            >
+              <span>📥</span> Download Windows & Android Apps
+            </a>
+          </div>
         </div>
       </main>
     </div>

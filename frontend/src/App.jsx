@@ -47,11 +47,30 @@ import { setupWindowCloseProtection, forceExitApplication } from './services/des
 import './App.css'
 
 function App() {
-  const parseRoute = (rawHash) => {
-    if (typeof window !== 'undefined' && window.location.pathname === '/download') {
+  const getActiveRoute = () => {
+    if (typeof window === 'undefined') return ''
+    const p = (window.location.pathname || '').replace(/\/+$/, '')
+    if (p === '/download' || p.endsWith('/download')) return 'download'
+    const h = (window.location.hash || '').replace(/^#\/?/, '').trim()
+    if (h) return h
+    if (p && p !== '/') return p.replace(/^\//, '')
+    return ''
+  }
+
+  const parseRoute = (rawRoute) => {
+    const clean = (rawRoute || '').replace(/^#\/?/, '').replace(/^\//, '').replace(/\/+$/, '').trim()
+    if (
+      clean === 'download' ||
+      (typeof window !== 'undefined' && (
+        window.location.pathname === '/download' ||
+        window.location.pathname === '/download/' ||
+        window.location.pathname.endsWith('/download') ||
+        window.location.hash === '#download' ||
+        window.location.hash === '#/download'
+      ))
+    ) {
       return { view: 'download', sessionId: null, stage: null, subAction: null }
     }
-    const clean = (rawHash || '').replace(/^#\/?/, '').trim()
     if (!clean || clean === 'dashboard') {
       return { view: 'dashboard', sessionId: null, stage: null, subAction: null }
     }
@@ -97,15 +116,15 @@ function App() {
     return { view: 'dashboard', sessionId: null, stage: null, subAction: null }
   }
 
-  // Navigation state initialized from URL hash
+  // Navigation state initialized from URL hash or pathname
   const [currentView, setCurrentView] = useState(() => {
-    return parseRoute(typeof window !== 'undefined' ? window.location.hash : '').view
+    return parseRoute(getActiveRoute()).view
   })
   const [sessionInitialStage, setSessionInitialStage] = useState(() => {
-    return parseRoute(typeof window !== 'undefined' ? window.location.hash : '').stage || 'overview'
+    return parseRoute(getActiveRoute()).stage || 'overview'
   })
   const [verificationProcessing, setVerificationProcessing] = useState(() => {
-    return parseRoute(typeof window !== 'undefined' ? window.location.hash : '').subAction === 'processing'
+    return parseRoute(getActiveRoute()).subAction === 'processing'
   })
   const [isRecorderMinimized, setIsRecorderMinimized] = useState(false)
   const [showCompletionModal, setShowCompletionModal] = useState(() => {
@@ -144,15 +163,27 @@ function App() {
   })
 
   useEffect(() => {
-    const handleHash = () => {
+    const syncRouteFromLocation = () => {
+      const routeStr = getActiveRoute()
+      const parsed = parseRoute(routeStr)
+      if (parsed.view) {
+        setCurrentView(parsed.view)
+        if (parsed.stage) setSessionInitialStage(parsed.stage)
+        if (parsed.sessionId) setCompletedSessionId(parsed.sessionId)
+        if (parsed.subAction === 'processing') setVerificationProcessing(true)
+      }
       const h = typeof window !== 'undefined' ? window.location.hash || '' : ''
       if (h.includes('reset-password')) {
         setAuthScreen('reset')
       }
     }
-    handleHash()
-    window.addEventListener('hashchange', handleHash)
-    return () => window.removeEventListener('hashchange', handleHash)
+    syncRouteFromLocation()
+    window.addEventListener('hashchange', syncRouteFromLocation)
+    window.addEventListener('popstate', syncRouteFromLocation)
+    return () => {
+      window.removeEventListener('hashchange', syncRouteFromLocation)
+      window.removeEventListener('popstate', syncRouteFromLocation)
+    }
   }, [])
 
   // Phase 1 & 3: Audio Capture & Live Transcription Hook
@@ -565,6 +596,10 @@ function App() {
       <LoginView
         onSwitchToCreate={() => setAuthScreen('create')}
         onSwitchToForgot={() => setAuthScreen('forgot')}
+        onOpenDownload={() => {
+          if (typeof window !== 'undefined') window.location.hash = '#download'
+          setCurrentView('download')
+        }}
       />
     )
   }
