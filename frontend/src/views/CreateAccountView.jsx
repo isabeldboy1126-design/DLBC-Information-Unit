@@ -182,7 +182,7 @@ export function CreateAccountView({ onSwitchToLogin }) {
             </button>
           </form>
 
-          <div className="auth-footer">
+          <div className="auth-footer" style={{ whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
             <span className="auth-footer-text">Already have an account?</span>{' '}
             <button
               type="button"

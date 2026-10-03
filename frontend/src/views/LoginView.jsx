@@ -136,7 +136,7 @@ export function LoginView({ onSwitchToCreate, onSwitchToForgot, onOpenDownload }
             </button>
           </form>
 
-          <div className="auth-footer">
+          <div className="auth-footer" style={{ whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
             <span className="auth-footer-text">Don't have an account?</span>{' '}
             <button
               type="button"
@@ -162,34 +162,6 @@ export function LoginView({ onSwitchToCreate, onSwitchToForgot, onOpenDownload }
               </button>
             </div>
           )}
-
-          <div style={{ marginTop: '20px', textAlign: 'center' }}>
-            <a
-              href="#download"
-              onClick={(e) => {
-                e.preventDefault()
-                if (onOpenDownload) {
-                  onOpenDownload()
-                } else if (typeof window !== 'undefined') {
-                  window.location.hash = '#download'
-                }
-              }}
-              style={{
-                fontSize: '13px',
-                color: '#9ca3af',
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                cursor: 'pointer',
-              }}
-              onMouseOver={(e) => (e.currentTarget.style.color = '#60a5fa')}
-              onMouseOut={(e) => (e.currentTarget.style.color = '#9ca3af')}
-              id="link-download-apps"
-            >
-              <span>📥</span> Download Windows & Android Apps
-            </a>
-          </div>
         </div>
       </main>
     </div>

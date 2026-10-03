@@ -42,6 +42,9 @@ import { ProfileView } from './components/profile/ProfileView'
 import { useRemoteControl } from './hooks/useRemoteControl'
 import { RemoteControlView } from './components/remote/RemoteControlView'
 import { DownloadView } from './views/DownloadView'
+import { PublicMediaUploadView } from './views/PublicMediaUploadView'
+import { App as CapApp } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
 import { CloseRecordingModal } from './components/common/CloseRecordingModal'
 import { setupWindowCloseProtection, forceExitApplication } from './services/desktopPlatform'
 import './App.css'
@@ -76,6 +79,25 @@ function App() {
     }
     if (clean === 'sessions') {
       return { view: 'sessions', sessionId: null, stage: null, subAction: null }
+    }
+    if (clean.startsWith('media/upload/')) {
+      const parts = clean.split('/')
+      return {
+        view: 'media_upload',
+        token: parts[2] || null,
+        sessionId: null,
+        stage: null,
+        subAction: null,
+      }
+    }
+    if (clean.startsWith('workspace/')) {
+      const parts = clean.split('/')
+      return {
+        view: 'workspace',
+        sessionId: parts[1] || null,
+        stage: 'final_report',
+        subAction: null,
+      }
     }
     if (clean.startsWith('session/')) {
       const parts = clean.split('/')
@@ -133,6 +155,13 @@ function App() {
   const [completedSessionId, setCompletedSessionId] = useState(() => {
     return parseRoute(typeof window !== 'undefined' ? window.location.hash : '').sessionId
   })
+  const [mediaUploadToken, setMediaUploadToken] = useState(() => {
+    return parseRoute(getActiveRoute()).token || null
+  })
+  const [workspaceSessionId, setWorkspaceSessionId] = useState(() => {
+    const parsed = parseRoute(getActiveRoute())
+    return parsed.view === 'workspace' ? parsed.sessionId : null
+  })
 
   const [sessionMetadata, setSessionMetadata] = useState({
     title: 'Sunday Morning Worship Service',
@@ -171,6 +200,8 @@ function App() {
         if (parsed.stage) setSessionInitialStage(parsed.stage)
         if (parsed.sessionId) setCompletedSessionId(parsed.sessionId)
         if (parsed.subAction === 'processing') setVerificationProcessing(true)
+        if (parsed.token) setMediaUploadToken(parsed.token)
+        if (parsed.view === 'workspace') setWorkspaceSessionId(parsed.sessionId)
       }
       const h = typeof window !== 'undefined' ? window.location.hash || '' : ''
       if (h.includes('reset-password')) {
@@ -293,6 +324,25 @@ function App() {
       return
     }
 
+    if (route.view === 'media_upload') {
+      setCurrentView('media_upload')
+      setMediaUploadToken(route.token)
+      return
+    }
+
+    if (route.view === 'workspace') {
+      setCurrentView('workspace')
+      if (route.sessionId) {
+        setWorkspaceSessionId(route.sessionId)
+        if (sessionsHook.activeSession?.session_id !== route.sessionId) {
+          sessionsHook.loadSession(route.sessionId)
+        }
+      } else {
+        setWorkspaceSessionId(null)
+      }
+      return
+    }
+
     setCurrentView(route.view)
     sessionsHook.closeActiveSession()
     setSessionInitialStage('overview')
@@ -330,6 +380,13 @@ function App() {
   }
 
   const handleInAppBack = () => {
+    // If inside workspace editor viewing a document, step back to workspace hub
+    if (currentView === 'workspace' && workspaceSessionId) {
+      setWorkspaceSessionId(null)
+      navigateTo('workspace')
+      return
+    }
+
     const currentDepth = (window.history.state && typeof window.history.state.depth === 'number')
       ? window.history.state.depth
       : 0
@@ -356,7 +413,9 @@ function App() {
         navigateTo('dashboard')
       } else if (clean.startsWith('completion/')) {
         navigateTo('sessions')
-      } else if (['sessions', 'new_live', 'transcribe', 'youtube', 'settings', 'profile'].includes(clean)) {
+      } else if (clean.startsWith('workspace/')) {
+        navigateTo('workspace')
+      } else if (['sessions', 'new_live', 'transcribe', 'youtube', 'settings', 'profile', 'remote_control', 'workspace', 'media'].includes(clean)) {
         navigateTo('dashboard')
       } else {
         navigateTo('dashboard')
@@ -382,6 +441,80 @@ function App() {
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
+
+  // Android Native Hardware Back Button & Gesture Support via Capacitor
+  useEffect(() => {
+    let backListener = null
+    let isMounted = true
+
+    async function registerBackListener() {
+      try {
+        if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
+          const handle = await CapApp.addListener('backButton', () => {
+            if (!isMounted) return
+
+            // 1. If Live Recording is open full-screen -> minimize
+            if (liveAudio.isRecording && !isRecorderMinimized) {
+              setIsRecorderMinimized(true)
+              return
+            }
+
+            // 2. Dismiss open overlay modals first
+            if (showCloseRecordingModal) {
+              setShowCloseRecordingModal(false)
+              return
+            }
+            if (showCompletionModal) {
+              setShowCompletionModal(false)
+              navigateTo('sessions')
+              return
+            }
+
+            // 3. If in Workspace editor editing a report, return to Workspace hub
+            if (currentView === 'workspace' && workspaceSessionId) {
+              setWorkspaceSessionId(null)
+              navigateTo('workspace')
+              return
+            }
+
+            // 4. If on top-level dashboard with no back history -> exit app
+            const clean = (window.location.hash || '').replace(/^#\/?/, '').trim()
+            const currentDepth = (window.history.state && typeof window.history.state.depth === 'number')
+              ? window.history.state.depth
+              : 0
+
+            if ((!clean || clean === 'dashboard') && currentDepth <= 0) {
+              CapApp.exitApp()
+              return
+            }
+
+            // Otherwise execute standard in-app back navigation
+            handleInAppBack()
+          })
+          backListener = handle
+        }
+      } catch (err) {
+        console.warn('Capacitor backButton setup:', err)
+      }
+    }
+
+    registerBackListener()
+
+    return () => {
+      isMounted = false
+      if (backListener && typeof backListener.remove === 'function') {
+        backListener.remove()
+      }
+    }
+  }, [
+    liveAudio.isRecording,
+    isRecorderMinimized,
+    showCloseRecordingModal,
+    showCompletionModal,
+    currentView,
+    workspaceSessionId,
+    sessionsHook.activeSession,
+  ])
 
   // Auto-load session if direct URL loaded
   useEffect(() => {
@@ -536,6 +669,18 @@ function App() {
         onBack: null,
       }
     }
+    if (currentView === 'workspace') {
+      return {
+        title: workspaceSessionId ? 'Workspace Editor' : 'Workspace',
+        onBack: handleInAppBack,
+      }
+    }
+    if (currentView === 'media') {
+      return {
+        title: 'Media Receiver',
+        onBack: handleInAppBack,
+      }
+    }
     if (currentView === 'sessions') {
       const activeOrTarget =
         sessionsHook.activeSession ||
@@ -573,6 +718,16 @@ function App() {
           <p className="auth-boot-text">Loading DLBC Information Unit...</p>
         </div>
       </div>
+    )
+  }
+
+  // Public Media Upload Landing Page (accessible via link without login)
+  if (currentView === 'media_upload') {
+    return (
+      <PublicMediaUploadView
+        token={mediaUploadToken}
+        onBackToApp={() => navigateTo('dashboard')}
+      />
     )
   }
 
@@ -957,10 +1112,20 @@ function App() {
       ) : currentView === 'workspace' ? (
         <WorkspaceView
           sessions={sessionsHook.sessions}
+          activeSessionId={workspaceSessionId}
           onOpenSession={(sessionId, initialStage = 'final_report') => {
             navigateTo(`session/${sessionId}/${initialStage}`)
           }}
+          onSelectDocument={(sessionId) => {
+            setWorkspaceSessionId(sessionId)
+            navigateTo(`workspace/${sessionId}`)
+          }}
+          onCloseEditor={() => {
+            setWorkspaceSessionId(null)
+            navigateTo('workspace')
+          }}
           onBack={handleInAppBack}
+          onRefreshSessions={sessionsHook.fetchSessions}
         />
       ) : currentView === 'media' ? (
         <MediaView
@@ -969,6 +1134,7 @@ function App() {
             navigateTo(`session/${sessionId}`)
           }}
           onBack={handleInAppBack}
+          onRefreshSessions={sessionsHook.fetchSessions}
         />
       ) : currentView === 'download' ? (
         <DownloadView onBackToApp={() => navigateTo('dashboard')} />

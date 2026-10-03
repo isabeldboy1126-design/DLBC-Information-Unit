@@ -174,7 +174,7 @@ export function DashboardView({
   // 3. Reports ready, pending editorial synthesis
   // 4. Editing complete, pending proofreading review
   const allAttentionSessions = sessions.filter(isActionableAttentionSession)
-  const attentionSessions = allAttentionSessions.slice(0, 3)
+  const attentionSessions = allAttentionSessions.slice(0, 6)
   const totalAttentionCount = allAttentionSessions.length
 
   // Recent 6 sessions
@@ -367,7 +367,7 @@ export function DashboardView({
           </div>
 
           <div className="mobile-pending-list">
-            {((allAttentionSessions.length > 0 ? allAttentionSessions : recentSessions.slice(0, 4))).map((s) => {
+            {((allAttentionSessions.length > 0 ? allAttentionSessions.slice(0, 6) : recentSessions.slice(0, 6))).map((s) => {
               const { sessionTitle } = getSessionHierarchy(s)
               const dayNum = s.day_number || (s.metadata && s.metadata.day_number)
               const dateText = formatAttentionDate(s.date_created)

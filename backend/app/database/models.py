@@ -464,6 +464,47 @@ CREATE TABLE IF NOT EXISTS active_workflow_state (
     FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_act_wf_account ON active_workflow_state(account_id);
+
+-- Media Upload Tokens & Received Recordings
+CREATE TABLE IF NOT EXISTS media_upload_tokens (
+    token_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    label TEXT DEFAULT 'Media Team Upload Link',
+    pin_code TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_media_tokens_account ON media_upload_tokens(account_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_media_tokens_token ON media_upload_tokens(token);
+
+CREATE TABLE IF NOT EXISTS media_recordings (
+    recording_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    token_id TEXT,
+    title TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'media_link',
+    original_filename TEXT,
+    file_path TEXT NOT NULL,
+    file_size INTEGER DEFAULT 0,
+    file_format TEXT,
+    duration_seconds REAL DEFAULT 0,
+    event TEXT,
+    programme TEXT,
+    day_number INTEGER,
+    pastor_name TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
+    session_id TEXT,
+    uploaded_by TEXT DEFAULT 'Media Team',
+    error_message TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_media_recordings_account ON media_recordings(account_id, status);
+CREATE INDEX IF NOT EXISTS idx_media_recordings_created ON media_recordings(created_at DESC);
 """
 
 # Phase 5 migration: add verification columns to sessions table.
@@ -1090,6 +1131,56 @@ CREATE TABLE active_workflow_state (
 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_act_wf_account')
 CREATE INDEX idx_act_wf_account ON active_workflow_state(account_id);
+
+IF OBJECT_ID(N'media_upload_tokens', N'U') IS NULL
+CREATE TABLE media_upload_tokens (
+    token_id VARCHAR(255) PRIMARY KEY,
+    account_id VARCHAR(255) NOT NULL,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    label NVARCHAR(255) DEFAULT 'Media Team Upload Link',
+    pin_code VARCHAR(50),
+    is_active INT NOT NULL DEFAULT 1,
+    created_at VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(255) NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_media_tokens_account')
+CREATE INDEX idx_media_tokens_account ON media_upload_tokens(account_id, is_active);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_media_tokens_token')
+CREATE INDEX idx_media_tokens_token ON media_upload_tokens(token);
+
+IF OBJECT_ID(N'media_recordings', N'U') IS NULL
+CREATE TABLE media_recordings (
+    recording_id VARCHAR(255) PRIMARY KEY,
+    account_id VARCHAR(255) NOT NULL,
+    token_id VARCHAR(255),
+    title NVARCHAR(MAX) NOT NULL,
+    source VARCHAR(50) NOT NULL DEFAULT 'media_link',
+    original_filename NVARCHAR(MAX),
+    file_path NVARCHAR(MAX) NOT NULL,
+    file_size BIGINT DEFAULT 0,
+    file_format VARCHAR(50),
+    duration_seconds FLOAT DEFAULT 0,
+    event NVARCHAR(MAX),
+    programme NVARCHAR(MAX),
+    day_number INT,
+    pastor_name NVARCHAR(MAX),
+    status VARCHAR(50) NOT NULL DEFAULT 'new',
+    session_id VARCHAR(255),
+    uploaded_by NVARCHAR(255) DEFAULT 'Media Team',
+    error_message NVARCHAR(MAX),
+    created_at VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(255) NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_media_recordings_account')
+CREATE INDEX idx_media_recordings_account ON media_recordings(account_id, status);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_media_recordings_created')
+CREATE INDEX idx_media_recordings_created ON media_recordings(created_at DESC);
 """
 
 PHASE5_MIGRATION_COLUMNS_MSSQL = [

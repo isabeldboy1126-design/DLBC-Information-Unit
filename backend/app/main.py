@@ -37,6 +37,8 @@ async def lifespan(app: FastAPI):
         await device_repo.init_db()
         from app.database.report_processing_repo import report_processing_repo
         await report_processing_repo.init_db()
+        from app.database.media_repo import media_repo
+        await media_repo.init_db()
         await session_repo.index_existing_storage_files()
         await recover_interrupted_sessions()
         print("Database, Accounts, and Session persistence initialized.")
@@ -98,6 +100,7 @@ from app.programmes.router import router as programmes_router
 from app.youtube.router import router as youtube_router
 from app.report_processing.router import router as report_processing_router
 from app.remote.router import router as remote_router
+from app.media.router import router as media_router
 
 app.include_router(auth_router)
 app.include_router(audio_router)
@@ -112,6 +115,7 @@ app.include_router(programmes_router)
 app.include_router(youtube_router)
 app.include_router(report_processing_router)
 app.include_router(remote_router)
+app.include_router(media_router)
 
 
 

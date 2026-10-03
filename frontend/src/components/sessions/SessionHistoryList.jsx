@@ -102,6 +102,20 @@ export function SessionHistoryList({
     }
   })
 
+  const [isMobileScreen, setIsMobileScreen] = useState(
+    typeof window !== 'undefined' ? window.innerWidth <= 768 : false
+  )
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth <= 768)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  const effectiveViewMode = isMobileScreen ? 'list' : viewMode
+
   const handleToggleViewMode = (mode) => {
     setViewMode(mode)
     try {
@@ -504,33 +518,35 @@ export function SessionHistoryList({
           )}
         </div>
 
-        {/* Desktop List / Grid Toggle */}
-        <div className="sessions-view-toggle-group" role="radiogroup" aria-label="Sessions view style">
-          <button
-            type="button"
-            className={`btn-view-toggle ${viewMode === 'list' ? 'btn-view-toggle--active' : ''}`}
-            onClick={() => handleToggleViewMode('list')}
-            title="Dense List View"
-            aria-checked={viewMode === 'list'}
-            role="radio"
-            id="btn-sessions-view-list"
-          >
-            <ListIcon />
-            <span className="btn-view-toggle-label">List</span>
-          </button>
-          <button
-            type="button"
-            className={`btn-view-toggle ${viewMode === 'grid' ? 'btn-view-toggle--active' : ''}`}
-            onClick={() => handleToggleViewMode('grid')}
-            title="Card Grid View"
-            aria-checked={viewMode === 'grid'}
-            role="radio"
-            id="btn-sessions-view-grid"
-          >
-            <GridIcon />
-            <span className="btn-view-toggle-label">Grid</span>
-          </button>
-        </div>
+        {/* Desktop List / Grid Toggle (Hidden on mobile) */}
+        {!isMobileScreen && (
+          <div className="sessions-view-toggle-group" role="radiogroup" aria-label="Sessions view style">
+            <button
+              type="button"
+              className={`btn-view-toggle ${viewMode === 'list' ? 'btn-view-toggle--active' : ''}`}
+              onClick={() => handleToggleViewMode('list')}
+              title="Dense List View"
+              aria-checked={viewMode === 'list'}
+              role="radio"
+              id="btn-sessions-view-list"
+            >
+              <ListIcon />
+              <span className="btn-view-toggle-label">List</span>
+            </button>
+            <button
+              type="button"
+              className={`btn-view-toggle ${viewMode === 'grid' ? 'btn-view-toggle--active' : ''}`}
+              onClick={() => handleToggleViewMode('grid')}
+              title="Card Grid View"
+              aria-checked={viewMode === 'grid'}
+              role="radio"
+              id="btn-sessions-view-grid"
+            >
+              <GridIcon />
+              <span className="btn-view-toggle-label">Grid</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ------------------------------------------------------------- */}
@@ -577,7 +593,7 @@ export function SessionHistoryList({
             </button>
           )}
         </div>
-      ) : viewMode === 'list' ? (
+      ) : effectiveViewMode === 'list' ? (
         /* ---------------- DENSE TABLE LIST VIEW ---------------- */
         <div className="sessions-dense-table-container">
           <table className="sessions-dense-table">

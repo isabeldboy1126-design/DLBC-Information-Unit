@@ -9,6 +9,8 @@ Provides endpoints for:
 5. Marking editing as complete for the next workflow stage.
 """
 
+import asyncio
+import os
 import time
 import urllib.parse
 from typing import Any, Dict, List, Optional
@@ -383,3 +385,80 @@ async def export_edited_report_docx(session_id: str):
             "Cache-Control": "no-cache",
         },
     )
+
+
+class ContextualAiEditRequest(BaseModel):
+    selected_text: str = Field(description="The snippet of text highlighted by the user.")
+    action: str = Field(description="Action: 'proofread', 'clarify', 'rephrase', 'shorten', 'expand', or 'custom'.")
+    custom_instruction: Optional[str] = Field(default=None, description="Optional custom instruction.")
+    context_before: Optional[str] = Field(default="", description="Context before selection.")
+    context_after: Optional[str] = Field(default="", description="Context after selection.")
+
+
+@router.post("/ai-assist")
+async def contextual_ai_assist(payload: ContextualAiEditRequest):
+    """
+    Contextual AI Assistant for Workspace and Report editing.
+    Performs focused revision on user-selected text without rewriting whole document.
+    """
+    if not payload.selected_text or not payload.selected_text.strip():
+        raise HTTPException(status_code=400, detail="No text provided for AI editing.")
+
+    if not gemini_editing_provider.is_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI Assistant is not configured. GEMINI_API_KEY is not set.",
+        )
+
+    action_instructions = {
+        "proofread": "Correct all spelling, grammar, punctuation, and syntax errors while preserving the exact tone and ministerial terminology.",
+        "clarify": "Improve the clarity and flow of the selected text, making theological thoughts crystal clear without adding extraneous details.",
+        "rephrase": "Rephrase the text with elegant, dignified church prose suitable for publication.",
+        "shorten": "Condense and tighten the text to be punchy and concise, removing redundancies while keeping the core spiritual message.",
+        "expand": "Elaborate slightly on the spiritual thoughts and structure, ensuring rich clarity while strictly adhering to biblical truth.",
+        "custom": payload.custom_instruction or "Improve the selected text.",
+    }
+
+    instruction = action_instructions.get(payload.action.lower(), action_instructions["proofread"])
+
+    prompt = f"""You are a specialized ministerial copy editor for the Deeper Christian Life Ministry (DLBC) Information Unit.
+Your task is to edit ONLY the user's selected text according to the specific editorial action.
+
+EDITORIAL ACTION: {payload.action.upper()}
+INSTRUCTION: {instruction}
+
+SURROUNDING CONTEXT:
+{payload.context_before} [...] {payload.context_after}
+
+SELECTED TEXT TO EDIT:
+"{payload.selected_text}"
+
+CRITICAL RULES:
+1. Return ONLY the edited replacement text for the selected portion.
+2. Do NOT output quotes around the response.
+3. Do NOT include greetings, conversational filler, markdown code fences, or meta-explanations.
+4. Preserve biblical scripture references accurately (e.g. John 3:16).
+5. Maintain a dignified, reverent, evangelical ministerial tone.
+"""
+
+    try:
+        from google import genai
+        api_key = os.getenv("GEMINI_API_KEY")
+        client = genai.Client(api_key=api_key)
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=gemini_editing_provider.get_model_name(),
+            contents=prompt,
+        )
+        replacement = (response.text or "").strip()
+        if replacement.startswith('"') and replacement.endswith('"'):
+            replacement = replacement[1:-1].strip()
+        return {
+            "status": "success",
+            "action": payload.action,
+            "original_text": payload.selected_text,
+            "replacement_text": replacement,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI assist failed: {str(e)}")
+
