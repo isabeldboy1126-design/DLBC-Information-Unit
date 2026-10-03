@@ -14,6 +14,7 @@ export function DownloadView({ onBackToApp }) {
   const [downloadNotice, setDownloadNotice] = React.useState(null);
 
   const windowsDownloadUrl = `https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC.Information.Unit_${APP_VERSION}_x64-setup.exe`;
+  const androidDownloadUrl = `https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC-Information-Unit.apk`;
 
   const handleWindowsDownload = () => {
     setDownloadNotice({
@@ -30,13 +31,7 @@ export function DownloadView({ onBackToApp }) {
       title: 'Android APK Download Started',
       detail: 'DLBC-Information-Unit.apk (7.9 MB) is downloading. Check your notification bar or downloads.',
     });
-
-    const link = document.createElement('a');
-    link.href = '/DLBC-Information-Unit.apk';
-    link.download = 'DLBC-Information-Unit.apk';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    window.location.href = androidDownloadUrl;
   };
 
   return (
