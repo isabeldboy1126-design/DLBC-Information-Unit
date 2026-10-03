@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { getApiUrl, API_BASE_URL, authFetch } from '../../config'
 import { ConfirmationModal } from '../common/ConfirmationModal'
+import { SettingsIcon } from './SettingsIcon'
 
 export function ProgrammesSettingsSection() {
   const [programmes, setProgrammes] = useState([])
@@ -287,7 +288,7 @@ export function ProgrammesSettingsSection() {
     <div className="card settings-card">
       <div className="card-header settings-card-header">
         <div className="settings-card-header-title">
-          <span className="settings-icon">📅</span>
+          <span className="settings-icon"><SettingsIcon name="events" size={20} /></span>
           <h3>Programmes &amp; Sessions</h3>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

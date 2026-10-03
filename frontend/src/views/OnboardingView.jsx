@@ -441,17 +441,6 @@ export function OnboardingView({
             <span className="progress-step-pill">
               {step === 7 ? 'Review' : `Step ${currentStepNumber}`}
             </span>
-            {isDemoTest && (
-              <button
-                type="button"
-                className="onboarding-restart-btn"
-                onClick={handleRestartTest}
-                title="Reset test onboarding draft and start again from step 1"
-                id="btn-restart-demo-test"
-              >
-                Restart test
-              </button>
-            )}
             {isReplay && onReplayCancel && (
               <button
                 type="button"

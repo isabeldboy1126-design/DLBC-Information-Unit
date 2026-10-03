@@ -1,41 +1,30 @@
 import React from 'react'
+import startLiveBg from '../../assets/dashboard/start-live-background.png'
 
-export function AuthBrandPanel({
-  tagline = 'Archival & Editorial Intelligence Platform',
-}) {
+/**
+ * AuthBrandPanel — Restrained Visual Identity for Desktop Authentication & Onboarding
+ *
+ * Requirements:
+ * - 40–45% left side proportion.
+ * - Minimal approved visual identity only: official DLBC logo and "Information Unit".
+ * - NO unapproved product marketing copy, no bullet points, no feature claims.
+ * - Subtle DLBC-blue treatment with approved architectural church imagery.
+ */
+export function AuthBrandPanel() {
   return (
-    <div className="auth-brand-panel">
-      {/* Subtle ecclesiastical architectural motif background */}
-      <div className="auth-brand-backdrop">
-        <svg className="auth-brand-pattern" viewBox="0 0 600 800" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <defs>
-            <radialGradient id="authAura" cx="50%" cy="35%" r="60%">
-              <stop offset="0%" stopColor="var(--color-primary-glow, rgba(59, 130, 246, 0.22))" />
-              <stop offset="60%" stopColor="transparent" />
-            </radialGradient>
-            <linearGradient id="authLineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="rgba(255, 255, 255, 0.03)" />
-              <stop offset="50%" stopColor="rgba(255, 255, 255, 0.12)" />
-              <stop offset="100%" stopColor="rgba(255, 255, 255, 0.02)" />
-            </linearGradient>
-          </defs>
+    <aside className="auth-brand-panel" aria-label="DLBC Information Unit Brand">
+      {/* Background Architectural Image with subtle DLBC blue overlay */}
+      <div
+        className="auth-brand-backdrop-image"
+        style={{ backgroundImage: `url(${startLiveBg})` }}
+        aria-hidden="true"
+      />
+      <div className="auth-brand-backdrop-overlay" aria-hidden="true" />
 
-          {/* Radiant Church Architecture Arcs & Tracery */}
-          <circle cx="300" cy="280" r="260" fill="url(#authAura)" />
-          <path d="M 120 700 C 120 400, 480 400, 480 700" stroke="url(#authLineGrad)" strokeWidth="1.5" />
-          <path d="M 160 700 C 160 440, 440 440, 440 700" stroke="url(#authLineGrad)" strokeWidth="1.2" />
-          <path d="M 200 700 C 200 480, 400 480, 400 700" stroke="url(#authLineGrad)" strokeWidth="1" />
-          <circle cx="300" cy="300" r="160" stroke="url(#authLineGrad)" strokeWidth="1" strokeDasharray="4 6" />
-          <circle cx="300" cy="300" r="110" stroke="url(#authLineGrad)" strokeWidth="1" />
-          <line x1="300" y1="100" x2="300" y2="700" stroke="url(#authLineGrad)" strokeWidth="1.2" />
-          <line x1="140" y1="300" x2="460" y2="300" stroke="url(#authLineGrad)" strokeWidth="1.2" />
-        </svg>
-      </div>
-
+      {/* Brand Identity Content: Clean, Minimal, Official */}
       <div className="auth-brand-content">
-        {/* Institutional Emblem and Header */}
-        <div className="auth-brand-emblem-group">
-          <div className="auth-brand-emblem-ring">
+        <div className="auth-brand-header">
+          <div className="auth-brand-emblem-wrap">
             <img
               src="/dlbc-logo.png"
               alt="Deeper Christian Life Ministry Emblem"
@@ -48,41 +37,11 @@ export function AuthBrandPanel({
           </div>
         </div>
 
-        <p className="auth-brand-tagline">{tagline}</p>
-
-        {/* Core Institutional Value Pillars */}
-        <div className="auth-brand-pillars">
-          <div className="auth-pillar-item">
-            <div className="auth-pillar-icon">🎙️</div>
-            <div className="auth-pillar-text">
-              <strong className="auth-pillar-title">Lossless Recording Integrity</strong>
-              <p className="auth-pillar-desc">Hardware-governed live capture & multi-source audio ingest</p>
-            </div>
-          </div>
-
-          <div className="auth-pillar-item">
-            <div className="auth-pillar-icon">⚖️</div>
-            <div className="auth-pillar-text">
-              <strong className="auth-pillar-title">Automated Acoustic Verification</strong>
-              <p className="auth-pillar-desc">Continuous doctrine cross-checks and ministerial verification</p>
-            </div>
-          </div>
-
-          <div className="auth-pillar-item">
-            <div className="auth-pillar-icon">📑</div>
-            <div className="auth-pillar-text">
-              <strong className="auth-pillar-title">Executive Editorial Intelligence</strong>
-              <p className="auth-pillar-desc">Direct publication-ready reports for leadership and archival units</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer Security / Version Note */}
+        {/* Minimal Footer */}
         <div className="auth-brand-footer">
-          <span className="auth-brand-version">DLBC Information Unit · Windows Desktop Release</span>
-          <span className="auth-brand-confidentiality">Authorized Church Personnel Only</span>
+          <span className="auth-brand-footer-text">Official Ministerial Desktop Application</span>
         </div>
       </div>
-    </div>
+    </aside>
   )
 }

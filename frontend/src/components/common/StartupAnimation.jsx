@@ -21,6 +21,7 @@ export function StartupAnimation({ onComplete }) {
   const [showSkip, setShowSkip] = useState(false)
   const [isFadingOut, setIsFadingOut] = useState(false)
   const completedRef = useRef(false)
+  const lastTapRef = useRef(0)
 
   const handleDismiss = useCallback(() => {
     if (completedRef.current) return
@@ -28,8 +29,22 @@ export function StartupAnimation({ onComplete }) {
     setIsFadingOut(true)
     setTimeout(() => {
       onComplete?.()
-    }, 350)
+    }, 300)
   }, [onComplete])
+
+  const handlePointerDown = useCallback((e) => {
+    if (e.target && e.target.closest && e.target.closest('.dlbc-startup-skip-btn')) {
+      return
+    }
+    const now = Date.now()
+    const DOUBLE_TAP_WINDOW = 350
+    if (now - lastTapRef.current <= DOUBLE_TAP_WINDOW) {
+      handleDismiss()
+      lastTapRef.current = 0
+    } else {
+      lastTapRef.current = now
+    }
+  }, [handleDismiss])
 
   useEffect(() => {
     // 1. Check persistent disable setting
@@ -83,6 +98,8 @@ export function StartupAnimation({ onComplete }) {
       role="dialog"
       aria-label="DLBC Information Unit Startup"
       aria-modal="true"
+      onPointerDown={handlePointerDown}
+      onDoubleClick={handleDismiss}
     >
       {/* Ambient Radial Illumination */}
       <div className="dlbc-startup-ambient-glow" aria-hidden="true" />
@@ -205,10 +222,6 @@ export function StartupAnimation({ onComplete }) {
           </div>
           <div className="dlbc-ministry-title">
             INFORMATION UNIT
-          </div>
-          <div className="dlbc-startup-divider" />
-          <div className="dlbc-startup-tagline">
-            Archival &amp; Editorial Intelligence
           </div>
         </div>
       </div>

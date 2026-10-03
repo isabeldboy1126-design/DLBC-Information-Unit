@@ -3,6 +3,7 @@ import { getApiUrl, API_BASE_URL, authFetch } from '../../config'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../hooks/useTheme'
 import { ProgrammesSettingsSection } from './ProgrammesSettingsSection'
+import { SettingsIcon } from './SettingsIcon'
 import { APP_VERSION } from '../../utils/version'
 import { isDesktop, checkForAppUpdates, downloadAndInstallUpdate, relaunchApplication } from '../../services/desktopPlatform'
 
@@ -10,8 +11,8 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
   const { account, demoMode } = useAuth()
   const { theme, toggleTheme } = useTheme()
 
-  // Active Settings Tab / Destination
-  const [activeTab, setActiveTab] = useState('church_profile')
+  // Active Settings Tab / Destination (default: profile)
+  const [activeTab, setActiveTab] = useState('profile')
 
   // Editorial Standards & Instructions state
   const [instruction, setInstruction] = useState('')
@@ -53,10 +54,6 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
     }
   })
 
-  // Audio devices state
-  const [audioDevices, setAudioDevices] = useState([])
-  const [hasAudioPermission, setHasAudioPermission] = useState(null)
-
   // Custom vocabulary state
   const [customVocab, setCustomVocab] = useState(() => {
     try {
@@ -73,23 +70,6 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
   const [updateInfo, setUpdateInfo] = useState(null)
   const [updateState, setUpdateState] = useState('idle')
   const [updateError, setUpdateError] = useState(null)
-
-  // Enumerate audio input devices
-  useEffect(() => {
-    async function loadAudioDevices() {
-      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.enumerateDevices) {
-        try {
-          const devices = await navigator.mediaDevices.enumerateDevices()
-          const inputs = devices.filter((d) => d.kind === 'audioinput')
-          setAudioDevices(inputs)
-          setHasAudioPermission(inputs.some((d) => Boolean(d.label)))
-        } catch (e) {
-          console.warn('Could not enumerate audio devices:', e)
-        }
-      }
-    }
-    loadAudioDevices()
-  }, [])
 
   // Handle Startup Animation Toggle
   const handleToggleStartupAnimation = (e) => {
@@ -119,15 +99,22 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
   // Handle Custom Vocabulary Add/Remove
   const handleAddVocabTerm = (e) => {
     e.preventDefault()
-    const trimmed = newVocabTerm.trim()
-    if (!trimmed || customVocab.includes(trimmed)) return
-    const updated = [...customVocab, trimmed]
+    const clean = newVocabTerm.trim()
+    if (!clean) return
+    if (customVocab.includes(clean)) {
+      setFeedback(`"${clean}" is already in vocabulary.`)
+      setTimeout(() => setFeedback(null), 3000)
+      return
+    }
+    const updated = [...customVocab, clean]
     setCustomVocab(updated)
     setNewVocabTerm('')
     try {
       localStorage.setItem('dlbc_custom_vocabulary', JSON.stringify(updated))
-    } catch (e) {
-      console.warn('Failed to save vocabulary:', e)
+      setFeedback(`Added "${clean}" to custom vocabulary.`)
+      setTimeout(() => setFeedback(null), 3000)
+    } catch (err) {
+      console.warn('Failed to save custom vocabulary:', err)
     }
   }
 
@@ -136,39 +123,45 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
     setCustomVocab(updated)
     try {
       localStorage.setItem('dlbc_custom_vocabulary', JSON.stringify(updated))
-    } catch (e) {
-      console.warn('Failed to save vocabulary:', e)
+      setFeedback(`Removed "${termToRemove}".`)
+      setTimeout(() => setFeedback(null), 3000)
+    } catch (err) {
+      console.warn('Failed to remove vocabulary term:', err)
     }
   }
 
-  // Handle Reset Demo Draft
+  // Handle Demo Onboarding reset
   const handleResetDemoDraft = () => {
     try {
       localStorage.removeItem('dlbc_demo_onboarding_draft')
       setHasDemoDraft(false)
-      setFeedback('Demo test onboarding draft cleared.')
+      setFeedback('Test onboarding draft reset.')
       setTimeout(() => setFeedback(null), 3000)
-    } catch (e) {
-      console.warn('Error clearing demo draft:', e)
+    } catch (err) {
+      console.warn('Failed to reset demo draft:', err)
     }
   }
 
-  // Software Update Handlers
+  // Handle Updates
   const handleCheckForUpdates = async () => {
+    if (isCheckingUpdate) return
     setIsCheckingUpdate(true)
     setUpdateError(null)
     setUpdateState('checking')
     try {
-      const res = await checkForAppUpdates()
-      if (res.available) {
-        setUpdateInfo(res)
+      const result = await checkForAppUpdates()
+      if (result && result.available) {
+        setUpdateInfo(result)
         setUpdateState('available')
+        setFeedback(`Update ${result.version} is available!`)
       } else {
+        setUpdateInfo(null)
         setUpdateState('up_to_date')
-        setTimeout(() => setUpdateState('idle'), 4000)
+        setFeedback('Application is up to date.')
       }
     } catch (err) {
-      setUpdateError('Update check failed. Try again later.')
+      console.error('Update check failed:', err)
+      setUpdateError(err.message || 'Could not check for updates.')
       setUpdateState('failed')
     } finally {
       setIsCheckingUpdate(false)
@@ -176,47 +169,55 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
   }
 
   const handleDownloadUpdate = async () => {
-    if (!updateInfo?.updateRef) return
     setUpdateState('downloading')
     setUpdateError(null)
     try {
-      await downloadAndInstallUpdate(updateInfo.updateRef)
+      await downloadAndInstallUpdate((progress) => {
+        if (progress.total && progress.downloaded) {
+          const pct = Math.round((progress.downloaded / progress.total) * 100)
+          setFeedback(`Downloading update... ${pct}%`)
+        }
+      })
       setUpdateState('ready')
+      setFeedback('Update downloaded and verified. Restart to apply.')
     } catch (err) {
-      console.error('Update download failed:', err)
-      setUpdateError('Update could not be installed. Try again later.')
+      console.error('Download update failed:', err)
+      setUpdateError(err.message || 'Failed to download update.')
       setUpdateState('failed')
     }
   }
 
   const handleRestartToUpdate = async () => {
-    await relaunchApplication()
+    try {
+      await relaunchApplication()
+    } catch (err) {
+      console.error('Relaunch failed:', err)
+      setUpdateError(err.message || 'Failed to restart application.')
+    }
   }
 
   // Fetch Settings Data
   const fetchSettingsData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
+    setFeedback(null)
     try {
-      // 1. Fetch settings (auto-process after verification)
+      // 1. Fetch Auto-Process Setting
       try {
-        const setRes = await authFetch(getApiUrl('/api/report-processing/settings'))
-        if (setRes.ok) {
-          const setData = await setRes.json()
-          const autoVal = setData.auto_process_after_verification
-          setAutoProcessAfterVerification(autoVal !== false && autoVal !== 'false')
-          setIsAutoProcessLoaded(true)
-        } else {
-          setIsAutoProcessLoaded(false)
+        const settingsRes = await authFetch(getApiUrl('/api/report-processing/settings'))
+        if (settingsRes.ok) {
+          const settingsData = await settingsRes.json()
+          if (typeof settingsData.auto_process_after_verification === 'boolean') {
+            setAutoProcessAfterVerification(settingsData.auto_process_after_verification)
+            setIsAutoProcessLoaded(true)
+          }
         }
       } catch (e) {
-        console.warn('Failed to load settings:', e)
-        setIsAutoProcessLoaded(false)
+        console.warn('Auto-process settings fetch failed:', e)
       }
 
-      // 2. Fetch authoritative instruction with multi-endpoint fallback
+      // 2. Fetch Editorial Instructions
       let loadedInstruction = null
-
       try {
         const instRes = await authFetch(getApiUrl('/api/report-processing/instruction'))
         if (instRes.ok) {
@@ -226,26 +227,12 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
           }
         }
       } catch (e) {
-        console.warn('Primary instruction fetch failed:', e)
+        console.warn('Instructions fetch failed, trying fallback standards endpoint:', e)
       }
 
       if (!loadedInstruction) {
         try {
-          const setRes2 = await authFetch(getApiUrl('/api/report-processing/settings'))
-          if (setRes2.ok) {
-            const setData2 = await setRes2.json()
-            if (setData2 && (setData2.instruction || setData2.unified_instructions)) {
-              loadedInstruction = setData2.instruction || setData2.unified_instructions
-            }
-          }
-        } catch (e) {
-          console.warn('Settings fallback fetch failed:', e)
-        }
-      }
-
-      if (!loadedInstruction) {
-        try {
-          const stdRes = await authFetch(getApiUrl('/api/report-processing/standards/active'))
+          const stdRes = await authFetch(getApiUrl('/api/report-processing/standards'))
           if (stdRes.ok) {
             const stdData = await stdRes.json()
             if (stdData && (stdData.instruction || stdData.unified_instructions)) {
@@ -356,25 +343,25 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
     }
   }
 
-  // Destination definitions
+  // Final 10 Desktop Settings Destinations (Focused on user needs, no technical Storage/Security/AI Providers)
   const destinations = [
-    { id: 'church_profile', label: 'Church Profile', icon: '🏛️', subtitle: 'Church Unit & hierarchy' },
-    { id: 'accounts_team', label: 'Accounts & Team', icon: '👥', subtitle: 'Active user & team scope' },
-    { id: 'audio_microphones', label: 'Audio & Microphones', icon: '🎙️', subtitle: 'Hardware & lossless setup' },
-    { id: 'programmes_sessions', label: 'Programmes & Sessions', icon: '📅', subtitle: 'Church programme schedule' },
-    { id: 'editorial_standards', label: 'Editorial Standards', icon: '📋', subtitle: 'AI instructions & rules' },
-    { id: 'ai_models', label: 'AI Models & Providers', icon: '⚡', subtitle: 'Deepgram & Azure LLM' },
-    { id: 'vocabulary', label: 'Vocabulary & Glossary', icon: '📖', subtitle: 'Doctrinal terms dictionary' },
-    { id: 'application_updates', label: 'Application & Updates', icon: '💻', subtitle: 'Version & release channel' },
-    { id: 'storage_security', label: 'Storage & Security', icon: '🛡️', subtitle: 'Audio preservation & auth' },
-    { id: 'preferences', label: 'Preferences', icon: '⚙️', subtitle: 'Theme, animation & layout' },
+    { id: 'profile', label: 'Profile', description: 'Your personal account details and ministerial access role' },
+    { id: 'account_church', label: 'Account & Church', description: 'Church unit identity and jurisdictional hierarchy' },
+    { id: 'events', label: 'Events', description: 'Church programme schedule and service templates' },
+    { id: 'verification', label: 'Verification', description: 'Transcript verification criteria and doctrinal glossary' },
+    { id: 'ai_processing', label: 'AI Processing', description: 'Automated synthesis triggers and workflow pacing' },
+    { id: 'editorial_standards', label: 'Editorial Standards', description: 'Editorial instructions and ministerial publication standards' },
+    { id: 'appearance', label: 'Appearance', description: 'Customize how the application looks and behaves' },
+    { id: 'application_updates', label: 'Application & Updates', description: 'Software version and release update management' },
+    { id: 'help_support', label: 'Help & Support', description: 'Operational workflows, guides, and technical assistance' },
+    { id: 'about', label: 'About', description: 'Application metadata, ministerial mission, and copyright' },
   ]
 
   const activeDest = destinations.find((d) => d.id === activeTab) || destinations[0]
 
   return (
     <div className="settings-page-root">
-      {/* Top Bar with Back, DLBC Emblem, and Refresh */}
+      {/* Top Bar with Back to app, DLBC Emblem, and Refresh */}
       <header className="settings-top-navbar">
         <div className="settings-top-navbar-left">
           <button
@@ -390,7 +377,12 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
 
           <div className="settings-brand-divider" />
 
-          <div className="settings-brand-title-wrap">
+          <div
+            className="settings-brand-title-wrap"
+            onClick={onBack}
+            style={{ cursor: 'pointer' }}
+            title="Return to Dashboard"
+          >
             <img src="/dlbc-logo.png" alt="DLBC" className="settings-brand-emblem" />
             <div>
               <span className="settings-brand-title">DLBC INFORMATION UNIT</span>
@@ -416,9 +408,9 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
 
       {/* Main Settings Two-Column Layout */}
       <div className="settings-split-container">
-        {/* Left Internal Sidebar with 10 Destinations */}
+        {/* Left Internal Sidebar with 10 Clean Destinations (No Subtext) */}
         <aside className="settings-destinations-sidebar" aria-label="Settings Categories">
-          <div className="settings-sidebar-heading">CONFIGURATION CATEGORIES</div>
+          <div className="settings-sidebar-heading">SETTINGS</div>
           <nav className="settings-nav-list">
             {destinations.map((dest) => {
               const isActive = activeTab === dest.id
@@ -430,11 +422,8 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
                   onClick={() => setActiveTab(dest.id)}
                   id={`btn-settings-nav-${dest.id}`}
                 >
-                  <span className="settings-nav-item-icon">{dest.icon}</span>
-                  <div className="settings-nav-item-text">
-                    <span className="settings-nav-item-label">{dest.label}</span>
-                    <span className="settings-nav-item-sub">{dest.subtitle}</span>
-                  </div>
+                  <span className="settings-nav-item-icon"><SettingsIcon name={dest.id} size={18} /></span>
+                  <span className="settings-nav-item-label">{dest.label}</span>
                   {isActive && <span className="settings-nav-item-indicator" />}
                 </button>
               )
@@ -447,10 +436,10 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
           {/* Header of Active Section */}
           <div className="settings-section-header">
             <div className="settings-section-header-title-row">
-              <span className="settings-section-header-icon">{activeDest.icon}</span>
+              <span className="settings-section-header-icon"><SettingsIcon name={activeDest.id} size={24} /></span>
               <div>
                 <h1 className="settings-section-title">{activeDest.label}</h1>
-                <p className="settings-section-desc">{activeDest.subtitle}</p>
+                <p className="settings-section-desc">{activeDest.description}</p>
               </div>
             </div>
           </div>
@@ -478,11 +467,50 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
             </div>
           )}
 
-          {/* TAB 1: Church Profile */}
-          {activeTab === 'church_profile' && (
+          {/* 1. Profile */}
+          {activeTab === 'profile' && (
             <div className="settings-card">
               <div className="settings-card-header">
-                <span className="settings-card-icon">🏛️</span>
+                <span className="settings-card-icon"><SettingsIcon name="profile" size={20} /></span>
+                <div>
+                  <h2 className="settings-card-title">User Profile &amp; Identity</h2>
+                  <span className="settings-card-subtitle">Personal credentials and ministerial access</span>
+                </div>
+              </div>
+              <div className="settings-card-body">
+                <div className="settings-key-val-grid">
+                  <div className="settings-key-val-box">
+                    <span className="settings-box-label">Full Name</span>
+                    <span className="settings-box-val">{account?.full_name || account?.name || 'Information Unit Reporter'}</span>
+                  </div>
+                  <div className="settings-key-val-box">
+                    <span className="settings-box-label">Account Email</span>
+                    <span className="settings-box-val">{account?.email || (demoMode ? 'demo@dlbc.org' : 'reporter@dlbc.org')}</span>
+                  </div>
+                  <div className="settings-key-val-box">
+                    <span className="settings-box-label">Ministerial Role</span>
+                    <span className="settings-box-val">
+                      <span className="badge badge--info" style={{ fontSize: '0.75rem' }}>
+                        {demoMode ? 'Local Demo' : (account?.role ? account.role.toUpperCase() : 'REPORTER')}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="settings-key-val-box">
+                    <span className="settings-box-label">Session Status</span>
+                    <span className="settings-box-val" style={{ color: '#10b981', fontWeight: 600 }}>
+                      ✓ Active &amp; Authenticated
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. Account & Church */}
+          {activeTab === 'account_church' && (
+            <div className="settings-card">
+              <div className="settings-card-header">
+                <span className="settings-card-icon"><SettingsIcon name="account_church" size={20} /></span>
                 <div>
                   <h2 className="settings-card-title">Church Unit &amp; Hierarchy</h2>
                   <span className="settings-card-subtitle">Identity of the operational church reporting unit</span>
@@ -512,9 +540,9 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
 
                 <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color, #e2e8f0)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontWeight: 600, color: 'var(--color-text, #1e293b)' }}>Setup &amp; Onboarding Walkthrough</div>
+                    <div style={{ fontWeight: 600, color: 'var(--color-text, #1e293b)' }}>Church Profile Setup</div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)' }}>
-                      Re-run the initial church profile setup guide at any time.
+                      Update your church location and jurisdictional hierarchy.
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -549,7 +577,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
                           onClick={onReplayOnboarding}
                           id="btn-replay-onboarding"
                         >
-                          Replay Onboarding
+                          Edit Church Details
                         </button>
                       )
                     )}
@@ -559,245 +587,36 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
             </div>
           )}
 
-          {/* TAB 2: Accounts & Team */}
-          {activeTab === 'accounts_team' && (
-            <div className="settings-card">
-              <div className="settings-card-header">
-                <span className="settings-card-icon">👥</span>
-                <div>
-                  <h2 className="settings-card-title">User Account &amp; Access Scope</h2>
-                  <span className="settings-card-subtitle">Active identity and strict account isolation</span>
-                </div>
-              </div>
-              <div className="settings-card-body">
-                <div className="settings-key-val-grid">
-                  <div className="settings-key-val-box">
-                    <span className="settings-box-label">Authenticated Account Email</span>
-                    <span className="settings-box-val">{account?.email || (demoMode ? 'demo@dlbc.org' : 'account@dlbc.org')}</span>
-                  </div>
-                  <div className="settings-key-val-box">
-                    <span className="settings-box-label">Role &amp; Permissions</span>
-                    <span className="settings-box-val" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span className="badge badge--info" style={{ fontSize: '0.75rem' }}>
-                        {demoMode ? 'Local Demo' : (account?.role ? account.role.toUpperCase() : 'OWNER')}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-
-                <div className="settings-info-callout" style={{ marginTop: '1.25rem' }}>
-                  <div style={{ fontWeight: 600, marginBottom: '0.25rem', color: '#2563eb' }}>🔒 Strict Session &amp; Data Isolation</div>
-                  <p style={{ margin: 0, fontSize: '0.85rem', color: '#475569', lineHeight: 1.5 }}>
-                    All audio recordings, transcripts, verified records, and generated publications are strictly isolated to your authenticated account ID (<code>{account?.account_id || account?.id || 'primary'}</code>). No unauthorized cross-account data access is permitted.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: Audio & Microphones */}
-          {activeTab === 'audio_microphones' && (
-            <div className="settings-card">
-              <div className="settings-card-header">
-                <span className="settings-card-icon">🎙️</span>
-                <div>
-                  <h2 className="settings-card-title">Audio Hardware &amp; Capture Settings</h2>
-                  <span className="settings-card-subtitle">Lossless-first audio pipeline configuration</span>
-                </div>
-              </div>
-              <div className="settings-card-body">
-                <div className="settings-key-val-grid">
-                  <div className="settings-key-val-box">
-                    <span className="settings-box-label">Capture Pipeline Quality</span>
-                    <span className="settings-box-val" style={{ color: '#10b981', fontWeight: 600 }}>
-                      ✓ Lossless-First (Pristine 16-bit PCM WAV)
-                    </span>
-                  </div>
-                  <div className="settings-key-val-box">
-                    <span className="settings-box-label">Capture Architecture</span>
-                    <span className="settings-box-val">Web Audio API (AudioWorkletNode)</span>
-                  </div>
-                  <div className="settings-key-val-box">
-                    <span className="settings-box-label">Sample Rate</span>
-                    <span className="settings-box-val">Native Hardware (44.1 kHz / 48 kHz Auto)</span>
-                  </div>
-                  <div className="settings-key-val-box">
-                    <span className="settings-box-label">Channel Format</span>
-                    <span className="settings-box-val">Mono Uncompressed (Speech-Optimized)</span>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color, #e2e8f0)' }}>
-                  <div style={{ fontWeight: 600, marginBottom: '0.5rem', color: 'var(--color-text, #1e293b)' }}>
-                    Detected Input Devices ({audioDevices.length})
-                  </div>
-                  {audioDevices.length === 0 ? (
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)' }}>
-                      System Default Microphone / Line In active.
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                      {audioDevices.map((dev, idx) => (
-                        <div
-                          key={dev.deviceId || idx}
-                          style={{
-                            padding: '0.6rem 0.85rem',
-                            borderRadius: '6px',
-                            background: 'var(--bg-card-subtle, rgba(0,0,0,0.03))',
-                            border: '1px solid var(--border-color, #e2e8f0)',
-                            fontSize: '0.85rem',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <span>🎙️ {dev.label || `Audio Input Device #${idx + 1}`}</span>
-                          <span className="badge badge--neutral" style={{ fontSize: '0.7rem' }}>Available</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: Programmes & Sessions */}
-          {activeTab === 'programmes_sessions' && (
+          {/* 3. Events */}
+          {activeTab === 'events' && (
             <ProgrammesSettingsSection />
           )}
 
-          {/* TAB 5: Editorial Standards */}
-          {activeTab === 'editorial_standards' && (
-            <div className="settings-card editorial-standards-card">
+          {/* 4. Verification */}
+          {activeTab === 'verification' && (
+            <div className="settings-card">
               <div className="settings-card-header">
-                <span className="settings-card-icon">📋</span>
+                <span className="settings-card-icon"><SettingsIcon name="verification" size={20} /></span>
                 <div>
-                  <h2 className="settings-card-title">Editorial Standards &amp; Instruction Management</h2>
-                  <span className="settings-card-subtitle">AI synthesis guidelines and auto-processing triggers</span>
+                  <h2 className="settings-card-title">Verification &amp; Doctrinal Standards</h2>
+                  <span className="settings-card-subtitle">Automated acoustic checks and doctrinal terms glossary</span>
                 </div>
               </div>
               <div className="settings-card-body">
-                {/* Auto-Process Row */}
-                <div className="settings-auto-process-row">
-                  <div className="settings-auto-process-label-group">
-                    <span className="settings-auto-process-label">Auto-Process After Verification</span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #888)', display: 'block' }}>
-                      When enabled, report generation begins automatically once transcript verification completes.
+                <div className="settings-key-val-grid">
+                  <div className="settings-key-val-box">
+                    <span className="settings-box-label">Acoustic Verification Mode</span>
+                    <span className="settings-box-val" style={{ color: '#10b981', fontWeight: 600 }}>
+                      ✓ Automated &amp; Ministerial Sync
                     </span>
                   </div>
-                  <label
-                    className={`toggle-switch ${(!isAutoProcessLoaded || isLoading || isSavingAutoProcess) ? 'toggle-switch--disabled' : ''}`}
-                    aria-label="Auto-Process After Verification"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={autoProcessAfterVerification}
-                      onChange={handleToggleAutoProcess}
-                      disabled={!isAutoProcessLoaded || isLoading || isSavingAutoProcess}
-                    />
-                    <span className="toggle-slider"></span>
-                  </label>
-                </div>
-
-                {/* AI Processing Instructions Area */}
-                <div className="unified-instructions-group" style={{ marginTop: '1.25rem' }}>
-                  <div className="unified-instructions-header">
-                    <label htmlFor="unified-instructions-textarea" className="unified-instructions-label">
-                      AI Processing Instructions (Unified Standard)
-                    </label>
-                    {isLoading && (
-                      <span className="instructions-loading-badge" aria-live="polite">
-                        Loading instructions...
-                      </span>
-                    )}
-                  </div>
-
-                  <textarea
-                    id="unified-instructions-textarea"
-                    className="unified-instructions-textarea"
-                    rows={16}
-                    value={instruction}
-                    onChange={(e) => setInstruction(e.target.value)}
-                    placeholder={isLoading ? '' : 'AI Processing Instructions will appear here when loaded...'}
-                    disabled={isLoading || !instructionLoaded}
-                  />
-
-                  <div className="unified-instructions-actions">
-                    <button
-                      type="button"
-                      className="btn btn--primary btn-save-instructions"
-                      onClick={handleSaveInstructions}
-                      disabled={isSaving || isLoading || !instructionLoaded || !instruction.trim()}
-                    >
-                      {isSaving ? 'Saving Instructions...' : 'Save Instructions'}
-                    </button>
+                  <div className="settings-key-val-box">
+                    <span className="settings-box-label">Replay Time-alignment</span>
+                    <span className="settings-box-val">Precision Millisecond Synced</span>
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {/* TAB 6: AI Models & Providers */}
-          {activeTab === 'ai_models' && (
-            <div className="settings-card">
-              <div className="settings-card-header">
-                <span className="settings-card-icon">⚡</span>
-                <div>
-                  <h2 className="settings-card-title">AI Processing Models &amp; Service Providers</h2>
-                  <span className="settings-card-subtitle">Active cognitive engines powering transcription &amp; reporting</span>
-                </div>
-              </div>
-              <div className="settings-card-body">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                  <div className="settings-key-val-box" style={{ padding: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <strong style={{ fontSize: '0.95rem' }}>Live &amp; Recorded Speech-to-Text</strong>
-                      <span className="badge badge--success" style={{ fontSize: '0.72rem' }}>Operational</span>
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)' }}>
-                      <strong>Primary:</strong> Deepgram Nova-2 (WebSocket live streaming &amp; file ingest)<br />
-                      <strong>Fallback:</strong> OpenAI Whisper Local Engine
-                    </div>
-                  </div>
-
-                  <div className="settings-key-val-box" style={{ padding: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <strong style={{ fontSize: '0.95rem' }}>Editorial Extraction &amp; Report Synthesis</strong>
-                      <span className="badge badge--success" style={{ fontSize: '0.72rem' }}>Operational</span>
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)' }}>
-                      <strong>Model:</strong> Azure OpenAI GPT-4o / Google Gemini 2.5<br />
-                      <strong>Protocol:</strong> Structured JSON Output compliant with DLBC Information Unit Schema
-                    </div>
-                  </div>
-
-                  <div className="settings-key-val-box" style={{ padding: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <strong style={{ fontSize: '0.95rem' }}>Transcript Verification &amp; Anti-Slop Checker</strong>
-                      <span className="badge badge--success" style={{ fontSize: '0.72rem' }}>Active</span>
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)' }}>
-                      <strong>Pipeline:</strong> Deterministic Rule Verification Engine + Human Confirmation Threshold
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 7: Vocabulary & Glossary */}
-          {activeTab === 'vocabulary' && (
-            <div className="settings-card">
-              <div className="settings-card-header">
-                <span className="settings-card-icon">📖</span>
-                <div>
-                  <h2 className="settings-card-title">DLBC Vocabulary &amp; Doctrinal Glossary</h2>
-                  <span className="settings-card-subtitle">Terms prioritized by transcription and report generation</span>
-                </div>
-              </div>
-              <div className="settings-card-body">
-                <div style={{ marginBottom: '1rem' }}>
+                <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color, #e2e8f0)' }}>
                   <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)', marginBottom: '0.5rem' }}>
                     CANONICAL DOCTRINAL TERMS (BUILT-IN)
                   </div>
@@ -854,7 +673,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
 
                   {customVocab.length === 0 ? (
                     <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted, #64748b)' }}>
-                      No custom vocabulary added yet.
+                      No custom vocabulary added yet. Terms added here will be prioritized during transcript verification.
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
@@ -890,11 +709,175 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
             </div>
           )}
 
-          {/* TAB 8: Application & Updates */}
+          {/* 5. AI Processing */}
+          {activeTab === 'ai_processing' && (
+            <div className="settings-card">
+              <div className="settings-card-header">
+                <span className="settings-card-icon"><SettingsIcon name="ai_processing" size={20} /></span>
+                <div>
+                  <h2 className="settings-card-title">AI Processing Workflow</h2>
+                  <span className="settings-card-subtitle">Automated report synthesis controls</span>
+                </div>
+              </div>
+              <div className="settings-card-body">
+                <div className="settings-auto-process-row">
+                  <div className="settings-auto-process-label-group">
+                    <span className="settings-auto-process-label">Auto-Process After Verification</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #888)', display: 'block' }}>
+                      When enabled, report generation begins automatically once transcript verification completes.
+                    </span>
+                  </div>
+                  <label
+                    className={`toggle-switch ${(!isAutoProcessLoaded || isLoading || isSavingAutoProcess) ? 'toggle-switch--disabled' : ''}`}
+                    aria-label="Auto-Process After Verification"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={autoProcessAfterVerification}
+                      onChange={handleToggleAutoProcess}
+                      disabled={!isAutoProcessLoaded || isLoading || isSavingAutoProcess}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+
+
+              </div>
+            </div>
+          )}
+
+          {/* 6. Editorial Standards */}
+          {activeTab === 'editorial_standards' && (
+            <div className="settings-card editorial-standards-card">
+              <div className="settings-card-header">
+                <span className="settings-card-icon"><SettingsIcon name="editorial_standards" size={20} /></span>
+                <div>
+                  <h2 className="settings-card-title">Editorial Standards &amp; Instructions</h2>
+                  <span className="settings-card-subtitle">AI synthesis guidelines and reporting rules</span>
+                </div>
+              </div>
+              <div className="settings-card-body">
+                <div className="unified-instructions-group">
+                  <div className="unified-instructions-header">
+                    <label htmlFor="unified-instructions-textarea" className="unified-instructions-label">
+                      AI Processing Instructions (Unified Standard)
+                    </label>
+                    {isLoading && (
+                      <span className="instructions-loading-badge" aria-live="polite">
+                        Loading instructions...
+                      </span>
+                    )}
+                  </div>
+
+                  <textarea
+                    id="unified-instructions-textarea"
+                    className="unified-instructions-textarea"
+                    rows={16}
+                    value={instruction}
+                    onChange={(e) => setInstruction(e.target.value)}
+                    placeholder={isLoading ? '' : 'AI Processing Instructions will appear here when loaded...'}
+                    disabled={isLoading || !instructionLoaded}
+                  />
+
+                  <div className="unified-instructions-actions">
+                    <button
+                      type="button"
+                      className="btn btn--primary btn-save-instructions"
+                      onClick={handleSaveInstructions}
+                      disabled={isSaving || isLoading || !instructionLoaded || !instruction.trim()}
+                    >
+                      {isSaving ? 'Saving Instructions...' : 'Save Instructions'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 7. Appearance */}
+          {activeTab === 'appearance' && (
+            <div className="settings-card">
+              <div className="settings-card-header">
+                <span className="settings-card-icon"><SettingsIcon name="appearance" size={20} /></span>
+                <div>
+                  <h2 className="settings-card-title">Appearance &amp; Presentation</h2>
+                  <span className="settings-card-subtitle">Customize how the application looks and behaves</span>
+                </div>
+              </div>
+              <div className="settings-card-body">
+                {/* Theme Selector */}
+                <div className="settings-auto-process-row">
+                  <div>
+                    <span className="settings-auto-process-label">Visual Theme Mode</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #888)', display: 'block' }}>
+                      Switch between institutional light and dark high-contrast themes
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn--outline btn--small"
+                    onClick={toggleTheme}
+                    id="btn-settings-toggle-theme"
+                  >
+                    {theme === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode'}
+                  </button>
+                </div>
+
+                {/* Startup Animation Toggle */}
+                <div className="settings-auto-process-row" style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color, #e2e8f0)' }}>
+                  <div>
+                    <span className="settings-auto-process-label">DLBC Startup Logo Animation</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #888)', display: 'block' }}>
+                      Play institutional DLBC emblem startup animation on initial workspace launch
+                    </span>
+                  </div>
+                  <label className="toggle-switch" aria-label="DLBC Startup Animation">
+                    <input
+                      type="checkbox"
+                      checked={startupAnimationEnabled}
+                      onChange={handleToggleStartupAnimation}
+                      id="toggle-startup-animation"
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+
+                {/* Default Sessions View Toggle */}
+                <div className="settings-auto-process-row" style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color, #e2e8f0)' }}>
+                  <div>
+                    <span className="settings-auto-process-label">Sessions Desktop Presentation</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #888)', display: 'block' }}>
+                      Choose default presentation style for the Sessions History view
+                    </span>
+                  </div>
+                  <div className="sessions-view-toggle-group">
+                    <button
+                      type="button"
+                      className={`btn-view-toggle ${sessionsDefaultView === 'list' ? 'btn-view-toggle--active' : ''}`}
+                      onClick={() => handleChangeSessionsViewMode('list')}
+                      id="btn-pref-sessions-list"
+                    >
+                      ☰ Dense List
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn-view-toggle ${sessionsDefaultView === 'grid' ? 'btn-view-toggle--active' : ''}`}
+                      onClick={() => handleChangeSessionsViewMode('grid')}
+                      id="btn-pref-sessions-grid"
+                    >
+                      ⊞ Card Grid
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 8. Application & Updates */}
           {activeTab === 'application_updates' && (
             <div className="settings-card">
               <div className="settings-card-header">
-                <span className="settings-card-icon">💻</span>
+                <span className="settings-card-icon"><SettingsIcon name="application_updates" size={20} /></span>
                 <div>
                   <h2 className="settings-card-title">Application &amp; Software Updates</h2>
                   <span className="settings-card-subtitle">Version metadata and release channel verification</span>
@@ -968,123 +951,88 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
             </div>
           )}
 
-          {/* TAB 9: Storage & Security */}
-          {activeTab === 'storage_security' && (
+          {/* 9. Help & Support */}
+          {activeTab === 'help_support' && (
             <div className="settings-card">
               <div className="settings-card-header">
-                <span className="settings-card-icon">🛡️</span>
+                <span className="settings-card-icon"><SettingsIcon name="help_support" size={20} /></span>
                 <div>
-                  <h2 className="settings-card-title">Storage Integrity &amp; Security Controls</h2>
-                  <span className="settings-card-subtitle">Permanent audio preservation and cryptographic policies</span>
+                  <h2 className="settings-card-title">Help &amp; Operational Support</h2>
+                  <span className="settings-card-subtitle">Guides and ministerial support for Information Unit reporters</span>
                 </div>
               </div>
               <div className="settings-card-body">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                  <div className="settings-key-val-box" style={{ padding: '0.85rem' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--color-text, #1e293b)', marginBottom: '0.25rem' }}>
-                      🎵 Immutable Source Audio Preservation
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)', lineHeight: 1.5 }}>
-                      Source audio is stored losslessly prior to any transcription or pipeline execution. The application pipeline is architecturally prohibited from deleting or overwriting the original master audio.
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div className="settings-key-val-box" style={{ padding: '1rem' }}>
+                    <strong style={{ fontSize: '0.95rem', color: 'var(--color-text, #1e293b)' }}><span style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}><SettingsIcon name="recording" size={16} /> Live Service Recording Workflow</span></strong>
+                    <p style={{ margin: '0.35rem 0 0', fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)', lineHeight: 1.5 }}>
+                      To begin live coverage, click "New Live Service" from the Dashboard. Ensure your church audio feed or USB interface is connected. The system automatically preserves pristine uncompressed audio and generates real-time transcripts.
+                    </p>
+                  </div>
+
+                  <div className="settings-key-val-box" style={{ padding: '1rem' }}>
+                    <strong style={{ fontSize: '0.95rem', color: 'var(--color-text, #1e293b)' }}><span style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}><SettingsIcon name="check" size={16} /> Transcript Verification &amp; Audio Replay</span></strong>
+                    <p style={{ margin: '0.35rem 0 0', fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)', lineHeight: 1.5 }}>
+                      Following recording, reporters review flagged phrases, names, and scriptures. Click on any segment to instantly listen to synchronized audio replay before confirming.
+                    </p>
+                  </div>
+
+                  <div className="settings-key-val-box" style={{ padding: '1rem' }}>
+                    <strong style={{ fontSize: '0.95rem', color: 'var(--color-text, #1e293b)' }}><span style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}><SettingsIcon name="keyboard" size={16} /> Desktop Shortcuts</span></strong>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.82rem', color: 'var(--color-text-muted, #64748b)' }}>
+                      <div><kbd style={{ padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.1)' }}>Space</kbd> Play / Pause Audio</div>
+                      <div><kbd style={{ padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.1)' }}>Esc</kbd> Close Modal / Overlay</div>
+                      <div><kbd style={{ padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.1)' }}>Double-tap</kbd> Skip Startup Screen</div>
                     </div>
                   </div>
 
-                  <div className="settings-key-val-box" style={{ padding: '0.85rem' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--color-text, #1e293b)', marginBottom: '0.25rem' }}>
-                      📜 Raw Transcript Immutability
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)', lineHeight: 1.5 }}>
-                      The raw speech-to-text transcript is preserved indefinitely as an immutable record of what the transcription engine produced, separated from verified or edited versions.
-                    </div>
-                  </div>
-
-                  <div className="settings-key-val-box" style={{ padding: '0.85rem' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--color-text, #1e293b)', marginBottom: '0.25rem' }}>
-                      🗑️ Permanent Deletion Guarantee
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)', lineHeight: 1.5 }}>
-                      When a session or event is permanently deleted with confirmation, all associated transcripts, verification logs, and report records are completely purged without leaving orphaned data.
-                    </div>
+                  <div className="settings-info-callout">
+                    <div style={{ fontWeight: 600, marginBottom: '0.25rem', color: '#2563eb' }}>Technical Assistance</div>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#475569', lineHeight: 1.5 }}>
+                      For system assistance or hardware interface questions, contact the Deeper Life Bible Church Information Unit technical committee or your Regional IT coordinator.
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB 10: Preferences */}
-          {activeTab === 'preferences' && (
+          {/* 10. About */}
+          {activeTab === 'about' && (
             <div className="settings-card">
               <div className="settings-card-header">
-                <span className="settings-card-icon">⚙️</span>
+                <span className="settings-card-icon"><SettingsIcon name="about" size={20} /></span>
                 <div>
-                  <h2 className="settings-card-title">User Interface Preferences</h2>
-                  <span className="settings-card-subtitle">Desktop workspace presentation and animation settings</span>
+                  <h2 className="settings-card-title">About DLBC Information Unit</h2>
+                  <span className="settings-card-subtitle">Official ministerial application information</span>
                 </div>
               </div>
               <div className="settings-card-body">
-                {/* Theme Selector Row */}
-                <div className="settings-auto-process-row">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginBottom: '1.5rem' }}>
+                  <img src="/dlbc-logo.png" alt="DLBC Emblem" style={{ width: '64px', height: '64px', objectFit: 'contain' }} />
                   <div>
-                    <span className="settings-auto-process-label">Visual Theme Mode</span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #888)', display: 'block' }}>
-                      Switch between institutional light and dark high-contrast themes
-                    </span>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text, #0f172a)' }}>
+                      Deeper Life Bible Church
+                    </h3>
+                    <div style={{ fontSize: '0.9rem', color: '#2563eb', fontWeight: 600 }}>
+                      Information Unit Application v{APP_VERSION}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #64748b)', marginTop: '0.2rem' }}>
+                      Desktop Platform · Windows Native
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn--outline btn--small"
-                    onClick={toggleTheme}
-                    id="btn-settings-toggle-theme"
-                  >
-                    {theme === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode'}
-                  </button>
                 </div>
 
-                {/* Startup Animation Toggle */}
-                <div className="settings-auto-process-row" style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color, #e2e8f0)' }}>
-                  <div>
-                    <span className="settings-auto-process-label">DLBC Startup Logo Animation</span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #888)', display: 'block' }}>
-                      Play institutional DLBC emblem startup animation on initial workspace launch
-                    </span>
-                  </div>
-                  <label className="toggle-switch" aria-label="DLBC Startup Animation">
-                    <input
-                      type="checkbox"
-                      checked={startupAnimationEnabled}
-                      onChange={handleToggleStartupAnimation}
-                      id="toggle-startup-animation"
-                    />
-                    <span className="toggle-slider"></span>
-                  </label>
+                <div className="settings-key-val-box" style={{ padding: '1rem', marginBottom: '1.25rem' }}>
+                  <div style={{ fontWeight: 600, marginBottom: '0.35rem', color: 'var(--color-text, #1e293b)' }}>Ministerial Mission</div>
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)', lineHeight: 1.55 }}>
+                    Dedicated to the accurate recording, faithful transcription, editorial excellence, and ministerial preservation of God's Word across Deeper Christian Life Ministry services, retreats, and global crusades worldwide.
+                  </p>
                 </div>
 
-                {/* Default Sessions View Toggle */}
-                <div className="settings-auto-process-row" style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color, #e2e8f0)' }}>
-                  <div>
-                    <span className="settings-auto-process-label">Sessions Desktop Presentation</span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #888)', display: 'block' }}>
-                      Choose default presentation style for the Sessions History view
-                    </span>
-                  </div>
-                  <div className="sessions-view-toggle-group">
-                    <button
-                      type="button"
-                      className={`btn-view-toggle ${sessionsDefaultView === 'list' ? 'btn-view-toggle--active' : ''}`}
-                      onClick={() => handleChangeSessionsViewMode('list')}
-                      id="btn-pref-sessions-list"
-                    >
-                      ☰ Dense List
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn-view-toggle ${sessionsDefaultView === 'grid' ? 'btn-view-toggle--active' : ''}`}
-                      onClick={() => handleChangeSessionsViewMode('grid')}
-                      id="btn-pref-sessions-grid"
-                    >
-                      ⊞ Card Grid
-                    </button>
-                  </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted, #94a3b8)', borderTop: '1px solid var(--border-color, #e2e8f0)', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>© 2026 Deeper Christian Life Ministry. All rights reserved.</span>
+                  <span>Institutional Publication Standard</span>
                 </div>
               </div>
             </div>
