@@ -71,9 +71,110 @@ export function LiveRecordingView({
   return (
     <div className="live-recording-view-container">
       {/* ------------------------------------------------------------- */}
-      {/* 1. COMPACT TOP RECORDING CONTROL BAR                          */}
+      {/* MOBILE LIVE RECORDING (Matching Reference Screen 3)           */}
       {/* ------------------------------------------------------------- */}
-      <div className={`card live-top-recording-bar ${isPaused ? 'live-top-bar--paused' : ''}`}>
+      <div className="mobile-live-recording-layout">
+        {/* Mobile Header */}
+        <div className="mobile-subpage-header">
+          <button
+            type="button"
+            className="mobile-header-back-btn"
+            onClick={onMinimize}
+            aria-label="Back / Minimize to background"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <h1 className="mobile-header-title">Live Session</h1>
+          <div className="mobile-header-action-slot">
+            <span className="mobile-rec-pulse-badge">●</span>
+          </div>
+        </div>
+
+        {/* Central Audio Waveform Graphic */}
+        <div className="mobile-recording-waveform-stage">
+          <div className="mobile-waveform-bars-container">
+            {[24, 45, 75, 90, 60, 35, 80, 95, 65, 40, 85, 100, 70, 50, 80, 60, 40, 90, 75, 55, 30].map((baseH, i) => {
+              const dynHeight = isPaused ? 15 : Math.max(12, Math.min(100, (baseH * (audioLevel > 0 ? (0.4 + audioLevel * 0.8) : 0.3))))
+              return (
+                <div
+                  key={i}
+                  className="mobile-waveform-bar"
+                  style={{
+                    height: `${dynHeight}%`,
+                    opacity: isPaused ? 0.35 : 0.9,
+                  }}
+                />
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Digital Timer & Recording Status */}
+        <div className="mobile-timer-section">
+          <div className="mobile-digital-clock">{formatTimer(elapsedTime)}</div>
+          <div className="mobile-recording-status-indicator">
+            {isPaused ? (
+              <span className="mobile-status-text mobile-status-text--paused">⏸ Paused</span>
+            ) : (
+              <span className="mobile-status-text mobile-status-text--recording">
+                <span className="mobile-rec-dot">●</span> Recording...
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Session Metadata Card */}
+        <div className="mobile-session-metadata-card">
+          <div className="mobile-meta-key-row">
+            <span className="mobile-meta-key">Event</span>
+            <span className="mobile-meta-val">{sessionMetadata.eventType || sessionMetadata.programme || 'Sunday Worship Service'}</span>
+          </div>
+          <div className="mobile-meta-key-row">
+            <span className="mobile-meta-key">Programme</span>
+            <span className="mobile-meta-val">{sessionMetadata.programme || sessionMetadata.eventType || 'Sunday Worship Service'}</span>
+          </div>
+          <div className="mobile-meta-key-row">
+            <span className="mobile-meta-key">Pastor</span>
+            <span className="mobile-meta-val">{sessionMetadata.minister || 'Pastor W.F. Kumuyi'}</span>
+          </div>
+          <div className="mobile-meta-key-row">
+            <span className="mobile-meta-key">Input</span>
+            <span className="mobile-meta-val mobile-meta-val--interactive">
+              Microphone (Default) <span className="mobile-chevron-icon">›</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Bottom Actions */}
+        <div className="mobile-recording-bottom-bar">
+          <button
+            type="button"
+            className="mobile-btn-pause-resume"
+            onClick={isPaused ? onResumeRecording : onPauseRecording}
+          >
+            {isPaused ? '▶ Resume' : '⏸ Pause'}
+          </button>
+
+          <button
+            type="button"
+            className="mobile-btn-stop-recording"
+            onClick={onStopRecording}
+            id="mobile-btn-stop-recording"
+          >
+            <span className="mobile-stop-icon">■</span>
+            <span>Stop Recording</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* DESKTOP LIVE RECORDING LAYOUT (Unchanged Desktop Layout)       */}
+      {/* ------------------------------------------------------------- */}
+      <div className="desktop-live-recording-layout">
+        {/* 1. COMPACT TOP RECORDING CONTROL BAR                          */}
+        <div className={`card live-top-recording-bar ${isPaused ? 'live-top-bar--paused' : ''}`}>
         <div className="live-bar-left">
           {/* Active / Paused Recording Badge */}
           {isPaused ? (
@@ -283,6 +384,7 @@ export function LiveRecordingView({
             </span>
           </div>
         </div>
+      </div>
       </div>
     </div>
   )

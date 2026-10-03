@@ -115,6 +115,28 @@ app.include_router(remote_router)
 
 
 
+from fastapi.responses import FileResponse
+from fastapi import HTTPException
+
+@app.get("/api/download/android")
+async def download_android_apk():
+    """
+    Directly serve the compiled Android APK installer.
+    """
+    candidate_paths = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "public", "DLBC-Information-Unit.apk")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk")),
+    ]
+    for apk_path in candidate_paths:
+        if os.path.exists(apk_path):
+            return FileResponse(
+                path=apk_path,
+                filename="DLBC-Information-Unit.apk",
+                media_type="application/vnd.android.package-archive"
+            )
+    raise HTTPException(status_code=404, detail="Android APK build not found")
+
+
 @app.get("/api/health")
 async def health_check():
     """

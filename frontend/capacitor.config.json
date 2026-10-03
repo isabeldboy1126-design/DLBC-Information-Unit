@@ -1,9 +1,5 @@
 {
   "appId": "org.dlbc.informationunit",
   "appName": "DLBC Information Unit",
-  "webDir": "dist",
-  "server": {
-    "url": "http://10.0.2.2:5173",
-    "cleartext": true
-  }
+  "webDir": "dist"
 }

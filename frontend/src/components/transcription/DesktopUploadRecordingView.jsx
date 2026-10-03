@@ -63,23 +63,9 @@ export function DesktopUploadRecordingView({
     }
   }
 
-  const handleFileChange = (e) => {
-    const selected = e.target.files?.[0]
-    if (selected) {
-      setFile(selected)
-      setUploadError(null)
-    }
-  }
-
-  const formatFileSize = (bytes) => {
-    if (!bytes) return '0 KB'
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-  }
-
-  const handleUploadAndProcess = async () => {
-    if (!file) {
+  const performUpload = async (targetFile) => {
+    const f = targetFile || file
+    if (!f) {
       setUploadError('Please select an audio or video file to upload.')
       return
     }
@@ -90,7 +76,7 @@ export function DesktopUploadRecordingView({
     try {
       // 1. Upload audio/video file
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', f)
 
       const uploadRes = await authFetch('/api/transcription/upload', {
         method: 'POST',
@@ -149,27 +135,139 @@ export function DesktopUploadRecordingView({
     }
   }
 
+  const handleUploadAndProcess = () => performUpload(file)
+
+  const handleFileChange = async (e) => {
+    const selected = e.target.files?.[0]
+    if (selected) {
+      setFile(selected)
+      setUploadError(null)
+      await performUpload(selected)
+    }
+  }
+
   return (
     <div className="desktop-upload-view-container">
-      <div className="new-session-header">
-        <h1 className="new-session-title">Upload Recording</h1>
+      {/* ------------------------------------------------------------- */}
+      {/* MOBILE UPLOAD RECORDING VIEW (Matching Reference Screen 10)   */}
+      {/* ------------------------------------------------------------- */}
+      <div className="mobile-upload-view-layout">
+        <div className="mobile-subpage-header">
+          <button
+            type="button"
+            className="mobile-header-back-btn"
+            onClick={onBack}
+            aria-label="Back"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <h1 className="mobile-header-title">Upload Recording</h1>
+          <div style={{ width: 36 }} />
+        </div>
+
+        {uploadError && (
+          <div className="new-session-alert">
+            <span>⚠️ {uploadError}</span>
+          </div>
+        )}
+
+        {/* Big Upload Drop Box */}
+        <div
+          className="mobile-upload-hero-box"
+          onClick={() => fileInputRef.current?.click()}
+          role="button"
+          tabIndex={0}
+        >
+          <div className="mobile-upload-cloud-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          </div>
+          <h2 className="mobile-upload-box-title">Select audio file</h2>
+          <p className="mobile-upload-box-sub">
+            {isUploading ? 'Uploading and preparing pipeline...' : 'Tap to browse or choose a file'}
+          </p>
+
+          <div className="mobile-upload-formats-pill">
+            <span className="mobile-formats-label">Supported formats:</span>
+            <span className="mobile-formats-types">MP3, WAV, M4A, AAC, OGG</span>
+          </div>
+        </div>
+
+        {/* Or choose from device */}
+        <div className="mobile-upload-options-section">
+          <h3 className="mobile-upload-options-heading">Or choose from device</h3>
+
+          <div className="mobile-upload-options-list">
+            <button
+              type="button"
+              className="mobile-upload-option-row"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+            >
+              <div className="mobile-option-left">
+                <span className="mobile-option-icon">🎵</span>
+                <span className="mobile-option-label">Audio files</span>
+              </div>
+              <span className="mobile-chevron">›</span>
+            </button>
+
+            <button
+              type="button"
+              className="mobile-upload-option-row"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+            >
+              <div className="mobile-option-left">
+                <span className="mobile-option-icon">📥</span>
+                <span className="mobile-option-label">Downloads</span>
+              </div>
+              <span className="mobile-chevron">›</span>
+            </button>
+
+            <button
+              type="button"
+              className="mobile-upload-option-row"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+            >
+              <div className="mobile-option-left">
+                <span className="mobile-option-icon">📁</span>
+                <span className="mobile-option-label">Browse files</span>
+              </div>
+              <span className="mobile-chevron">›</span>
+            </button>
+          </div>
+        </div>
       </div>
 
-      {uploadError && (
-        <div className="new-session-alert">
-          <span>⚠️ {uploadError}</span>
+      {/* ------------------------------------------------------------- */}
+      {/* DESKTOP UPLOAD RECORDING VIEW (Unchanged Desktop Layout)       */}
+      {/* ------------------------------------------------------------- */}
+      <div className="desktop-upload-layout">
+        <div className="new-session-header">
+          <h1 className="new-session-title">Upload Recording</h1>
         </div>
-      )}
 
-      <div className="new-session-grid">
-        {/* Left Column: Metadata */}
-        <div className="card new-session-card">
-          <div className="card-header new-session-card-header">
-            <div className="card-header-icon-title">
-              <span className="card-icon">📄</span>
-              <h3>Session Metadata</h3>
-            </div>
+        {uploadError && (
+          <div className="new-session-alert">
+            <span>⚠️ {uploadError}</span>
           </div>
+        )}
+
+        <div className="new-session-grid">
+          {/* Left Column: Metadata */}
+          <div className="card new-session-card">
+            <div className="card-header new-session-card-header">
+              <div className="card-header-icon-title">
+                <span className="card-icon">📄</span>
+                <h3>Session Metadata</h3>
+              </div>
+            </div>
 
           <div className="card-body new-session-card-body">
             {/* Programme / Event */}
@@ -359,6 +457,7 @@ export function DesktopUploadRecordingView({
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   )

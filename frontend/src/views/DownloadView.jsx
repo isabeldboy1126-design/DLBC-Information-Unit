@@ -11,15 +11,32 @@ import { APP_VERSION } from '../utils/version';
  * - Responsive: Stacks neatly on narrow mobile screens
  */
 export function DownloadView({ onBackToApp }) {
+  const [downloadNotice, setDownloadNotice] = React.useState(null);
+
   const windowsDownloadUrl = `https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC.Information.Unit_${APP_VERSION}_x64-setup.exe`;
 
   const handleWindowsDownload = () => {
+    setDownloadNotice({
+      platform: 'Windows',
+      title: 'Windows Installer Download Started',
+      detail: `DLBC.Information.Unit_${APP_VERSION}_x64-setup.exe is downloading. Check your browser downloads.`,
+    });
     window.location.href = windowsDownloadUrl;
   };
 
-  const handleAndroidClick = (e) => {
-    e.preventDefault();
-    // Intentionally inert as requested
+  const handleAndroidDownload = () => {
+    setDownloadNotice({
+      platform: 'Android',
+      title: 'Android APK Download Started',
+      detail: 'DLBC-Information-Unit.apk (7.9 MB) is downloading. Check your notification bar or downloads.',
+    });
+
+    const link = document.createElement('a');
+    link.href = '/DLBC-Information-Unit.apk';
+    link.download = 'DLBC-Information-Unit.apk';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -66,11 +83,44 @@ export function DownloadView({ onBackToApp }) {
         <p style={{
           fontSize: '14px',
           color: '#9ca3af',
-          margin: '0 0 32px 0',
+          margin: '0 0 24px 0',
           lineHeight: '1.5',
         }}>
           Reporting, transcription verification, and editorial workflow system. Download the client application for your device.
         </p>
+
+        {/* Real-time Download Confirmation Notice */}
+        {downloadNotice && (
+          <div style={{
+            marginBottom: '20px',
+            padding: '12px 16px',
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            border: '1px solid rgba(34, 197, 94, 0.3)',
+            borderRadius: '10px',
+            textAlign: 'left',
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              color: '#4ade80',
+              fontWeight: 600,
+              fontSize: '14px',
+              marginBottom: '4px',
+            }}>
+              <span>✓</span>
+              <span>{downloadNotice.title}</span>
+            </div>
+            <p style={{
+              margin: 0,
+              fontSize: '12px',
+              color: '#d1d5db',
+              lineHeight: 1.4,
+            }}>
+              {downloadNotice.detail}
+            </p>
+          </div>
+        )}
 
         {/* Side-by-side Download Buttons */}
         <div style={{
@@ -78,7 +128,7 @@ export function DownloadView({ onBackToApp }) {
           gap: '16px',
           justifyContent: 'center',
           flexWrap: 'wrap',
-          marginBottom: '28px',
+          marginBottom: '20px',
         }}>
           {/* Windows Button */}
           <button
@@ -110,18 +160,18 @@ export function DownloadView({ onBackToApp }) {
             Download for Windows
           </button>
 
-          {/* Android Button (Matching visual weight, clickable appearance, inert) */}
+          {/* Android Button (Directly downloads APK) */}
           <button
             type="button"
             id="download-android-btn"
-            onClick={handleAndroidClick}
+            onClick={handleAndroidDownload}
             style={{
               flex: '1 1 200px',
               maxWidth: '240px',
               padding: '14px 20px',
               backgroundColor: '#1f2937',
               color: '#ffffff',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
               borderRadius: '8px',
               fontSize: '14px',
               fontWeight: 600,
@@ -131,19 +181,35 @@ export function DownloadView({ onBackToApp }) {
               justifyContent: 'center',
               gap: '10px',
               transition: 'background-color 0.15s ease, border-color 0.15s ease',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
             }}
             onMouseOver={(e) => {
               e.currentTarget.style.backgroundColor = '#374151';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.35)';
             }}
             onMouseOut={(e) => {
               e.currentTarget.style.backgroundColor = '#1f2937';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
             }}
           >
             <span style={{ fontSize: '18px' }}>🤖</span>
             Download for Android
           </button>
+        </div>
+
+        {/* Android Guidance Box */}
+        <div style={{
+          marginBottom: '24px',
+          padding: '12px 14px',
+          backgroundColor: 'rgba(255, 255, 255, 0.03)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '8px',
+          fontSize: '12px',
+          color: '#9ca3af',
+          textAlign: 'left',
+          lineHeight: '1.5',
+        }}>
+          <span style={{ color: '#e5e7eb', fontWeight: 600 }}>Android tip:</span> If prompted <em>"File might be harmful"</em>, tap <span style={{ color: '#60a5fa', fontWeight: 500 }}>Download anyway</span>. Once finished, tap the notification to install.
         </div>
 
         {/* Version metadata & Return button */}
@@ -156,7 +222,7 @@ export function DownloadView({ onBackToApp }) {
           fontSize: '12px',
           color: '#6b7280',
         }}>
-          <span>Version {APP_VERSION} · x64</span>
+          <span>Version {APP_VERSION} · Windows & Android</span>
           {onBackToApp && (
             <button
               type="button"

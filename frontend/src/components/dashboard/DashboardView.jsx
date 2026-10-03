@@ -1,9 +1,28 @@
 import React, { useRef } from 'react'
 import { getSessionHierarchy, deriveSessionDisplayStatus } from '../sessions/SessionDetailView'
+import { useAuth } from '../../context/AuthContext'
 
 /* =========================================================================
    SVG Icons (Clean, crisp vectors matching reference design)
    ========================================================================= */
+
+function MobileRemoteIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+      <line x1="12" y1="18" x2="12.01" y2="18" />
+    </svg>
+  )
+}
+
+function MobileWorkspaceIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  )
+}
 
 function MicIcon() {
   return (
@@ -126,8 +145,12 @@ export function DashboardView({
   onFileSelect,
   remoteControl = null,
   onOpenRemoteControl = null,
+  onOpenWorkspace = null,
+  onOpenProfile = null,
 }) {
   const fileInputRef = useRef(null)
+  const { user, account } = useAuth()
+  const userInitial = (account?.name || user?.name || user?.email || 'Daniel').charAt(0).toUpperCase()
 
   const [remoteElapsed, setRemoteElapsed] = React.useState(0)
   React.useEffect(() => {
@@ -230,8 +253,169 @@ export function DashboardView({
 
   return (
     <div className="dashboard-view-container">
-      {/* Remote Recording Banner if another device on account is recording */}
-      {remoteControl?.isRemoteRecordingActive && remoteControl?.activeRecording && (
+      {/* ------------------------------------------------------------- */}
+      {/* MOBILE DASHBOARD VIEW (Matching Reference Screen 1)           */}
+      {/* ------------------------------------------------------------- */}
+      <div className="mobile-dashboard-layout">
+        {/* Mobile Top Header */}
+        <div className="mobile-top-header">
+          <div className="mobile-header-brand">
+            <h1 className="mobile-brand-title">DLBC</h1>
+            <span className="mobile-brand-subtitle">Information Unit</span>
+          </div>
+          <button
+            type="button"
+            className="mobile-avatar-btn"
+            onClick={onOpenProfile}
+            aria-label="Open User Profile"
+            id="mobile-btn-profile"
+          >
+            <span>{userInitial}</span>
+          </button>
+        </div>
+
+        {/* Start Live Session Hero Card */}
+        <div
+          className="mobile-hero-session-card"
+          onClick={onStartLiveSession}
+          role="button"
+          tabIndex={0}
+          id="mobile-hero-start-live"
+        >
+          <div className="mobile-hero-card-left">
+            <div className="mobile-hero-mic-avatar">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="22" />
+                <line x1="8" y1="22" x2="16" y2="22" />
+              </svg>
+            </div>
+            <div className="mobile-hero-card-text">
+              <h2 className="mobile-hero-card-title">Start Live Session</h2>
+              <p className="mobile-hero-card-desc">Record and transcribe a live session</p>
+            </div>
+          </div>
+          <div className="mobile-hero-arrow-circle">
+            <ArrowRightIcon />
+          </div>
+        </div>
+
+        {/* 4 Quick Actions (Remote, YouTube, Upload, Workspace) */}
+        <div className="mobile-quick-actions-grid">
+          <button
+            type="button"
+            className="mobile-quick-action-item"
+            onClick={onOpenRemoteControl}
+            id="mobile-quick-remote"
+          >
+            <div className="mobile-quick-icon-box">
+              <MobileRemoteIcon />
+            </div>
+            <span className="mobile-quick-label">Remote</span>
+          </button>
+
+          <button
+            type="button"
+            className="mobile-quick-action-item"
+            onClick={onStartYouTubeSession}
+            id="mobile-quick-youtube"
+          >
+            <div className="mobile-quick-icon-box mobile-quick-icon-box--yt">
+              <YouTubeIcon />
+            </div>
+            <span className="mobile-quick-label">YouTube</span>
+          </button>
+
+          <button
+            type="button"
+            className="mobile-quick-action-item"
+            onClick={() => fileInputRef.current?.click()}
+            id="mobile-quick-upload"
+          >
+            <div className="mobile-quick-icon-box">
+              <UploadTrayIcon />
+            </div>
+            <span className="mobile-quick-label">Upload</span>
+          </button>
+
+          <button
+            type="button"
+            className="mobile-quick-action-item"
+            onClick={onOpenWorkspace}
+            id="mobile-quick-workspace"
+          >
+            <div className="mobile-quick-icon-box">
+              <MobileWorkspaceIcon />
+            </div>
+            <span className="mobile-quick-label">Workspace</span>
+          </button>
+        </div>
+
+        {/* Pending Sessions Section */}
+        <div className="mobile-pending-section">
+          <div className="mobile-pending-header">
+            <h3 className="mobile-pending-title">Pending</h3>
+            <button
+              type="button"
+              className="mobile-view-all-btn"
+              onClick={onViewAllSessions}
+              id="mobile-btn-view-all"
+            >
+              View all →
+            </button>
+          </div>
+
+          <div className="mobile-pending-list">
+            {((allAttentionSessions.length > 0 ? allAttentionSessions : recentSessions.slice(0, 4))).map((s) => {
+              const { sessionTitle } = getSessionHierarchy(s)
+              const dayNum = s.day_number || (s.metadata && s.metadata.day_number)
+              const dateText = formatAttentionDate(s.date_created)
+              const durText = formatAttentionDuration(s.duration_seconds || s.audio_duration_seconds)
+              const metaText = [dateText, durText].filter(Boolean).join(' · ')
+
+              return (
+                <div
+                  key={s.session_id}
+                  className="mobile-pending-row"
+                  onClick={() => onOpenSession(s.session_id, 'overview')}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="mobile-pending-left">
+                    <div className="mobile-pending-icon-box">
+                      <DocumentItemIcon />
+                    </div>
+                    <div className="mobile-pending-info">
+                      <div className="mobile-pending-name-row">
+                        <span className="mobile-pending-name">{sessionTitle}</span>
+                        {dayNum && (
+                          <span className="session-day-circle-badge" title={`Day ${dayNum}`}>
+                            {dayNum}
+                          </span>
+                        )}
+                      </div>
+                      <span className="mobile-pending-meta">{metaText || 'Recent session'}</span>
+                    </div>
+                  </div>
+                  <div className="mobile-pending-chevron">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* DESKTOP DASHBOARD VIEW (Unchanged Desktop Layout)             */}
+      {/* ------------------------------------------------------------- */}
+      <div className="desktop-dashboard-layout">
+        {/* Remote Recording Banner if another device on account is recording */}
+        {remoteControl?.isRemoteRecordingActive && remoteControl?.activeRecording && (
         <div
           className="remote-recording-banner"
           style={{
@@ -692,6 +876,7 @@ export function DashboardView({
           </div>
         </div>
       </section>
+      </div>
     </div>
   )
 }

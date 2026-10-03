@@ -292,6 +292,7 @@ export function SessionDetailView({
   verificationProcessing,
   onTriggerVerificationProcessing,
   onCloseVerificationProcessing,
+  onDeleteSession = null,
 }) {
   const getDefaultView = () => {
     if (typeof window !== 'undefined') {
@@ -320,6 +321,7 @@ export function SessionDetailView({
   }
 
   const [activeView, setActiveView] = useState(getDefaultView)
+  const [isViewingDetailsPage, setIsViewingDetailsPage] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [showReportProcessingModal, setShowReportProcessingModal] = useState(() => {
     return initialStage === 'report_processing' || (typeof window !== 'undefined' && window.location.hash.includes('/report_processing'))
@@ -618,6 +620,244 @@ export function SessionDetailView({
   // ---------------------------------------------------------------------------
   return (
     <div className="session-workspace-page-container">
+      {/* ------------------------------------------------------------- */}
+      {/* MOBILE SESSION HUB & SESSION DETAILS (Collage 1 & 3 Screens 3 & 4) */}
+      {/* ------------------------------------------------------------- */}
+      <div className="mobile-session-overview-layout">
+        {isViewingDetailsPage ? (
+          /* Screen 4: Session Details (Full Page) */
+          <div className="mobile-session-details-fullpage">
+            <div className="mobile-subpage-header">
+              <button
+                type="button"
+                className="mobile-header-back-btn"
+                onClick={() => setIsViewingDetailsPage(false)}
+                aria-label="Back to Session"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <h1 className="mobile-header-title">Session Details</h1>
+              <div style={{ width: 36 }} />
+            </div>
+
+            {/* Top Identity Card */}
+            <div className="mobile-details-hero-card">
+              <div className="mobile-details-doc-icon">
+                <DocumentIcon />
+              </div>
+              <div className="mobile-details-hero-text">
+                <h2 className="mobile-details-hero-title">{sessionDisplay}</h2>
+                <span className="mobile-details-hero-sub">{dateDisplay} · {durationDisplay}</span>
+              </div>
+            </div>
+
+            {/* Key-Value Details Card */}
+            <div className="mobile-details-kv-card">
+              <div className="mobile-kv-row">
+                <span className="mobile-kv-label">Event</span>
+                <span className="mobile-kv-val">{progDisplay}</span>
+              </div>
+              <div className="mobile-kv-row">
+                <span className="mobile-kv-label">Programme</span>
+                <span className="mobile-kv-val">{progDisplay}</span>
+              </div>
+              <div className="mobile-kv-row">
+                <span className="mobile-kv-label">Pastor</span>
+                <span className="mobile-kv-val">{preacherDisplay}</span>
+              </div>
+              <div className="mobile-kv-row">
+                <span className="mobile-kv-label">Date</span>
+                <span className="mobile-kv-val">{dateDisplay}</span>
+              </div>
+              <div className="mobile-kv-row">
+                <span className="mobile-kv-label">Start Time</span>
+                <span className="mobile-kv-val">
+                  {session?.date_created ? new Date(session.date_created).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM'}
+                </span>
+              </div>
+              <div className="mobile-kv-row">
+                <span className="mobile-kv-label">Duration</span>
+                <span className="mobile-kv-val">{durationDisplay}</span>
+              </div>
+              <div className="mobile-kv-row">
+                <span className="mobile-kv-label">Input</span>
+                <span className="mobile-kv-val">Microphone (Default)</span>
+              </div>
+            </div>
+
+            {/* Action Links */}
+            <div className="mobile-details-actions-list">
+              <button
+                type="button"
+                className="mobile-details-action-link"
+                onClick={() => {
+                  const audioUrl = getApiUrl(`/api/sessions/${session.session_id}/audio`)
+                  const a = new Audio(audioUrl)
+                  a.play().catch(() => alert('Audio playback not supported or audio file unavailable.'))
+                }}
+              >
+                <div className="mobile-details-link-left">
+                  <span className="mobile-link-icon">▶</span>
+                  <span>View Recording</span>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </button>
+
+              <button
+                type="button"
+                className="mobile-details-action-link"
+                onClick={() => changeStage(isVerified ? 'verified_transcript' : 'raw_transcript')}
+              >
+                <div className="mobile-details-link-left">
+                  <span className="mobile-link-icon">📜</span>
+                  <span>View Transcript</span>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </button>
+
+              <button
+                type="button"
+                className="mobile-details-action-link"
+                onClick={() => changeStage('final_report')}
+              >
+                <div className="mobile-details-link-left">
+                  <span className="mobile-link-icon">📝</span>
+                  <span>Open in Workspace</span>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </button>
+
+              {onDeleteSession && (
+                <button
+                  type="button"
+                  className="mobile-details-delete-btn"
+                  onClick={async () => {
+                    if (window.confirm(`Are you sure you want to delete "${sessionDisplay}"? This action cannot be undone.`)) {
+                      await onDeleteSession(session.session_id)
+                      if (onBack) onBack()
+                    }
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                  <span>Delete Session</span>
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Screen 3: Session Hub (2x3 Grid) */
+          <div className="mobile-session-hub">
+            <div className="mobile-subpage-header">
+              <button
+                type="button"
+                className="mobile-header-back-btn"
+                onClick={onBack}
+                aria-label="Back"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <h1 className="mobile-header-title">Session</h1>
+              <div style={{ width: 36 }} />
+            </div>
+
+            {/* Session Headline Info */}
+            <div className="mobile-session-hub-header">
+              <h2 className="mobile-session-hub-title">{sessionDisplay}</h2>
+              <span className="mobile-session-hub-meta">{dateDisplay} · {durationDisplay}</span>
+            </div>
+
+            {/* Link to Session Details */}
+            <div
+              className="mobile-session-details-trigger-card"
+              onClick={() => setIsViewingDetailsPage(true)}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="mobile-trigger-left">
+                <span className="mobile-trigger-icon">📄</span>
+                <span className="mobile-trigger-text">View session details</span>
+              </div>
+              <span className="mobile-chevron">›</span>
+            </div>
+
+            {/* 2x3 Action Grid */}
+            <div className="mobile-session-actions-grid">
+              <button
+                type="button"
+                className="mobile-grid-action-btn"
+                onClick={() => {
+                  const audioUrl = getApiUrl(`/api/sessions/${session.session_id}/audio`)
+                  const a = new Audio(audioUrl)
+                  a.play().catch(() => alert('Audio playback not supported or audio file unavailable.'))
+                }}
+              >
+                <div className="mobile-grid-action-icon mobile-grid-action-icon--play">▶</div>
+                <span className="mobile-grid-action-label">Play Recording</span>
+              </button>
+
+              <button
+                type="button"
+                className="mobile-grid-action-btn"
+                onClick={() => changeStage(isVerified ? 'verified_transcript' : 'raw_transcript')}
+              >
+                <div className="mobile-grid-action-icon mobile-grid-action-icon--doc">📜</div>
+                <span className="mobile-grid-action-label">View Transcript</span>
+              </button>
+
+              <button
+                type="button"
+                className="mobile-grid-action-btn"
+                onClick={() => {
+                  onStartVerification(session.session_id)
+                  changeStage('verification')
+                }}
+              >
+                <div className="mobile-grid-action-icon mobile-grid-action-icon--verify">☑</div>
+                <span className="mobile-grid-action-label">Verify Transcript</span>
+              </button>
+
+              <button
+                type="button"
+                className="mobile-grid-action-btn"
+                onClick={() => setShowReportProcessingModal(true)}
+              >
+                <div className="mobile-grid-action-icon mobile-grid-action-icon--brain">🧠</div>
+                <span className="mobile-grid-action-label">Process with AI</span>
+              </button>
+
+              <button
+                type="button"
+                className="mobile-grid-action-btn"
+                onClick={() => changeStage('final_report')}
+              >
+                <div className="mobile-grid-action-icon mobile-grid-action-icon--edit">✏️</div>
+                <span className="mobile-grid-action-label">Editing</span>
+              </button>
+
+              <button
+                type="button"
+                className="mobile-grid-action-btn"
+                onClick={() => changeStage('final_report')}
+              >
+                <div className="mobile-grid-action-icon mobile-grid-action-icon--report">📄</div>
+                <span className="mobile-grid-action-label">Final Report</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* DESKTOP SESSION WORKSPACE (Unchanged Desktop Layout)           */}
+      {/* ------------------------------------------------------------- */}
+      <div className="desktop-session-workspace-layout">
       {/* 1. Header Bar: Programme (muted, secondary) + Session Title (dominant) + Meta line */}
       <div className="session-workspace-header">
         <div className="session-workspace-header-content">
@@ -964,16 +1204,16 @@ export function SessionDetailView({
         onSave={handleSaveDetails}
       />
 
-      {/* 6. Stage 7 Unified Report Processing Modal */}
-      <ReportProcessingModal
-        isOpen={showReportProcessingModal}
-        session={session}
-        onClose={() => setShowReportProcessingModal(false)}
-        onViewReport={() => changeStage('final_report')}
-        onProcessingComplete={() => {
-          if (onFinaliseVerification) onFinaliseVerification()
-        }}
-      />
+        <ReportProcessingModal
+          isOpen={showReportProcessingModal}
+          session={session}
+          onClose={() => setShowReportProcessingModal(false)}
+          onViewReport={() => changeStage('final_report')}
+          onProcessingComplete={() => {
+            if (onFinaliseVerification) onFinaliseVerification()
+          }}
+        />
+      </div>
     </div>
   )
 }

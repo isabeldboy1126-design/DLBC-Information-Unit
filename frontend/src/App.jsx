@@ -20,6 +20,8 @@ import { DesktopUploadRecordingView } from './components/transcription/DesktopUp
 import { SettingsView } from './components/settings/SettingsView'
 import { YouTubeSessionView } from './components/youtube/YouTubeSessionView'
 import { CompletedReportsView } from './components/reporting/CompletedReportsView'
+import { WorkspaceView } from './components/workspace/WorkspaceView'
+import { MediaView } from './components/media/MediaView'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { StartupAnimation } from './components/common/StartupAnimation'
 
@@ -89,7 +91,7 @@ function App() {
     if (clean === 'verification_workspace') {
       return { view: 'sessions', sessionId: null, stage: 'verification', subAction: null }
     }
-    if (['new_live', 'transcribe', 'youtube', 'settings', 'live_recording', 'reports', 'events', 'profile', 'remote_control', 'download'].includes(clean)) {
+    if (['new_live', 'transcribe', 'youtube', 'settings', 'live_recording', 'reports', 'events', 'profile', 'remote_control', 'download', 'workspace', 'media'].includes(clean)) {
       return { view: clean, sessionId: null, stage: null, subAction: null }
     }
     return { view: 'dashboard', sessionId: null, stage: null, subAction: null }
@@ -120,7 +122,7 @@ function App() {
     messageTitle: '',
   })
   const [sessionSubViewInfo, setSessionSubViewInfo] = useState({
-    title: 'Session Workspace',
+    title: 'Session',
     onBack: null,
   })
   const [sessionsStatusFilter, setSessionsStatusFilter] = useState('all')
@@ -739,6 +741,8 @@ function App() {
           onFileSelect={handleDashboardFileSelect}
           remoteControl={remoteControl}
           onOpenRemoteControl={() => navigateTo('remote_control')}
+          onOpenWorkspace={() => navigateTo('workspace')}
+          onOpenProfile={() => navigateTo('profile')}
         />
       ) : currentView === 'new_live' ? (
         /* ----------------------------------------------------------- */
@@ -799,6 +803,7 @@ function App() {
             onBack={handleInAppBack}
             onUpdateTitle={sessionsHook.updateSessionTitle}
             onUpdateDetails={sessionsHook.updateSessionDetails}
+            onDeleteSession={sessionsHook.deleteSession}
             onSubViewChange={setSessionSubViewInfo}
             verificationState={sessionsHook.verificationState}
             onStartVerification={sessionsHook.startVerification}
@@ -913,6 +918,21 @@ function App() {
         <RemoteControlView
           remoteControl={remoteControl}
           onNavigate={navigateTo}
+        />
+      ) : currentView === 'workspace' ? (
+        <WorkspaceView
+          sessions={sessionsHook.sessions}
+          onOpenSession={(sessionId, initialStage = 'final_report') => {
+            navigateTo(`session/${sessionId}/${initialStage}`)
+          }}
+          onBack={handleInAppBack}
+        />
+      ) : currentView === 'media' ? (
+        <MediaView
+          sessions={sessionsHook.sessions}
+          onOpenSession={(sessionId, initialStage = 'overview') => {
+            navigateTo(`session/${sessionId}`)
+          }}
           onBack={handleInAppBack}
         />
       ) : currentView === 'download' ? (

@@ -8,11 +8,12 @@ import { APP_VERSION } from '../../utils/version'
 import { isDesktop, checkForAppUpdates, downloadAndInstallUpdate, relaunchApplication } from '../../services/desktopPlatform'
 
 export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
-  const { account, demoMode } = useAuth()
+  const { account, user, demoMode, signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
 
   // Active Settings Tab / Destination (default: profile)
   const [activeTab, setActiveTab] = useState('profile')
+  const [mobileSubpage, setMobileSubpage] = useState(null)
 
   // Editorial Standards & Instructions state
   const [instruction, setInstruction] = useState('')
@@ -361,8 +362,565 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
 
   return (
     <div className="settings-page-root">
-      {/* Top Bar with Back to app, DLBC Emblem, and Refresh */}
-      <header className="settings-top-navbar">
+      {/* ------------------------------------------------------------- */}
+      {/* MOBILE SETTINGS VIEW (Matching Reference Screen 8-15)         */}
+      {/* ------------------------------------------------------------- */}
+      <div className="mobile-settings-page-layout">
+        {!mobileSubpage ? (
+          /* Screen 8: Main Settings List */
+          <div className="mobile-settings-main-list">
+            <div className="mobile-subpage-header">
+              {onBack && (
+                <button
+                  type="button"
+                  className="mobile-header-back-btn"
+                  onClick={onBack}
+                  aria-label="Back"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                </button>
+              )}
+              <h1 className="mobile-header-title">Settings</h1>
+              <div style={{ width: 36 }} />
+            </div>
+
+            <div className="mobile-settings-items-stack">
+              {/* 1. Profile */}
+              <button
+                type="button"
+                className="mobile-settings-item-row"
+                onClick={() => setMobileSubpage('profile')}
+              >
+                <div className="mobile-item-left">
+                  <div className="mobile-item-icon-box">👤</div>
+                  <div className="mobile-item-text">
+                    <span className="mobile-item-label">Profile</span>
+                    <span className="mobile-item-sub">Manage your account</span>
+                  </div>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </button>
+
+              {/* 2. App Preferences */}
+              <button
+                type="button"
+                className="mobile-settings-item-row"
+                onClick={() => setMobileSubpage('app_preferences')}
+              >
+                <div className="mobile-item-left">
+                  <div className="mobile-item-icon-box">⚙️</div>
+                  <div className="mobile-item-text">
+                    <span className="mobile-item-label">App Preferences</span>
+                    <span className="mobile-item-sub">Appearance, notifications</span>
+                  </div>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </button>
+
+              {/* 3. Verification Settings */}
+              <button
+                type="button"
+                className="mobile-settings-item-row"
+                onClick={() => setMobileSubpage('verification_settings')}
+              >
+                <div className="mobile-item-left">
+                  <div className="mobile-item-icon-box">🛡️</div>
+                  <div className="mobile-item-text">
+                    <span className="mobile-item-label">Verification Settings</span>
+                    <span className="mobile-item-sub">Configure verification options</span>
+                  </div>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </button>
+
+              {/* 4. AI Processing Settings */}
+              <button
+                type="button"
+                className="mobile-settings-item-row"
+                onClick={() => setMobileSubpage('ai_processing')}
+              >
+                <div className="mobile-item-left">
+                  <div className="mobile-item-icon-box">🧠</div>
+                  <div className="mobile-item-text">
+                    <span className="mobile-item-label">AI Processing Settings</span>
+                    <span className="mobile-item-sub">Processing preferences</span>
+                  </div>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </button>
+
+              {/* 5. Editing Instructions */}
+              <button
+                type="button"
+                className="mobile-settings-item-row"
+                onClick={() => setMobileSubpage('editing_instructions')}
+              >
+                <div className="mobile-item-left">
+                  <div className="mobile-item-icon-box">✏️</div>
+                  <div className="mobile-item-text">
+                    <span className="mobile-item-label">Editing Instructions</span>
+                    <span className="mobile-item-sub">View editing guidelines</span>
+                  </div>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </button>
+
+              {/* 6. Events */}
+              <button
+                type="button"
+                className="mobile-settings-item-row"
+                onClick={() => setMobileSubpage('events')}
+              >
+                <div className="mobile-item-left">
+                  <div className="mobile-item-icon-box">📅</div>
+                  <div className="mobile-item-text">
+                    <span className="mobile-item-label">Events</span>
+                    <span className="mobile-item-sub">Add and manage events</span>
+                  </div>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </button>
+
+              {/* 7. Help & Support */}
+              <button
+                type="button"
+                className="mobile-settings-item-row"
+                onClick={() => setMobileSubpage('help_support')}
+              >
+                <div className="mobile-item-left">
+                  <div className="mobile-item-icon-box">❓</div>
+                  <div className="mobile-item-text">
+                    <span className="mobile-item-label">Help & Support</span>
+                    <span className="mobile-item-sub">Get help and resources</span>
+                  </div>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </button>
+
+              {/* 8. About */}
+              <button
+                type="button"
+                className="mobile-settings-item-row"
+                onClick={() => setMobileSubpage('about')}
+              >
+                <div className="mobile-item-left">
+                  <div className="mobile-item-icon-box">ℹ️</div>
+                  <div className="mobile-item-text">
+                    <span className="mobile-item-label">About</span>
+                    <span className="mobile-item-sub">{`App version ${APP_VERSION}`}</span>
+                  </div>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </button>
+            </div>
+          </div>
+        ) : mobileSubpage === 'profile' ? (
+          /* Screen 9: Profile (Main) */
+          <div className="mobile-subpage-container">
+            <div className="mobile-subpage-header">
+              <button
+                type="button"
+                className="mobile-header-back-btn"
+                onClick={() => setMobileSubpage(null)}
+                aria-label="Back"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <h1 className="mobile-header-title">Profile</h1>
+              <div style={{ width: 36 }} />
+            </div>
+
+            <div className="mobile-profile-hero">
+              <div className="mobile-profile-avatar-large">
+                <span>{(account?.name || user?.name || user?.email || 'Daniel').charAt(0).toUpperCase()}</span>
+              </div>
+              <h2 className="mobile-profile-name">{account?.name || user?.name || 'Daniel'}</h2>
+              <span className="mobile-profile-email">{user?.email || 'daniel@dlbc.org'}</span>
+            </div>
+
+            <div className="mobile-settings-items-stack" style={{ marginTop: '1.5rem' }}>
+              <button
+                type="button"
+                className="mobile-settings-item-row"
+                onClick={() => setMobileSubpage('account_info')}
+              >
+                <div className="mobile-item-left">
+                  <div className="mobile-item-icon-box">👤</div>
+                  <span className="mobile-item-label">Account Information</span>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </button>
+
+              <button
+                type="button"
+                className="mobile-settings-item-row"
+                onClick={() => setMobileSubpage('change_password')}
+              >
+                <div className="mobile-item-left">
+                  <div className="mobile-item-icon-box">🔒</div>
+                  <span className="mobile-item-label">Change Password</span>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </button>
+
+              <button
+                type="button"
+                className="mobile-settings-item-row"
+                onClick={toggleTheme}
+              >
+                <div className="mobile-item-left">
+                  <div className="mobile-item-icon-box">🎨</div>
+                  <span className="mobile-item-label">Theme</span>
+                </div>
+                <span className="mobile-item-right-text">{theme === 'dark' ? 'Dark ›' : 'Light ›'}</span>
+              </button>
+            </div>
+
+            <div style={{ marginTop: '2rem', padding: '0 1rem' }}>
+              <button
+                type="button"
+                className="btn btn--danger"
+                style={{ width: '100%', height: '44px', borderRadius: '12px', fontWeight: 600 }}
+                onClick={() => signOut()}
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        ) : mobileSubpage === 'account_info' ? (
+          /* Screen 10: Account Information */
+          <div className="mobile-subpage-container">
+            <div className="mobile-subpage-header">
+              <button
+                type="button"
+                className="mobile-header-back-btn"
+                onClick={() => setMobileSubpage('profile')}
+                aria-label="Back"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <h1 className="mobile-header-title">Account Information</h1>
+              <div style={{ width: 36 }} />
+            </div>
+
+            <div className="mobile-profile-hero">
+              <div className="mobile-profile-avatar-large">
+                <span>{(account?.name || user?.name || user?.email || 'Daniel').charAt(0).toUpperCase()}</span>
+              </div>
+              <button type="button" className="btn-link" style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>Change Photo</button>
+            </div>
+
+            <div className="mobile-form-fields" style={{ padding: '1rem' }}>
+              <div className="form-group">
+                <label className="form-label">Name</label>
+                <input type="text" className="form-control" defaultValue={account?.name || user?.name || 'Daniel'} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Email</label>
+                <input type="email" className="form-control" defaultValue={user?.email || 'daniel@dlbc.org'} disabled />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Role</label>
+                <input type="text" className="form-control" defaultValue={account?.role || 'Information Unit'} disabled />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Phone</label>
+                <input type="text" className="form-control" defaultValue="+234 801 234 5678" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Organization</label>
+                <input type="text" className="form-control" defaultValue="DLBC" disabled />
+              </div>
+              <button type="button" className="btn btn--primary" style={{ width: '100%', marginTop: '1rem', height: '44px', borderRadius: '12px' }}>
+                Save Changes
+              </button>
+            </div>
+          </div>
+        ) : mobileSubpage === 'change_password' ? (
+          /* Screen 11: Change Password */
+          <div className="mobile-subpage-container">
+            <div className="mobile-subpage-header">
+              <button
+                type="button"
+                className="mobile-header-back-btn"
+                onClick={() => setMobileSubpage('profile')}
+                aria-label="Back"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <h1 className="mobile-header-title">Change Password</h1>
+              <div style={{ width: 36 }} />
+            </div>
+
+            <div className="mobile-form-fields" style={{ padding: '1rem' }}>
+              <div className="form-group">
+                <label className="form-label">Current Password</label>
+                <input type="password" className="form-control" placeholder="••••••••" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">New Password</label>
+                <input type="password" className="form-control" placeholder="••••••••" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Confirm New Password</label>
+                <input type="password" className="form-control" placeholder="••••••••" />
+              </div>
+              <button type="button" className="btn btn--primary" style={{ width: '100%', marginTop: '1rem', height: '44px', borderRadius: '12px' }}>
+                Update Password
+              </button>
+            </div>
+          </div>
+        ) : mobileSubpage === 'app_preferences' ? (
+          /* Screen 12: App Preferences */
+          <div className="mobile-subpage-container">
+            <div className="mobile-subpage-header">
+              <button
+                type="button"
+                className="mobile-header-back-btn"
+                onClick={() => setMobileSubpage(null)}
+                aria-label="Back"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <h1 className="mobile-header-title">App Preferences</h1>
+              <div style={{ width: 36 }} />
+            </div>
+
+            <div style={{ padding: '1rem' }}>
+              <h3 style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Appearance</h3>
+              <div className="card" style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                  <input type="radio" name="app_theme" checked={theme === 'light'} onChange={() => theme !== 'light' && toggleTheme()} />
+                  <span>Light Mode</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                  <input type="radio" name="app_theme" checked={theme === 'dark'} onChange={() => theme !== 'dark' && toggleTheme()} />
+                  <span>Dark Mode</span>
+                </label>
+              </div>
+
+              <h3 style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', marginTop: '1.5rem', marginBottom: '0.75rem' }}>Notifications</h3>
+              <div className="card" style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>App Notifications</span>
+                  <input type="checkbox" defaultChecked />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Processing Complete</span>
+                  <input type="checkbox" defaultChecked />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Verification Updates</span>
+                  <input type="checkbox" defaultChecked />
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : mobileSubpage === 'verification_settings' ? (
+          /* Screen 13: Verification Settings */
+          <div className="mobile-subpage-container">
+            <div className="mobile-subpage-header">
+              <button
+                type="button"
+                className="mobile-header-back-btn"
+                onClick={() => setMobileSubpage(null)}
+                aria-label="Back"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <h1 className="mobile-header-title">Verification Settings</h1>
+              <div style={{ width: 36 }} />
+            </div>
+
+            <div style={{ padding: '1rem' }}>
+              <h3 style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Default Behavior</h3>
+              <div className="card" style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                  <input type="radio" name="verification_behavior" defaultChecked />
+                  <span>Manual verification</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                  <input type="radio" name="verification_behavior" />
+                  <span>Automatic verification</span>
+                </label>
+              </div>
+
+              <h3 style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', marginTop: '1.5rem', marginBottom: '0.75rem' }}>Verification Options</h3>
+              <div className="card" style={{ padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Show timestamps</span>
+                  <input type="checkbox" defaultChecked />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Smart suggestions</span>
+                  <input type="checkbox" defaultChecked />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Highlight uncertainties</span>
+                  <input type="checkbox" defaultChecked />
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : mobileSubpage === 'ai_processing' ? (
+          /* AI Processing Settings */
+          <div className="mobile-subpage-container">
+            <div className="mobile-subpage-header">
+              <button
+                type="button"
+                className="mobile-header-back-btn"
+                onClick={() => setMobileSubpage(null)}
+                aria-label="Back"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <h1 className="mobile-header-title">AI Processing Settings</h1>
+              <div style={{ width: 36 }} />
+            </div>
+
+            <div style={{ padding: '1rem' }}>
+              <div className="card" style={{ padding: '1rem', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <strong style={{ display: 'block', fontSize: '0.9rem' }}>Auto-process after verification</strong>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Automatically trigger report generation</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={autoProcessAfterVerification}
+                    onChange={handleToggleAutoProcess}
+                    disabled={isSavingAutoProcess}
+                  />
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: '1rem' }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Editorial Prompt Guidelines</label>
+                <textarea
+                  className="unified-instructions-textarea"
+                  rows={8}
+                  value={instruction}
+                  onChange={(e) => setInstruction(e.target.value)}
+                  placeholder="Enter editorial instructions for the AI report generation..."
+                />
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  style={{ width: '100%', marginTop: '1rem', height: '42px', borderRadius: '10px' }}
+                  onClick={handleSaveInstructions}
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Saving...' : 'Save Instructions'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : mobileSubpage === 'events' ? (
+          /* Screen 14: Events (Manage) */
+          <div className="mobile-subpage-container">
+            <div className="mobile-subpage-header">
+              <button
+                type="button"
+                className="mobile-header-back-btn"
+                onClick={() => setMobileSubpage(null)}
+                aria-label="Back"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <h1 className="mobile-header-title">Events</h1>
+              <div style={{ width: 36 }} />
+            </div>
+            <div style={{ padding: '1rem' }}>
+              <ProgrammesSettingsSection />
+            </div>
+          </div>
+        ) : mobileSubpage === 'editing_instructions' ? (
+          /* Screen 15: Editing Instructions */
+          <div className="mobile-subpage-container">
+            <div className="mobile-subpage-header">
+              <button
+                type="button"
+                className="mobile-header-back-btn"
+                onClick={() => setMobileSubpage(null)}
+                aria-label="Back"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <h1 className="mobile-header-title">Editing Instructions</h1>
+              <div style={{ width: 36 }} />
+            </div>
+
+            <div style={{ padding: '1rem' }}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+                These guidelines help the AI process and format transcripts according to DLBC standards.
+              </p>
+
+              <div className="mobile-settings-items-stack">
+                {['View Guidelines', 'Introduction Format', 'Speaker Labels', 'Scripture References', 'Tone and Style', 'Common Corrections'].map((item) => (
+                  <div key={item} className="mobile-settings-item-row" style={{ cursor: 'default' }}>
+                    <span className="mobile-item-label">{item}</span>
+                    <span className="mobile-chevron">›</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Help & Support / About */
+          <div className="mobile-subpage-container">
+            <div className="mobile-subpage-header">
+              <button
+                type="button"
+                className="mobile-header-back-btn"
+                onClick={() => setMobileSubpage(null)}
+                aria-label="Back"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <h1 className="mobile-header-title">{mobileSubpage === 'about' ? 'About' : 'Help & Support'}</h1>
+              <div style={{ width: 36 }} />
+            </div>
+
+            <div style={{ padding: '1.25rem' }}>
+              <div className="card" style={{ padding: '1.25rem', textAlign: 'center' }}>
+                <img src="/dlbc-logo.png" alt="DLBC" style={{ width: '48px', height: '48px', margin: '0 auto 0.75rem' }} />
+                <h3 style={{ margin: '0 0 0.25rem' }}>DLBC Information Unit</h3>
+                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>Version {APP_VERSION}</span>
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginTop: '0.75rem', lineHeight: 1.5 }}>
+                  Institutional ministerial platform for high-integrity sermon audio recording, automatic acoustic verification, and publication-ready report synthesis.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* DESKTOP SETTINGS VIEW (Unchanged Desktop Layout)               */}
+      {/* ------------------------------------------------------------- */}
+      <div className="desktop-settings-page-layout">
+        {/* Top Bar with Back to app, DLBC Emblem, and Refresh */}
+        <header className="settings-top-navbar">
         <div className="settings-top-navbar-left">
           <button
             type="button"
@@ -1038,6 +1596,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
             </div>
           )}
         </main>
+      </div>
       </div>
     </div>
   )

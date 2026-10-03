@@ -83,6 +83,25 @@ function SidebarToggleIcon() {
   )
 }
 
+function WorkspaceIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  )
+}
+
+function MediaIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </svg>
+  )
+}
+
 /**
  * AppShell — Persistent application shell matching the Lead Monitor reference design.
  */
@@ -395,6 +414,34 @@ export function AppShell({
               </span>
               {isEffectivelyExpanded && <span className="nav-label">Remote Control</span>}
             </button>
+
+            <button
+              type="button"
+              className={`sidebar-nav-item ${activeView === 'workspace' ? 'sidebar-nav-item--active' : ''}`}
+              onClick={() => {
+                onNavigate('workspace')
+                closeMobileNav()
+              }}
+              id="nav-link-workspace"
+              title={!isEffectivelyExpanded ? 'Workspace' : undefined}
+            >
+              <span className="nav-icon"><WorkspaceIcon /></span>
+              {isEffectivelyExpanded && <span className="nav-label">Workspace</span>}
+            </button>
+
+            <button
+              type="button"
+              className={`sidebar-nav-item ${activeView === 'media' ? 'sidebar-nav-item--active' : ''}`}
+              onClick={() => {
+                onNavigate('media')
+                closeMobileNav()
+              }}
+              id="nav-link-media"
+              title={!isEffectivelyExpanded ? 'Media' : undefined}
+            >
+              <span className="nav-icon"><MediaIcon /></span>
+              {isEffectivelyExpanded && <span className="nav-label">Media</span>}
+            </button>
           </nav>
         </div>
 
@@ -597,6 +644,55 @@ export function AppShell({
         <main className="app-content-body">
           {children}
         </main>
+
+        {/* Mobile Bottom Navigation Bar (Home, Sessions, Media, Settings) */}
+        {['dashboard', 'sessions', 'media', 'settings'].includes(activeView) && (
+          <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
+            <button
+              type="button"
+              className={`mobile-bottom-nav-item ${activeView === 'dashboard' ? 'mobile-bottom-nav-item--active' : ''}`}
+              onClick={() => onNavigate('dashboard')}
+              aria-label="Home"
+              id="mobile-nav-home"
+            >
+              <span className="mobile-bottom-nav-icon"><HomeIcon /></span>
+              <span className="mobile-bottom-nav-label">Home</span>
+            </button>
+
+            <button
+              type="button"
+              className={`mobile-bottom-nav-item ${activeView === 'sessions' ? 'mobile-bottom-nav-item--active' : ''}`}
+              onClick={() => onNavigate('sessions')}
+              aria-label="Sessions"
+              id="mobile-nav-sessions"
+            >
+              <span className="mobile-bottom-nav-icon"><SessionsIcon /></span>
+              <span className="mobile-bottom-nav-label">Sessions</span>
+            </button>
+
+            <button
+              type="button"
+              className={`mobile-bottom-nav-item ${activeView === 'media' ? 'mobile-bottom-nav-item--active' : ''}`}
+              onClick={() => onNavigate('media')}
+              aria-label="Media"
+              id="mobile-nav-media"
+            >
+              <span className="mobile-bottom-nav-icon"><MediaIcon /></span>
+              <span className="mobile-bottom-nav-label">Media</span>
+            </button>
+
+            <button
+              type="button"
+              className={`mobile-bottom-nav-item ${activeView === 'settings' ? 'mobile-bottom-nav-item--active' : ''}`}
+              onClick={() => onNavigate('settings')}
+              aria-label="Settings"
+              id="mobile-nav-settings"
+            >
+              <span className="mobile-bottom-nav-icon"><SettingsIcon /></span>
+              <span className="mobile-bottom-nav-label">Settings</span>
+            </button>
+          </nav>
+        )}
       </div>
     </div>
   )
