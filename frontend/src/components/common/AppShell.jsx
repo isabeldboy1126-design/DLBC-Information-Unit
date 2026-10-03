@@ -265,6 +265,49 @@ export function AppShell({
     return (
       <div className="app-shell-settings-bleed">
         {children}
+        {/* Persistent Mobile Bottom Navigation Bar for Settings */}
+        <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
+          <button
+            type="button"
+            className="mobile-bottom-nav-item"
+            onClick={() => onNavigate('dashboard')}
+            aria-label="Home"
+            id="mobile-nav-home-settings"
+          >
+            <span className="mobile-bottom-nav-icon"><HomeIcon /></span>
+            <span className="mobile-bottom-nav-label">Home</span>
+          </button>
+          <button
+            type="button"
+            className="mobile-bottom-nav-item"
+            onClick={() => onNavigate('sessions')}
+            aria-label="Sessions"
+            id="mobile-nav-sessions-settings"
+          >
+            <span className="mobile-bottom-nav-icon"><SessionsIcon /></span>
+            <span className="mobile-bottom-nav-label">Sessions</span>
+          </button>
+          <button
+            type="button"
+            className="mobile-bottom-nav-item"
+            onClick={() => onNavigate('media')}
+            aria-label="Media"
+            id="mobile-nav-media-settings"
+          >
+            <span className="mobile-bottom-nav-icon"><MediaIcon /></span>
+            <span className="mobile-bottom-nav-label">Media</span>
+          </button>
+          <button
+            type="button"
+            className="mobile-bottom-nav-item mobile-bottom-nav-item--active"
+            onClick={() => onNavigate('settings')}
+            aria-label="Settings"
+            id="mobile-nav-settings-settings"
+          >
+            <span className="mobile-bottom-nav-icon"><SettingsIcon /></span>
+            <span className="mobile-bottom-nav-label">Settings</span>
+          </button>
+        </nav>
       </div>
     )
   }
@@ -606,6 +649,20 @@ export function AppShell({
                     </svg>
                     <span>Profile</span>
                   </button>
+                  <button
+                    type="button"
+                    className="user-menu-item"
+                    onClick={() => {
+                      toggleTheme()
+                    }}
+                    id="btn-user-quick-theme"
+                    role="menuitem"
+                  >
+                    <span style={{ display: 'inline-flex', alignItems: 'center', opacity: 0.85, flexShrink: 0, marginRight: '6px' }}>
+                      {isDark ? <SunIcon /> : <MoonIcon />}
+                    </span>
+                    <span>Theme: {isDark ? 'Light' : 'Dark'}</span>
+                  </button>
                   <div className="user-menu-divider" />
                   {demoMode ? (
                     <button
@@ -645,54 +702,61 @@ export function AppShell({
           {children}
         </main>
 
-        {/* Mobile Bottom Navigation Bar (Home, Sessions, Media, Settings) */}
-        {['dashboard', 'sessions', 'media', 'settings'].includes(activeView) && (
-          <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
-            <button
-              type="button"
-              className={`mobile-bottom-nav-item ${activeView === 'dashboard' ? 'mobile-bottom-nav-item--active' : ''}`}
-              onClick={() => onNavigate('dashboard')}
-              aria-label="Home"
-              id="mobile-nav-home"
-            >
-              <span className="mobile-bottom-nav-icon"><HomeIcon /></span>
-              <span className="mobile-bottom-nav-label">Home</span>
-            </button>
+        {/* Mobile Bottom Navigation Bar (Home, Sessions, Media, Settings) — ALWAYS visible on authenticated pages */}
+        {(() => {
+          const isHomeActive = ['dashboard', 'youtube', 'transcribe', 'remote_control', 'new_live', 'live_recording'].includes(activeView)
+          const isSessionsActive = ['sessions', 'session_detail', 'processing', 'reports'].includes(activeView)
+          const isMediaActive = ['media', 'media_upload'].includes(activeView)
+          const isSettingsActive = ['settings', 'profile', 'events'].includes(activeView)
 
-            <button
-              type="button"
-              className={`mobile-bottom-nav-item ${activeView === 'sessions' ? 'mobile-bottom-nav-item--active' : ''}`}
-              onClick={() => onNavigate('sessions')}
-              aria-label="Sessions"
-              id="mobile-nav-sessions"
-            >
-              <span className="mobile-bottom-nav-icon"><SessionsIcon /></span>
-              <span className="mobile-bottom-nav-label">Sessions</span>
-            </button>
+          return (
+            <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
+              <button
+                type="button"
+                className={`mobile-bottom-nav-item ${isHomeActive ? 'mobile-bottom-nav-item--active' : ''}`}
+                onClick={() => onNavigate('dashboard')}
+                aria-label="Home"
+                id="mobile-nav-home"
+              >
+                <span className="mobile-bottom-nav-icon"><HomeIcon /></span>
+                <span className="mobile-bottom-nav-label">Home</span>
+              </button>
 
-            <button
-              type="button"
-              className={`mobile-bottom-nav-item ${activeView === 'media' ? 'mobile-bottom-nav-item--active' : ''}`}
-              onClick={() => onNavigate('media')}
-              aria-label="Media"
-              id="mobile-nav-media"
-            >
-              <span className="mobile-bottom-nav-icon"><MediaIcon /></span>
-              <span className="mobile-bottom-nav-label">Media</span>
-            </button>
+              <button
+                type="button"
+                className={`mobile-bottom-nav-item ${isSessionsActive ? 'mobile-bottom-nav-item--active' : ''}`}
+                onClick={() => onNavigate('sessions')}
+                aria-label="Sessions"
+                id="mobile-nav-sessions"
+              >
+                <span className="mobile-bottom-nav-icon"><SessionsIcon /></span>
+                <span className="mobile-bottom-nav-label">Sessions</span>
+              </button>
 
-            <button
-              type="button"
-              className={`mobile-bottom-nav-item ${activeView === 'settings' ? 'mobile-bottom-nav-item--active' : ''}`}
-              onClick={() => onNavigate('settings')}
-              aria-label="Settings"
-              id="mobile-nav-settings"
-            >
-              <span className="mobile-bottom-nav-icon"><SettingsIcon /></span>
-              <span className="mobile-bottom-nav-label">Settings</span>
-            </button>
-          </nav>
-        )}
+              <button
+                type="button"
+                className={`mobile-bottom-nav-item ${isMediaActive ? 'mobile-bottom-nav-item--active' : ''}`}
+                onClick={() => onNavigate('media')}
+                aria-label="Media"
+                id="mobile-nav-media"
+              >
+                <span className="mobile-bottom-nav-icon"><MediaIcon /></span>
+                <span className="mobile-bottom-nav-label">Media</span>
+              </button>
+
+              <button
+                type="button"
+                className={`mobile-bottom-nav-item ${isSettingsActive ? 'mobile-bottom-nav-item--active' : ''}`}
+                onClick={() => onNavigate('settings')}
+                aria-label="Settings"
+                id="mobile-nav-settings"
+              >
+                <span className="mobile-bottom-nav-icon"><SettingsIcon /></span>
+                <span className="mobile-bottom-nav-label">Settings</span>
+              </button>
+            </nav>
+          )
+        })()}
       </div>
     </div>
   )

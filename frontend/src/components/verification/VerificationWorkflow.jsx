@@ -226,11 +226,8 @@ export function VerificationWorkflow({
     setShowBulkConfirmModal(false)
   }
 
-  const handleFinalise = () => {
-    setShowFinaliseModal(true)
-  }
-
-  const handleConfirmFinalise = async () => {
+  const handleConfirmFinalise = useCallback(async () => {
+    if (isFinalising) return
     setIsFinalising(true)
     try {
       await onFinalise(sessionId)
@@ -238,7 +235,20 @@ export function VerificationWorkflow({
     } finally {
       setIsFinalising(false)
     }
-  }
+  }, [isFinalising, onFinalise, sessionId])
+
+  const handleFinalise = useCallback(() => {
+    handleConfirmFinalise()
+  }, [handleConfirmFinalise])
+
+  // Automatically finalise verification when all items are resolved
+  const autoFinalisedRef = useRef(false)
+  useEffect(() => {
+    if (itemsTotal > 0 && pendingCount === 0 && !isFinalising && !autoFinalisedRef.current) {
+      autoFinalisedRef.current = true
+      handleConfirmFinalise()
+    }
+  }, [itemsTotal, pendingCount, isFinalising, handleConfirmFinalise])
 
   const handleTriggerAiVerification = async () => {
     if (!sessionId) return
@@ -635,15 +645,7 @@ export function VerificationWorkflow({
               <div className="completed-state-content">
                 <div className="completed-check-icon">✓</div>
                 <h3 className="completed-title">All verification items resolved</h3>
-                <button
-                  type="button"
-                  className="btn btn--primary btn--proceed-action"
-                  onClick={handleFinalise}
-                  disabled={isFinalising}
-                  id="btn-finalize-verification"
-                >
-                  {isFinalising ? 'Processing...' : 'Proceed →'}
-                </button>
+                <p className="completed-subtitle">Preparing verified transcript...</p>
               </div>
             </div>
           ) : (

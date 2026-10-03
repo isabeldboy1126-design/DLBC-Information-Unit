@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 
 const STORAGE_KEY = 'dlbc_active_process'
     
@@ -115,7 +115,7 @@ export function useActiveProcess() {
 
 
         if (jobType === 'report_processing') {
-          const res = await fetch(getApiUrl('/api/report-processing/status/' + encodeURIComponent(sessionId)))
+          const res = await authFetch(getApiUrl('/api/report-processing/status/' + encodeURIComponent(sessionId)))
           if (res.ok) {
             const data = await res.json()
             if (data.status === 'completed') {

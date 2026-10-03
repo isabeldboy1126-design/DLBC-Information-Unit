@@ -143,6 +143,7 @@ export function DashboardView({
   onViewAllSessions,
   onViewNeedsVerification,
   onFileSelect,
+  onOpenTranscribe = null,
   remoteControl = null,
   onOpenRemoteControl = null,
   onOpenWorkspace = null,
@@ -330,7 +331,13 @@ export function DashboardView({
           <button
             type="button"
             className="mobile-quick-action-item"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              if (onOpenTranscribe) {
+                onOpenTranscribe()
+              } else {
+                fileInputRef.current?.click()
+              }
+            }}
             id="mobile-quick-upload"
           >
             <div className="mobile-quick-icon-box">

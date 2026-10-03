@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 
 function SearchIcon() {
   return (
@@ -58,7 +58,7 @@ function formatDuration(sec) {
   return `${m}m ${s < 10 ? '0' : ''}${s}s`
 }
 
-export function CompletedReportsView({ onNavigateSession }) {
+export function CompletedReportsView({ onNavigateSession, onBack }) {
   const [reports, setReports] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -74,7 +74,7 @@ export function CompletedReportsView({ onNavigateSession }) {
       if (selectedProgramme !== 'all') params.append('programme', selectedProgramme)
       if (selectedMinister !== 'all') params.append('minister', selectedMinister)
 
-      const res = await fetch(getApiUrl(`/api/report-processing/archive?${params.toString()}`))
+      const res = await authFetch(getApiUrl(`/api/report-processing/archive?${params.toString()}`))
       if (res.ok) {
         const data = await res.json()
         setReports(data.reports || [])
@@ -99,7 +99,7 @@ export function CompletedReportsView({ onNavigateSession }) {
     if (!sessionId) return
     try {
       setDownloadingId(sessionId)
-      const res = await fetch(getApiUrl(`/api/report-processing/download-docx/${sessionId}`))
+      const res = await authFetch(getApiUrl(`/api/report-processing/download-docx/${sessionId}`))
       if (res.ok) {
         const blob = await res.blob()
         const url = window.URL.createObjectURL(blob)
@@ -133,11 +133,23 @@ export function CompletedReportsView({ onNavigateSession }) {
     <div className="completed-reports-view">
       {/* Top Header */}
       <div className="completed-reports-header">
-        <div>
-          <h1 className="completed-reports-title">Reports Archive</h1>
-          <p className="completed-reports-subtitle">
-            All finalized DLBC Information Unit reports and downloadable Word (.docx) documents.
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {onBack && (
+            <button
+              type="button"
+              className="btn btn--outline btn--small mobile-header-back-btn"
+              onClick={onBack}
+              aria-label="Back"
+            >
+              ← Back
+            </button>
+          )}
+          <div>
+            <h1 className="completed-reports-title">Reports Archive</h1>
+            <p className="completed-reports-subtitle">
+              All finalized DLBC Information Unit reports and downloadable Word (.docx) documents.
+            </p>
+          </div>
         </div>
       </div>
 

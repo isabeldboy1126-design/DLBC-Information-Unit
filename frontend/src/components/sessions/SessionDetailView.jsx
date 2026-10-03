@@ -525,11 +525,11 @@ export function SessionDetailView({
           onConfirmAllRemaining={onConfirmAllRemaining}
           onFinalise={async (sId) => {
             await onFinaliseVerification(sId)
-            changeStage('overview')
+            changeStage('verified_transcript')
           }}
           onConfirmRawAsVerified={async (sId) => {
             await onConfirmRawAsVerified(sId)
-            changeStage('overview')
+            changeStage('verified_transcript')
           }}
           onPlaySegment={handleJumpToTime}
           onNavigateToReporting={() => {
@@ -549,15 +549,27 @@ export function SessionDetailView({
   // VIEW: VERIFIED TRANSCRIPT STANDALONE
   // ---------------------------------------------------------------------------
   if (activeView === 'verified_transcript') {
+    const audioUrl = getApiUrl(`/api/transcription/media/${encodeURIComponent(session?.recording_id || session?.audio_filename || session?.session_id)}`)
     return (
       <div className="session-subview-container">
         <div className="card verified-transcript-card">
           <div className="verified-transcript-top-header">
-            <div>
-              <h2 className="verified-view-title">{session.title || 'Sunday Morning Worship Service'}</h2>
-              <p className="verified-view-sub">
-                Verified Transcript &bull; Created {formatDate(session.verified_at || session.date_created)} &bull; Verified by Operator Admin
-              </p>
+            <div className="verified-header-title-group">
+              <button
+                type="button"
+                className="mobile-header-back-btn"
+                onClick={() => changeStage('overview')}
+                aria-label="Back to Session Overview"
+                title="Back"
+              >
+                ←
+              </button>
+              <div>
+                <h2 className="verified-view-title">{session.title || 'Sunday Morning Worship Service'}</h2>
+                <p className="verified-view-sub">
+                  Verified Transcript &bull; Created {formatDate(session.verified_at || session.date_created)} &bull; Verified by Operator Admin
+                </p>
+              </div>
             </div>
             <div className="verified-top-actions">
               <button type="button" className="btn btn--outline" onClick={() => changeStage('overview')}>
@@ -577,15 +589,39 @@ export function SessionDetailView({
             </div>
           </div>
 
+          {/* Compact Master Audio Player */}
+          <div className="verified-master-player-bar">
+            <div className="verified-player-label">
+              <span className="player-indicator-dot" />
+              <span>Master Audio</span>
+            </div>
+            <audio
+              ref={mediaElementRef}
+              controls
+              className="verified-audio-element"
+              src={audioUrl}
+              preload="metadata"
+            />
+          </div>
+
           <div className="verified-body-box">
             <div className="verified-body-toolbar">
-              <button
-                type="button"
-                className="btn-link-small"
-                onClick={() => setActiveView('raw_transcript')}
-              >
-                📜 View Raw Transcript
-              </button>
+              <div className="verified-toolbar-left">
+                <button
+                  type="button"
+                  className="btn-link-small"
+                  onClick={() => setActiveView('raw_transcript')}
+                >
+                  📜 View Raw Transcript
+                </button>
+                <button
+                  type="button"
+                  className="btn-link-small"
+                  onClick={() => changeStage('verification')}
+                >
+                  🔍 View Verification Details
+                </button>
+              </div>
               <button
                 type="button"
                 className="btn btn--outline btn--small"

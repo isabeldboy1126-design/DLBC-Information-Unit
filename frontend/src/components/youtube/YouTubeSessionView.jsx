@@ -204,53 +204,77 @@ export function YouTubeSessionView({
   }
 
   return (
-    <div className="youtube-session-page-container">
-      {/* 1. Header */}
-      <div className="youtube-session-header">
-        <h1 className="youtube-session-title">YouTube Session</h1>
+    <div className="youtube-session-page-container" style={{ padding: '16px', maxWidth: '720px', margin: '0 auto' }}>
+      {/* 1. Header with Visible Back Button */}
+      <div className="mobile-subpage-header" style={{ marginBottom: '16px' }}>
+        {onBack && (
+          <button
+            type="button"
+            className="mobile-header-back-btn"
+            onClick={onBack}
+            aria-label="Back to Dashboard"
+            id="btn-youtube-back"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+        )}
+        <h1 className="mobile-header-title">YouTube Session</h1>
+        <div style={{ width: onBack ? 36 : 0 }} />
       </div>
 
       {/* 2. URL Input Card */}
-      <div className="card youtube-input-card">
+      <div className="card youtube-input-card" style={{ padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color, #e2e8f0)', background: 'var(--color-surface, #ffffff)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#ef4444">
+              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+          </div>
+          <div>
+            <h2 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: 'var(--color-text-primary, #0f172a)' }}>YouTube Link</h2>
+            <p style={{ fontSize: '12px', margin: 0, color: 'var(--color-text-muted, #64748b)' }}>Video, Shorts or Live Broadcast</p>
+          </div>
+        </div>
+
         <form onSubmit={handleAnalyzeUrl} className="youtube-url-form">
           <div className="form-group youtube-url-group">
-            <label className="form-label" htmlFor="youtube-url-input">
-              YouTube video, shorts or live broadcast
-            </label>
-            <div className="youtube-input-flex">
-              <input
-                id="youtube-url-input"
-                type="text"
-                className="form-control youtube-url-field"
-                placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
-                value={youtubeUrl}
-                onChange={(e) => setYoutubeUrl(e.target.value)}
-                disabled={isAnalyzing || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
-              />
-              <button
-                type="submit"
-                className={`btn youtube-analyze-btn ${
-                  !youtubeUrl.trim() || isAnalyzing || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'
-                    ? 'youtube-analyze-btn--disabled'
-                    : 'youtube-analyze-btn--enabled'
-                }`}
-                disabled={isAnalyzing || !youtubeUrl.trim() || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
-              >
-                {isAnalyzing ? (
-                  <>
-                    <span className="spinner spinner--small" />
-                    <span>Analysing...</span>
-                  </>
-                ) : (
-                  <span>Analyse Link</span>
-                )}
-              </button>
-            </div>
+            <input
+              id="youtube-url-input"
+              type="text"
+              className="form-control youtube-url-field"
+              placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+              disabled={isAnalyzing || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
+              style={{ padding: '10px 12px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--border-color, #cbd5e1)', width: '100%', boxSizing: 'border-box' }}
+            />
           </div>
+          <button
+            type="submit"
+            className={`btn btn--primary youtube-analyze-btn ${
+              !youtubeUrl.trim() || isAnalyzing || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'
+                ? 'youtube-analyze-btn--disabled'
+                : 'youtube-analyze-btn--enabled'
+            }`}
+            disabled={isAnalyzing || !youtubeUrl.trim() || activeJob?.status === 'preparing' || activeJob?.status === 'transcribing'}
+            style={{ width: '100%', marginTop: '10px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            id="btn-analyze-youtube"
+          >
+            {isAnalyzing ? (
+              <>
+                <span className="spinner spinner--small" />
+                <span>Analysing Link...</span>
+              </>
+            ) : (
+              <span>Analyse Link</span>
+            )}
+          </button>
         </form>
 
         {analysisError && (
-          <div className="youtube-error-banner">
+          <div className="youtube-error-banner" style={{ marginTop: '12px', padding: '10px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.1)', color: '#dc2626', fontSize: '13px' }}>
             <span>⚠️ {analysisError}</span>
           </div>
         )}

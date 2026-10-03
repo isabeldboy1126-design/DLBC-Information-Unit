@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 import { getCleanSessionName } from '../sessions/SessionDetailView'
 import { setActiveProcess, clearActiveProcess, minimizeActiveProcess } from '../common/activeProcessManager'
 
@@ -120,7 +120,7 @@ export function ReportProcessingModal({
   const pollStatus = useCallback(async () => {
     if (!sessionId) return
     try {
-      const res = await fetch(getApiUrl(`/api/report-processing/status/${sessionId}`))
+      const res = await authFetch(getApiUrl(`/api/report-processing/status/${sessionId}`))
       if (!res.ok) return
       const data = await res.json()
       if (!isMountedRef.current) return
@@ -192,7 +192,7 @@ export function ReportProcessingModal({
     const cleanTitle = getCleanSessionName(session)
 
     try {
-      const statusRes = await fetch(getApiUrl(`/api/report-processing/status/${sessionId}`))
+      const statusRes = await authFetch(getApiUrl(`/api/report-processing/status/${sessionId}`))
       if (statusRes.ok) {
         const statusData = await statusRes.json()
         if (statusData.status === 'completed') {
@@ -227,7 +227,7 @@ export function ReportProcessingModal({
         }
       }
 
-      const res = await fetch(getApiUrl('/api/report-processing/start'), {
+      const res = await authFetch(getApiUrl('/api/report-processing/start'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId }),
@@ -284,10 +284,10 @@ export function ReportProcessingModal({
     try {
       setIsCancelling(true)
       if (sessionId) {
-        await fetch(getApiUrl(`/api/report-processing/sessions/${sessionId}/cancel`), { method: 'POST' })
+        await authFetch(getApiUrl(`/api/report-processing/sessions/${sessionId}/cancel`), { method: 'POST' })
       }
       if (runId) {
-        await fetch(getApiUrl(`/api/report-processing/cancel/${runId}`), { method: 'POST' })
+        await authFetch(getApiUrl(`/api/report-processing/cancel/${runId}`), { method: 'POST' })
       }
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current)
@@ -310,7 +310,7 @@ export function ReportProcessingModal({
     if (!sessionId) return
     try {
       setIsDownloading(true)
-      const res = await fetch(getApiUrl(`/api/report-processing/download-docx/${sessionId}`))
+      const res = await authFetch(getApiUrl(`/api/report-processing/download-docx/${sessionId}`))
       if (res.ok) {
         const blob = await res.blob()
         const url = window.URL.createObjectURL(blob)

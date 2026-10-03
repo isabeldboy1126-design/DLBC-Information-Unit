@@ -77,6 +77,7 @@ export function SessionHistoryList({
   error,
   onRetry,
   initialStatusFilter = 'all',
+  onBack = null,
 }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [isFilterOpen, setIsFilterOpen] = useState(() => {
@@ -322,14 +323,29 @@ export function SessionHistoryList({
       {/* 1. TOP HEADER & NEW SESSION ACTION                            */}
       {/* ------------------------------------------------------------- */}
       <div className="sessions-history-header">
-        <div>
-          <h1 className="sessions-history-title">Sessions History</h1>
-          <p className="sessions-history-subtitle">
-            Active sessions: {activeSessionsCount}
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {onBack && (
+            <button
+              type="button"
+              className="mobile-header-back-btn"
+              onClick={onBack}
+              aria-label="Back"
+              id="btn-sessions-back"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+          )}
+          <div>
+            <h1 className="sessions-history-title">Sessions</h1>
+            <p className="sessions-history-subtitle">
+              Active sessions: {activeSessionsCount}
+            </p>
+          </div>
         </div>
 
-        <div className="sessions-header-actions">
+        <div className="sessions-header-actions desktop-only-action">
           {onRefresh && (
             <button
               type="button"
@@ -371,51 +387,53 @@ export function SessionHistoryList({
           />
         </div>
 
-        {/* Event / Programme Visible Selector */}
-        <div className="sessions-event-selector-anchor" ref={eventDropdownRef}>
-          <button
-            type="button"
-            className={`sessions-event-selector-btn ${selectedProgrammeFilter !== 'all' ? 'sessions-event-selector-btn--active' : ''}`}
-            onClick={() => setIsEventDropdownOpen(!isEventDropdownOpen)}
-            aria-expanded={isEventDropdownOpen}
-            aria-label="Filter by Event or Programme"
-            id="btn-sessions-event-selector"
-          >
-            <span className="event-selector-label">Event:</span>
-            <span className="event-selector-value">
-              {selectedProgrammeFilter === 'all' ? 'All Events' : selectedProgrammeFilter}
-            </span>
-            <span className="event-selector-caret" aria-hidden="true">▾</span>
-          </button>
+        {/* Event / Programme Visible Selector (Desktop Only) */}
+        {!isMobileScreen && (
+          <div className="sessions-event-selector-anchor desktop-only-action" ref={eventDropdownRef}>
+            <button
+              type="button"
+              className={`sessions-event-selector-btn ${selectedProgrammeFilter !== 'all' ? 'sessions-event-selector-btn--active' : ''}`}
+              onClick={() => setIsEventDropdownOpen(!isEventDropdownOpen)}
+              aria-expanded={isEventDropdownOpen}
+              aria-label="Filter by Event or Programme"
+              id="btn-sessions-event-selector"
+            >
+              <span className="event-selector-label">Event:</span>
+              <span className="event-selector-value">
+                {selectedProgrammeFilter === 'all' ? 'All Events' : selectedProgrammeFilter}
+              </span>
+              <span className="event-selector-caret" aria-hidden="true">▾</span>
+            </button>
 
-          {isEventDropdownOpen && (
-            <div className="sessions-event-dropdown-menu" role="menu">
-              <button
-                type="button"
-                className={`event-dropdown-item ${selectedProgrammeFilter === 'all' ? 'event-dropdown-item--selected' : ''}`}
-                onClick={() => {
-                  handleProgrammeFilterChange('all')
-                  setIsEventDropdownOpen(false)
-                }}
-              >
-                All Events
-              </button>
-              {configuredProgrammes.map((p) => (
+            {isEventDropdownOpen && (
+              <div className="sessions-event-dropdown-menu" role="menu">
                 <button
-                  key={p.id}
                   type="button"
-                  className={`event-dropdown-item ${selectedProgrammeFilter === p.name ? 'event-dropdown-item--selected' : ''}`}
+                  className={`event-dropdown-item ${selectedProgrammeFilter === 'all' ? 'event-dropdown-item--selected' : ''}`}
                   onClick={() => {
-                    handleProgrammeFilterChange(p.name)
+                    handleProgrammeFilterChange('all')
                     setIsEventDropdownOpen(false)
                   }}
                 >
-                  {p.name}
+                  All Events
                 </button>
-              ))}
-            </div>
-          )}
-        </div>
+                {configuredProgrammes.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={`event-dropdown-item ${selectedProgrammeFilter === p.name ? 'event-dropdown-item--selected' : ''}`}
+                    onClick={() => {
+                      handleProgrammeFilterChange(p.name)
+                      setIsEventDropdownOpen(false)
+                    }}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Filter Popover Trigger */}
         <div className="sessions-filter-anchor" ref={filterRef}>
@@ -553,9 +571,19 @@ export function SessionHistoryList({
       {/* 3. DENSE LIST OR 3-COLUMN RESTRAINED SESSION CARDS GRID       */}
       {/* ------------------------------------------------------------- */}
       {isLoading && (!sessions || sessions.length === 0) ? (
-        <div className="sessions-state-box">
-          <div className="sessions-state-spinner" aria-hidden="true" />
-          <p className="sessions-state-text">Loading recorded sessions...</p>
+        <div className="mobile-sessions-list" aria-busy="true" aria-label="Loading sessions">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="mobile-pending-row skeleton-row" style={{ opacity: 0.6, pointerEvents: 'none' }}>
+              <div className="mobile-pending-left">
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--border-color, #cbd5e1)' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ width: '160px', height: '14px', borderRadius: '4px', background: 'var(--border-color, #cbd5e1)' }} />
+                  <div style={{ width: '100px', height: '10px', borderRadius: '4px', background: 'var(--border-color, #cbd5e1)' }} />
+                </div>
+              </div>
+              <div style={{ width: '70px', height: '22px', borderRadius: '12px', background: 'var(--border-color, #cbd5e1)' }} />
+            </div>
+          ))}
         </div>
       ) : error && (!sessions || sessions.length === 0) ? (
         <div className="sessions-state-box sessions-state-box--error" role="alert">
@@ -592,6 +620,58 @@ export function SessionHistoryList({
               Clear all filters
             </button>
           )}
+        </div>
+      ) : isMobileScreen ? (
+        /* ---------------- COMPACT MOBILE ROWS VIEW ---------------- */
+        <div className="mobile-sessions-list">
+          {filteredSessions.map((s) => {
+            const { sessionName, programmeName } = getSessionDisplayNames(s)
+            const { statusLabel, cardPillClass } = deriveSessionDisplayStatus(s)
+            const dayNum = s.day_number || s.metadata?.day_number
+            const formattedDate = formatCardDate(s.date_created)
+            const humanDuration = formatHumanDuration(s.duration_seconds || s.audio_duration_seconds)
+            const metaParts = [formattedDate, humanDuration, programmeName].filter(Boolean).join(' · ')
+
+            return (
+              <div
+                key={s.session_id}
+                className="mobile-pending-row"
+                onClick={() => onOpenSession && onOpenSession(s.session_id, 'overview')}
+                role="button"
+                tabIndex={0}
+              >
+                <div className="mobile-pending-left">
+                  {dayNum ? (
+                    <div className="session-day-circle-badge" title={`Day ${dayNum}`}>
+                      {dayNum}
+                    </div>
+                  ) : (
+                    <div className="mobile-pending-icon-box">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                      </svg>
+                    </div>
+                  )}
+                  <div className="mobile-pending-info">
+                    <span className="mobile-pending-name">{sessionName}</span>
+                    <span className="mobile-pending-meta">{metaParts}</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className={`session-card-pill ${cardPillClass}`}>
+                    <span className="pill-dot">●</span>
+                    <span className="pill-label">{statusLabel}</span>
+                  </span>
+                  <div className="mobile-pending-chevron">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       ) : effectiveViewMode === 'list' ? (
         /* ---------------- DENSE TABLE LIST VIEW ---------------- */

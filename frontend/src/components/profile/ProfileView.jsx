@@ -1,30 +1,15 @@
-﻿import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 
-function formatTerminalLevel(level) {
-  switch (level) {
-    case 'state_headquarters':
-      return 'State Headquarters'
-    case 'region_headquarters':
-      return 'Region Headquarters'
-    case 'old_group_headquarters':
-      return 'Old Group Headquarters'
-    case 'group_headquarters':
-      return 'Group Headquarters'
-    case 'district':
-      return 'District Church'
-    default:
-      return level ? level.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '—'
-  }
-}
-
-export function ProfileView({ onBack, onEditChurchDetails }) {
-  const { user, account, updateDisplayName, demoMode } = useAuth()
+export function ProfileView({ onBack, onEditChurchDetails, onNavigate }) {
+  const { user, account, updateDisplayName, resetPassword, signOut, demoMode, exitDemoMode } = useAuth()
 
   const [displayName, setDisplayName] = useState('')
   const [isSavingName, setIsSavingName] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [passwordNotice, setPasswordNotice] = useState(null)
+  const [isSendingReset, setIsSendingReset] = useState(false)
 
   // Initialize display name from user object
   useEffect(() => {
@@ -51,214 +36,220 @@ export function ProfileView({ onBack, onEditChurchDetails }) {
     }
   }
 
+  const handlePasswordReset = async () => {
+    if (demoMode) {
+      setPasswordNotice('Password change is disabled in Local Demo Mode.')
+      setTimeout(() => setPasswordNotice(null), 3000)
+      return
+    }
+    if (!user?.email) return
+    setIsSendingReset(true)
+    setPasswordNotice(null)
+    try {
+      await resetPassword(user.email)
+      setPasswordNotice(`Password reset instructions sent to ${user.email}.`)
+      setTimeout(() => setPasswordNotice(null), 5000)
+    } catch (err) {
+      setPasswordNotice(`Error: ${err.message}`)
+    } finally {
+      setIsSendingReset(false)
+    }
+  }
+
   const roleLabel = demoMode
     ? 'Local Demo Mode'
     : account?.role
     ? account.role.charAt(0).toUpperCase() + account.role.slice(1)
     : 'Owner'
 
-  const sectorDisplay =
-    account?.sector === 'Other' && account?.custom_sector
-      ? `Other (${account.custom_sector})`
-      : account?.sector || '—'
+  const userInitial = (displayName || user?.email || 'U').charAt(0).toUpperCase()
 
   return (
-    <div className="profile-container" id="profile-view">
-      <div className="profile-header-bar">
-        <div className="profile-header-title-group">
-          <h1 className="profile-page-title">Profile &amp; Account</h1>
-          <p className="profile-page-subtitle">
-            Manage your personal identity and view your Church Information Unit configuration.
-          </p>
-        </div>
+    <div className="profile-container" id="profile-view" style={{ maxWidth: '640px', margin: '0 auto', padding: '16px' }}>
+      {/* 1. Mobile Header with Visible Back Button */}
+      <div className="mobile-subpage-header" style={{ marginBottom: '16px' }}>
+        {onBack && (
+          <button
+            type="button"
+            className="mobile-header-back-btn"
+            onClick={onBack}
+            aria-label="Back to Dashboard"
+            id="btn-profile-back"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+        )}
+        <h1 className="mobile-header-title">Profile</h1>
+        <div style={{ width: onBack ? 36 : 0 }} />
       </div>
 
       {saveSuccess && (
-        <div className="settings-alert settings-alert--success" role="status">
+        <div className="settings-alert settings-alert--success" role="status" style={{ marginBottom: '16px' }}>
           <span>Display name updated successfully.</span>
         </div>
       )}
 
       {saveError && (
-        <div className="onboarding-error-banner" role="alert">
+        <div className="onboarding-error-banner" role="alert" style={{ marginBottom: '16px' }}>
           <span>{saveError}</span>
         </div>
       )}
 
-      {/* SECTION 1: PERSONAL DETAILS */}
-      <div className="settings-card profile-card" id="personal-details-section">
-        <div className="settings-card-header">
-          <div className="settings-card-title-group">
-            <span className="settings-card-icon">👤</span>
-            <div>
-              <h2 className="settings-card-title">Personal Details</h2>
-              <p className="settings-card-subtitle">
-                Your personal identity within the application.
-              </p>
-            </div>
+      {passwordNotice && (
+        <div className="settings-alert settings-alert--success" role="status" style={{ marginBottom: '16px' }}>
+          <span>{passwordNotice}</span>
+        </div>
+      )}
+
+      {/* 2. Personal Profile Card */}
+      <div className="card profile-card" style={{ padding: '24px', borderRadius: '14px', border: '1px solid var(--border-color, #e2e8f0)', background: 'var(--color-surface, #ffffff)', marginBottom: '16px' }}>
+        {/* Avatar & Core Identity */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+          <div
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: '#2563eb',
+              color: '#ffffff',
+              fontSize: '26px',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+              flexShrink: 0,
+            }}
+          >
+            {userInitial}
           </div>
-        </div>
-
-        <div className="settings-card-body">
-          <form onSubmit={handleSaveDisplayName} className="profile-form">
-            <div className="auth-field">
-              <label htmlFor="input-profile-display-name" className="auth-label">
-                Display Name / Name
-              </label>
-              <div className="profile-input-save-group">
-                <input
-                  id="input-profile-display-name"
-                  type="text"
-                  className="auth-input profile-input"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="e.g. John Doe"
-                  maxLength={100}
-                />
-                <button
-                  type="submit"
-                  className="btn btn--primary profile-btn-save"
-                  disabled={isSavingName || displayName.trim() === (user?.display_name || '').trim()}
-                  id="btn-save-display-name"
-                >
-                  {isSavingName ? 'Saving...' : 'Save Name'}
-                </button>
-              </div>
-              <span className="profile-field-hint">
-                Your personal name for attribution. This does not change the church Information Unit identity.
-              </span>
-            </div>
-
-            <div className="profile-meta-row">
-              <div className="auth-field" style={{ flex: 1 }}>
-                <label className="auth-label">
-                  Email Address
-                  <span className="profile-readonly-badge">Read-only</span>
-                </label>
-                <input
-                  type="text"
-                  className="auth-input profile-input profile-input--readonly"
-                  value={user?.email || (demoMode ? 'demo@dlbc.org' : '')}
-                  readOnly
-                  disabled
-                  id="profile-email-readonly"
-                />
-              </div>
-
-              <div className="auth-field" style={{ flex: 1 }}>
-                <label className="auth-label">
-                  Account Role
-                  <span className="profile-readonly-badge">View-only</span>
-                </label>
-                <input
-                  type="text"
-                  className="auth-input profile-input profile-input--readonly"
-                  value={roleLabel}
-                  readOnly
-                  disabled
-                  id="profile-role-readonly"
-                />
-              </div>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      {/* SECTION 2: CHURCH INFORMATION UNIT */}
-      <div className="settings-card profile-card" id="church-unit-section">
-        <div className="settings-card-header">
-          <div className="settings-card-title-group">
-            <span className="settings-card-icon">🏛️</span>
-            <div>
-              <h2 className="settings-card-title">Church Information Unit</h2>
-              <p className="settings-card-subtitle">
-                The church unit that scopes all recordings, transcripts, verified reports, and programmes.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="settings-card-body">
-          <div className="profile-unit-identity-box">
-            <div className="profile-unit-identity-left">
-              <span className="profile-unit-badge">Active Unit</span>
-              <h3 className="profile-unit-name">
-                {account?.account_name || 'DLBC Information Unit'}
-              </h3>
-              <p className="profile-unit-subtext">
-                {[
-                  account?.sector,
-                  account?.church_state,
-                  formatTerminalLevel(account?.terminal_level),
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="btn btn--secondary profile-btn-edit-church"
-              onClick={onEditChurchDetails}
-              id="btn-edit-church-details"
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 4px 0', color: 'var(--color-text-primary, #0f172a)', wordBreak: 'break-word' }}>
+              {displayName || (demoMode ? 'Local Demo User' : 'Operator')}
+            </h2>
+            <p style={{ fontSize: '13px', margin: '0 0 6px 0', color: 'var(--color-text-muted, #64748b)', wordBreak: 'break-all' }}>
+              {user?.email || (demoMode ? 'demo@dlbc.org' : 'user@church.org')}
+            </p>
+            <span
+              style={{
+                display: 'inline-block',
+                fontSize: '11px',
+                fontWeight: 600,
+                padding: '2px 8px',
+                borderRadius: '12px',
+                background: 'rgba(37, 99, 235, 0.1)',
+                color: '#2563eb',
+              }}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginRight: '6px' }}>
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-              </svg>
-              Edit church details
-            </button>
-          </div>
-
-          <div className="profile-hierarchy-grid">
-            <div className="profile-hierarchy-item">
-              <span className="profile-hierarchy-label">Sector</span>
-              <span className="profile-hierarchy-val">{sectorDisplay}</span>
-            </div>
-
-            <div className="profile-hierarchy-item">
-              <span className="profile-hierarchy-label">Church State</span>
-              <span className="profile-hierarchy-val">{account?.church_state || '—'}</span>
-            </div>
-
-            <div className="profile-hierarchy-item">
-              <span className="profile-hierarchy-label">Region</span>
-              <span className="profile-hierarchy-val">{account?.region || '—'}</span>
-            </div>
-
-            <div className="profile-hierarchy-item">
-              <span className="profile-hierarchy-label">Old Group</span>
-              <span className="profile-hierarchy-val">{account?.old_group || '—'}</span>
-            </div>
-
-            <div className="profile-hierarchy-item">
-              <span className="profile-hierarchy-label">Group</span>
-              <span className="profile-hierarchy-val">{account?.group_name || '—'}</span>
-            </div>
-
-            <div className="profile-hierarchy-item">
-              <span className="profile-hierarchy-label">District</span>
-              <span className="profile-hierarchy-val">{account?.district || '—'}</span>
-            </div>
-
-            <div className="profile-hierarchy-item profile-hierarchy-item--full">
-              <span className="profile-hierarchy-label">Headquarters / Terminal Level</span>
-              <span className="profile-hierarchy-val profile-hierarchy-val--highlight">
-                {formatTerminalLevel(account?.terminal_level)}
-              </span>
-            </div>
-          </div>
-
-          <div className="profile-edit-note">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }}>
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="16" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12.01" y2="8" />
-            </svg>
-            <span>
-              Clicking <strong>Edit church details</strong> opens the guided configuration flow with your current answers prefilled. Changes are only applied when you review and confirm on the final step. Exiting at any time leaves current church details unchanged.
+              {roleLabel}
             </span>
           </div>
         </div>
+
+        {/* Display Name Edit Form */}
+        <form onSubmit={handleSaveDisplayName} style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '16px', borderTop: '1px solid var(--border-color, #e2e8f0)' }}>
+          <div className="auth-field">
+            <label htmlFor="input-profile-display-name" className="auth-label" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-muted, #64748b)', marginBottom: '6px', display: 'block' }}>
+              Display Name
+            </label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                id="input-profile-display-name"
+                type="text"
+                className="form-control"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Enter your name"
+                maxLength={100}
+                style={{ flex: 1, padding: '10px 12px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--border-color, #cbd5e1)' }}
+              />
+              <button
+                type="submit"
+                className="btn btn--primary"
+                disabled={isSavingName || displayName.trim() === (user?.display_name || '').trim()}
+                id="btn-save-display-name"
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                {isSavingName ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      {/* 3. Account Actions */}
+      <div className="card" style={{ padding: '8px 16px', borderRadius: '14px', border: '1px solid var(--border-color, #e2e8f0)', background: 'var(--color-surface, #ffffff)', marginBottom: '16px' }}>
+        {/* Account Information / Church Details */}
+        <button
+          type="button"
+          className="mobile-settings-item-row"
+          onClick={() => {
+            if (onEditChurchDetails) {
+              onEditChurchDetails()
+            } else if (onBack) {
+              onBack()
+            }
+          }}
+          style={{ width: '100%', padding: '14px 0', border: 'none', borderBottom: '1px solid var(--border-color, #e2e8f0)', background: 'transparent', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+          id="btn-profile-church-info"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '18px' }}>🏛️</span>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary, #0f172a)' }}>Church &amp; Information Unit</div>
+              <div style={{ fontSize: '12px', color: 'var(--color-text-muted, #64748b)' }}>{account?.account_name || 'DLBC Information Unit'}</div>
+            </div>
+          </div>
+          <span style={{ color: 'var(--color-text-muted, #94a3b8)', fontSize: '18px' }}>›</span>
+        </button>
+
+        {/* Change Password */}
+        <button
+          type="button"
+          className="mobile-settings-item-row"
+          onClick={handlePasswordReset}
+          disabled={isSendingReset}
+          style={{ width: '100%', padding: '14px 0', border: 'none', background: 'transparent', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+          id="btn-profile-change-password"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '18px' }}>🔒</span>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-primary, #0f172a)' }}>Change Password</div>
+              <div style={{ fontSize: '12px', color: 'var(--color-text-muted, #64748b)' }}>
+                {isSendingReset ? 'Sending reset email...' : 'Send reset link to your email'}
+              </div>
+            </div>
+          </div>
+          <span style={{ color: 'var(--color-text-muted, #94a3b8)', fontSize: '18px' }}>›</span>
+        </button>
+      </div>
+
+      {/* 4. Sign Out */}
+      <div style={{ marginTop: '24px', textAlign: 'center' }}>
+        {demoMode ? (
+          <button
+            type="button"
+            className="btn btn--outline"
+            onClick={exitDemoMode}
+            style={{ width: '100%', height: '44px' }}
+            id="btn-profile-exit-demo"
+          >
+            Exit Demo Mode
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn btn--outline"
+            onClick={signOut}
+            style={{ width: '100%', height: '44px', color: '#dc2626', borderColor: 'rgba(239, 68, 68, 0.4)' }}
+            id="btn-profile-signout"
+          >
+            Sign Out
+          </button>
+        )}
       </div>
     </div>
   )

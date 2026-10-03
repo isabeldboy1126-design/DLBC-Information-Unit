@@ -379,14 +379,82 @@ function App() {
     applyRoute('#' + cleanTarget, false)
   }
 
+  const navStateRef = useRef({
+    currentView,
+    workspaceSessionId,
+    isRecording: liveAudio.isRecording,
+    isRecorderMinimized,
+    showCloseRecordingModal,
+    showCompletionModal,
+    activeSession: sessionsHook.activeSession,
+    sessionInitialStage,
+  })
+
+  useEffect(() => {
+    navStateRef.current = {
+      currentView,
+      workspaceSessionId,
+      isRecording: liveAudio.isRecording,
+      isRecorderMinimized,
+      showCloseRecordingModal,
+      showCompletionModal,
+      activeSession: sessionsHook.activeSession,
+      sessionInitialStage,
+    }
+  })
+
   const handleInAppBack = () => {
-    // If inside workspace editor viewing a document, step back to workspace hub
-    if (currentView === 'workspace' && workspaceSessionId) {
+    // 1. If inside workspace editor viewing a document, step back to workspace hub
+    if (navStateRef.current.currentView === 'workspace' && navStateRef.current.workspaceSessionId) {
       setWorkspaceSessionId(null)
       navigateTo('workspace')
       return
     }
 
+    // 2. Deterministic hierarchical back navigation
+    const clean = (window.location.hash || '').replace(/^#\/?/, '').trim()
+
+    if (clean.startsWith('session/')) {
+      const parts = clean.split('/')
+      const sId = parts[1]
+      const stage = parts[2]
+      const sub = parts[3]
+      if (sub === 'processing') {
+        navigateTo(`session/${sId}/verification`)
+      } else if (stage && stage !== 'overview') {
+        // Return from sub-stage (transcript, verified_transcript, verification, final_report) to Session Overview
+        navigateTo(`session/${sId}`)
+      } else {
+        // Return from Session Overview to Sessions list
+        navigateTo('sessions')
+      }
+      return
+    }
+
+    if (clean.startsWith('workspace/')) {
+      setWorkspaceSessionId(null)
+      navigateTo('workspace')
+      return
+    }
+
+    if (clean.startsWith('processing/')) {
+      navigateTo('dashboard')
+      return
+    }
+
+    if (clean.startsWith('completion/')) {
+      setShowCompletionModal(false)
+      navigateTo('sessions')
+      return
+    }
+
+    // Direct top-level destinations back to dashboard
+    if (['sessions', 'new_live', 'transcribe', 'youtube', 'settings', 'profile', 'remote_control', 'workspace', 'media', 'reports', 'events', 'download'].includes(clean)) {
+      navigateTo('dashboard')
+      return
+    }
+
+    // Fallback: If browser depth exists, pop history
     const currentDepth = (window.history.state && typeof window.history.state.depth === 'number')
       ? window.history.state.depth
       : 0
@@ -394,32 +462,7 @@ function App() {
     if (currentDepth > 0) {
       window.history.back()
     } else {
-      // Fallback: If no browser history exists (e.g. user refreshed or opened direct link),
-      // safely navigate to the logical parent screen:
-      const clean = window.location.hash.replace(/^#\/?/, '').trim()
-      if (clean.startsWith('session/')) {
-        const parts = clean.split('/')
-        const sId = parts[1]
-        const stage = parts[2]
-        const sub = parts[3]
-        if (sub === 'processing') {
-          navigateTo(`session/${sId}/verification`)
-        } else if (stage && stage !== 'overview') {
-          navigateTo(`session/${sId}`)
-        } else {
-          navigateTo('sessions')
-        }
-      } else if (clean.startsWith('processing/')) {
-        navigateTo('dashboard')
-      } else if (clean.startsWith('completion/')) {
-        navigateTo('sessions')
-      } else if (clean.startsWith('workspace/')) {
-        navigateTo('workspace')
-      } else if (['sessions', 'new_live', 'transcribe', 'youtube', 'settings', 'profile', 'remote_control', 'workspace', 'media'].includes(clean)) {
-        navigateTo('dashboard')
-      } else {
-        navigateTo('dashboard')
-      }
+      navigateTo('dashboard')
     }
   }
 
@@ -443,6 +486,7 @@ function App() {
   }, [])
 
   // Android Native Hardware Back Button & Gesture Support via Capacitor
+  // Registered ONCE on mount with stable mutable state ref to eliminate bridge listener thrashing
   useEffect(() => {
     let backListener = null
     let isMounted = true
@@ -453,42 +497,40 @@ function App() {
           const handle = await CapApp.addListener('backButton', () => {
             if (!isMounted) return
 
+            const state = navStateRef.current
+
             // 1. If Live Recording is open full-screen -> minimize
-            if (liveAudio.isRecording && !isRecorderMinimized) {
+            if (state.isRecording && !state.isRecorderMinimized) {
               setIsRecorderMinimized(true)
               return
             }
 
             // 2. Dismiss open overlay modals first
-            if (showCloseRecordingModal) {
+            if (state.showCloseRecordingModal) {
               setShowCloseRecordingModal(false)
               return
             }
-            if (showCompletionModal) {
+            if (state.showCompletionModal) {
               setShowCompletionModal(false)
               navigateTo('sessions')
               return
             }
 
             // 3. If in Workspace editor editing a report, return to Workspace hub
-            if (currentView === 'workspace' && workspaceSessionId) {
+            if (state.currentView === 'workspace' && state.workspaceSessionId) {
               setWorkspaceSessionId(null)
               navigateTo('workspace')
               return
             }
 
-            // 4. If on top-level dashboard with no back history -> exit app
+            // 4. Check if currently on dashboard root
             const clean = (window.location.hash || '').replace(/^#\/?/, '').trim()
-            const currentDepth = (window.history.state && typeof window.history.state.depth === 'number')
-              ? window.history.state.depth
-              : 0
-
-            if ((!clean || clean === 'dashboard') && currentDepth <= 0) {
+            if (!clean || clean === 'dashboard') {
               CapApp.exitApp()
               return
             }
 
-            // Otherwise execute standard in-app back navigation
+            // Otherwise execute deterministic hierarchical in-app back
             handleInAppBack()
           })
           backListener = handle
@@ -506,15 +548,7 @@ function App() {
         backListener.remove()
       }
     }
-  }, [
-    liveAudio.isRecording,
-    isRecorderMinimized,
-    showCloseRecordingModal,
-    showCompletionModal,
-    currentView,
-    workspaceSessionId,
-    sessionsHook.activeSession,
-  ])
+  }, [])
 
   // Auto-load session if direct URL loaded
   useEffect(() => {
@@ -929,6 +963,7 @@ function App() {
             navigateTo('sessions')
           }}
           onFileSelect={handleDashboardFileSelect}
+          onOpenTranscribe={() => navigateTo('transcribe')}
           remoteControl={remoteControl}
           onOpenRemoteControl={() => navigateTo('remote_control')}
           onOpenWorkspace={() => navigateTo('workspace')}
@@ -1082,6 +1117,7 @@ function App() {
           onNavigateSession={(sessionId, stage) => {
             navigateTo(`session/${sessionId}/${stage || 'overview'}`)
           }}
+          onBack={handleInAppBack}
         />
       ) : currentView === 'events' ? (
         /* ----------------------------------------------------------- */
@@ -1092,6 +1128,7 @@ function App() {
           onStartLiveSession={handleStartLiveRecording}
           onOpenTranscribe={() => navigateTo('transcribe')}
           initialFilter="all"
+          onBack={handleInAppBack}
         />
       ) : currentView === 'profile' ? (
         /* ----------------------------------------------------------- */
@@ -1108,6 +1145,7 @@ function App() {
         <RemoteControlView
           remoteControl={remoteControl}
           onNavigate={navigateTo}
+          onBack={handleInAppBack}
         />
       ) : currentView === 'workspace' ? (
         <WorkspaceView
