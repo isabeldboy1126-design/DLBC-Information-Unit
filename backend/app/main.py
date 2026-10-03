@@ -115,26 +115,27 @@ app.include_router(remote_router)
 
 
 
-from fastapi.responses import FileResponse
-from fastapi import HTTPException
+from fastapi.responses import RedirectResponse
+
+@app.get("/api/download/windows")
+async def download_windows_redirect():
+    """
+    Redirect directly to the stable GitHub Release Windows setup installer.
+    """
+    return RedirectResponse(
+        url="https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC-Information-Unit-Setup-x64.exe",
+        status_code=307
+    )
 
 @app.get("/api/download/android")
-async def download_android_apk():
+async def download_android_redirect():
     """
-    Directly serve the compiled Android APK installer.
+    Redirect directly to the stable GitHub Release Android APK.
     """
-    candidate_paths = [
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "public", "DLBC-Information-Unit.apk")),
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk")),
-    ]
-    for apk_path in candidate_paths:
-        if os.path.exists(apk_path):
-            return FileResponse(
-                path=apk_path,
-                filename="DLBC-Information-Unit.apk",
-                media_type="application/vnd.android.package-archive"
-            )
-    raise HTTPException(status_code=404, detail="Android APK build not found")
+    return RedirectResponse(
+        url="https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC-Information-Unit-Android.apk",
+        status_code=307
+    )
 
 
 @app.get("/api/health")

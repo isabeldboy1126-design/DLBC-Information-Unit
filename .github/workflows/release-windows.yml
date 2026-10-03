@@ -66,3 +66,22 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: --target x86_64-pc-windows-msvc
+
+      - name: Publish Stable Windows Installer Asset
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = if ('${{ github.ref_type }}' -eq 'tag') { '${{ github.ref_name }}' } else { '${{ inputs.release_tag }}' }
+          Write-Host "Locating built setup.exe in frontend/src-tauri/target..."
+          $installer = Get-ChildItem -Path "frontend/src-tauri/target" -Recurse -Filter "*setup.exe" | Where-Object { $_.Name -notmatch "DLBC-Information-Unit-Setup-x64.exe" } | Select-Object -First 1
+          if ($installer) {
+            Write-Host "Found installer: $($installer.FullName)"
+            $stableInstaller = Join-Path $installer.DirectoryName "DLBC-Information-Unit-Setup-x64.exe"
+            Copy-Item $installer.FullName $stableInstaller -Force
+            Write-Host "Uploading stable public installer ($stableInstaller) to release $tag..."
+            gh release upload $tag $stableInstaller --clobber
+            Write-Host "Stable installer uploaded successfully."
+          } else {
+            Write-Warning "No installer found to create stable asset."
+          }

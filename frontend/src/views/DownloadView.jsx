@@ -13,25 +13,23 @@ import { APP_VERSION } from '../utils/version';
 export function DownloadView({ onBackToApp }) {
   const [downloadNotice, setDownloadNotice] = React.useState(null);
 
-  const windowsDownloadUrl = `https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC.Information.Unit_${APP_VERSION}_x64-setup.exe`;
-  const androidDownloadUrl = `https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC-Information-Unit.apk`;
+  const windowsDownloadUrl = '/api/download/windows';
+  const androidDownloadUrl = '/api/download/android';
 
   const handleWindowsDownload = () => {
     setDownloadNotice({
       platform: 'Windows',
       title: 'Windows Installer Download Started',
-      detail: `DLBC.Information.Unit_${APP_VERSION}_x64-setup.exe is downloading. Check your browser downloads.`,
+      detail: 'DLBC-Information-Unit-Setup-x64.exe (7.3 MB) is downloading. Check your browser downloads.',
     });
-    window.location.href = windowsDownloadUrl;
   };
 
   const handleAndroidDownload = () => {
     setDownloadNotice({
       platform: 'Android',
       title: 'Android APK Download Started',
-      detail: 'DLBC-Information-Unit.apk (7.9 MB) is downloading. Check your notification bar or downloads.',
+      detail: 'DLBC-Information-Unit-Android.apk (14.3 MB) is downloading. Check your notification bar or downloads.',
     });
-    window.location.href = androidDownloadUrl;
   };
 
   return (
@@ -126,9 +124,9 @@ export function DownloadView({ onBackToApp }) {
           marginBottom: '20px',
         }}>
           {/* Windows Button */}
-          <button
-            type="button"
+          <a
             id="download-windows-btn"
+            href={windowsDownloadUrl}
             onClick={handleWindowsDownload}
             style={{
               flex: '1 1 200px',
@@ -145,6 +143,8 @@ export function DownloadView({ onBackToApp }) {
               alignItems: 'center',
               justifyContent: 'center',
               gap: '10px',
+              textDecoration: 'none',
+              boxSizing: 'border-box',
               transition: 'background-color 0.15s ease',
               boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
             }}
@@ -153,12 +153,12 @@ export function DownloadView({ onBackToApp }) {
           >
             <span style={{ fontSize: '18px' }}>🪟</span>
             Download for Windows
-          </button>
+          </a>
 
-          {/* Android Button (Directly downloads APK) */}
-          <button
-            type="button"
+          {/* Android Button */}
+          <a
             id="download-android-btn"
+            href={androidDownloadUrl}
             onClick={handleAndroidDownload}
             style={{
               flex: '1 1 200px',
@@ -175,6 +175,8 @@ export function DownloadView({ onBackToApp }) {
               alignItems: 'center',
               justifyContent: 'center',
               gap: '10px',
+              textDecoration: 'none',
+              boxSizing: 'border-box',
               transition: 'background-color 0.15s ease, border-color 0.15s ease',
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
             }}
@@ -189,7 +191,7 @@ export function DownloadView({ onBackToApp }) {
           >
             <span style={{ fontSize: '18px' }}>🤖</span>
             Download for Android
-          </button>
+          </a>
         </div>
 
         {/* Android Guidance Box */}
