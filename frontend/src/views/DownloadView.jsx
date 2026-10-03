@@ -13,8 +13,8 @@ import { APP_VERSION } from '../utils/version';
 export function DownloadView({ onBackToApp }) {
   const [downloadNotice, setDownloadNotice] = React.useState(null);
 
-  const windowsDownloadUrl = '/api/download/windows';
-  const androidDownloadUrl = '/api/download/android';
+  const windowsDownloadUrl = 'https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC-Information-Unit-Setup-x64.exe';
+  const androidDownloadUrl = 'https://github.com/isabeldboy1126-design/DLBC-Information-Unit/releases/latest/download/DLBC-Information-Unit-Android.apk';
 
   const handleWindowsDownload = () => {
     setDownloadNotice({
