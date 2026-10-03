@@ -1,6 +1,6 @@
 [package]
 name = "dlbc-information-unit"
-version = "1.0.1"
+version = "1.0.4"
 description = "DLBC Information Unit Desktop Application"
 authors = ["Deeper Life Bible Church"]
 edition = "2021"
