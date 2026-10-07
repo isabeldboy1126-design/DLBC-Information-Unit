@@ -1243,7 +1243,12 @@ export function SessionDetailView({
         <ReportProcessingModal
           isOpen={showReportProcessingModal}
           session={session}
-          onClose={() => setShowReportProcessingModal(false)}
+          onClose={() => {
+            setShowReportProcessingModal(false)
+            if (typeof window !== 'undefined' && window.location.hash.includes('/report_processing')) {
+              window.history.replaceState(null, '', `#session/${session?.session_id || ''}`)
+            }
+          }}
           onViewReport={() => changeStage('final_report')}
           onProcessingComplete={() => {
             if (onFinaliseVerification) onFinaliseVerification()

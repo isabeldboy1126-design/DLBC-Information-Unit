@@ -1187,29 +1187,44 @@ function App() {
       />
 
       {/* ------------------------------------------------------------- */}
-      {/* DOCKED IN-APP STATUS BAR: Persistent across views when processing */}
+      {/* COMPACT IN-APP STATUS INDICATOR: Persistent across views      */}
       {/* ------------------------------------------------------------- */}
       {activeProcess && currentView !== 'processing' && (
-        <div className="docked-processing-bar" role="status" aria-live="polite">
+        <aside className="docked-processing-bar" role="status" aria-live="polite">
           <div className="docked-processing-content">
-            <span className="docked-processing-dot pill-dot--pulse">●</span>
-            <span className="docked-processing-title">
-              {activeProcess.sessionTitle}
-              {activeProcess.dayNumber && (
-                <span className="session-day-badge" title={`Day ${activeProcess.dayNumber}`}>
-                  {activeProcess.dayNumber}
-                </span>
-              )}
-            </span>
-            <span className="docked-processing-separator">·</span>
-            <span className="docked-processing-stage">{activeProcess.stageLabel}</span>
+            <div className="docked-processing-title-row">
+              <span className={`docked-processing-dot ${activeProcess.isCompleted ? 'docked-processing-dot--completed' : 'pill-dot--pulse'}`}>
+                {activeProcess.isCompleted ? '✓' : '●'}
+              </span>
+              <span className="docked-processing-title" title={activeProcess.sessionTitle}>
+                {activeProcess.sessionTitle}
+                {activeProcess.dayNumber && (
+                  <span className="session-day-badge" title={`Day ${activeProcess.dayNumber}`}>
+                    {activeProcess.dayNumber}
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="docked-processing-stage-row">
+              <span className="docked-processing-stage">{activeProcess.stageLabel}</span>
+            </div>
           </div>
           <div className="docked-processing-actions">
             <button
               type="button"
               className="btn btn--small btn--primary docked-open-btn"
               onClick={() => {
-                navigateTo(`processing/${activeProcess.sessionId}`)
+                if (activeProcess.jobType === 'report_processing') {
+                  if (activeProcess.isCompleted) {
+                    navigateTo(`session/${activeProcess.sessionId}/final_report`)
+                  } else {
+                    navigateTo(`session/${activeProcess.sessionId}/report_processing`)
+                  }
+                } else if (activeProcess.jobType === 'verification') {
+                  navigateTo(`session/${activeProcess.sessionId}/verification`)
+                } else {
+                  navigateTo(`processing/${activeProcess.sessionId}`)
+                }
               }}
             >
               Open
@@ -1226,7 +1241,7 @@ function App() {
               </button>
             )}
           </div>
-        </div>
+        </aside>
       )}
 
       {/* ------------------------------------------------------------- */}

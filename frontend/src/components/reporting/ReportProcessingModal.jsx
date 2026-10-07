@@ -136,14 +136,19 @@ export function ReportProcessingModal({
         completed: 'Report ready',
       }
 
-      if (data.status === 'in_progress') {
-        const nextStage = data.current_stage || 'ai_processing'
-        setCurrentStage(nextStage)
+      const inProgressStages = [
+        'preparing_transcript',
+        'ai_processing',
+        'preparing_report',
+      ]
+
+      if (inProgressStages.includes(data.status)) {
+        setCurrentStage(data.status)
         setActiveProcess({
           jobType: 'report_processing',
           sessionId,
           sessionTitle: cleanTitle,
-          stageLabel: stageMap[nextStage] || 'AI Processing',
+          stageLabel: stageMap[data.status] || 'Processing with AI...',
           isCompleted: false,
           runId: data.run_id || runId,
         })
@@ -192,6 +197,12 @@ export function ReportProcessingModal({
     const cleanTitle = getCleanSessionName(session)
 
     try {
+      const inProgressStages = [
+        'preparing_transcript',
+        'ai_processing',
+        'preparing_report',
+      ]
+
       const statusRes = await authFetch(getApiUrl(`/api/report-processing/status/${sessionId}`))
       if (statusRes.ok) {
         const statusData = await statusRes.json()
@@ -209,15 +220,20 @@ export function ReportProcessingModal({
           })
           return
         }
-        if (statusData.status === 'in_progress') {
+        if (inProgressStages.includes(statusData.status)) {
           setRunData(statusData)
           setRunId(statusData.run_id)
-          setCurrentStage(statusData.current_stage || 'ai_processing')
+          setCurrentStage(statusData.status)
+          const stageMap = {
+            preparing_transcript: 'Preparing Transcript',
+            ai_processing: 'Processing with AI...',
+            preparing_report: 'Preparing Report',
+          }
           setActiveProcess({
             jobType: 'report_processing',
             sessionId,
             sessionTitle: cleanTitle,
-            stageLabel: 'AI Processing',
+            stageLabel: stageMap[statusData.status] || 'Processing with AI...',
             isCompleted: false,
             runId: statusData.run_id,
           })
@@ -236,7 +252,7 @@ export function ReportProcessingModal({
       if (res.ok) {
         const data = await res.json()
         setRunId(data.run_id)
-        setCurrentStage(data.current_stage || 'preparing_transcript')
+        setCurrentStage(data.status || 'preparing_transcript')
         setActiveProcess({
           jobType: 'report_processing',
           sessionId,

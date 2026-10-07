@@ -128,14 +128,14 @@ export function useActiveProcess() {
               setActiveProcess(updated)
             } else if (data.status === 'failed' || data.status === 'cancelled') {
               clearActiveProcess()
-            } else if (data.current_stage) {
+            } else if (data.status) {
               const stageLabels = {
                 preparing_transcript: 'Preparing Transcript',
-                ai_processing: 'AI Processing',
+                ai_processing: 'Processing with AI...',
                 preparing_report: 'Preparing Report',
                 completed: 'Report ready',
               }
-              const lbl = stageLabels[data.current_stage] || 'AI Processing'
+              const lbl = stageLabels[data.status] || (data.status ? data.status.replace(/_/g, ' ') : 'AI Processing')
               if (lbl !== activeProcess.stageLabel) {
                 setActiveProcess({
                   ...activeProcess,
@@ -146,17 +146,18 @@ export function useActiveProcess() {
             }
           }
         } else if (jobType === 'verification') {
-          const res = await fetch(getApiUrl('/api/sessions/' + encodeURIComponent(sessionId) + '/verification'))
+          const res = await authFetch(getApiUrl('/api/sessions/' + encodeURIComponent(sessionId) + '/verification/ai-status'))
           if (res.ok) {
             const data = await res.json()
-            if (data.verification_status === 'completed' || data.status === 'completed') {
+            const st = data.ai_verification_status || data.status || data.verification_status
+            if (st === 'completed_verified' || st === 'completed_needs_review' || st === 'completed') {
               const updated = {
                 ...activeProcess,
                 isCompleted: true,
                 stageLabel: 'Verification complete',
               }
               setActiveProcess(updated)
-            } else if (data.status === 'failed') {
+            } else if (st === 'failed') {
               clearActiveProcess()
             }
           }
