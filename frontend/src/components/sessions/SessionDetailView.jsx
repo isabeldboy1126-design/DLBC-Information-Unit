@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { getApiUrl } from '../../config'
 import { RawTranscriptViewer } from '../transcription/RawTranscriptViewer'
 import { VerificationWorkflow } from '../verification/VerificationWorkflow'
@@ -357,17 +357,25 @@ export function SessionDetailView({
     }
   }
 
-  // Synchronize activeView when opening a new session or changing initialStage or hash route
+  const handleOpenReportProcessing = () => {
+    setShowReportProcessingModal(true)
+    if (onNavigateStage) {
+      onNavigateStage('report_processing')
+    } else {
+      changeStage('report_processing')
+    }
+  }
+
+  // Synchronize activeView and modal visibility when opening a new session or changing initialStage or hash route
   useEffect(() => {
     setActiveView(getDefaultView())
-    if (initialStage === 'report_processing' || (typeof window !== 'undefined' && window.location.hash.includes('/report_processing'))) {
-      setShowReportProcessingModal(true)
-    }
+    const isReportProc = initialStage === 'report_processing' || (typeof window !== 'undefined' && window.location.hash.includes('/report_processing'))
+    setShowReportProcessingModal(isReportProc)
+
     const handleHash = () => {
       setActiveView(getDefaultView())
-      if (window.location.hash.includes('/report_processing')) {
-        setShowReportProcessingModal(true)
-      }
+      const isHashReportProc = typeof window !== 'undefined' && window.location.hash.includes('/report_processing')
+      setShowReportProcessingModal(isHashReportProc)
     }
     window.addEventListener('hashchange', handleHash)
     window.addEventListener('popstate', handleHash)
@@ -401,18 +409,6 @@ export function SessionDetailView({
           ← Back to Sessions
         </button>
       </div>
-    )
-  }
-
-  // ---------------------------------------------------------------------------
-  // CHILD STAGE ROUTING
-  // ---------------------------------------------------------------------------
-  if (activeView === 'final_report') {
-    return (
-      <FinalReportView
-        session={session}
-        onBack={() => changeStage('overview')}
-      />
     )
   }
 
@@ -490,10 +486,19 @@ export function SessionDetailView({
   const fStatus = session?.final_report_status || 'not_started'
 
   // ---------------------------------------------------------------------------
-  // VIEW: RAW TRANSCRIPT STANDALONE
+  // CHILD STAGE ROUTING
   // ---------------------------------------------------------------------------
-  if (activeView === 'raw_transcript') {
-    return (
+  let subViewContent = null
+
+  if (activeView === 'final_report') {
+    subViewContent = (
+      <FinalReportView
+        session={session}
+        onBack={() => changeStage('overview')}
+      />
+    )
+  } else if (activeView === 'raw_transcript') {
+    subViewContent = (
       <div className="session-subview-container">
         <RawTranscriptViewer
           transcript={transcriptData}
@@ -507,13 +512,8 @@ export function SessionDetailView({
         />
       </div>
     )
-  }
-
-  // ---------------------------------------------------------------------------
-  // VIEW: VERIFICATION WORKSPACE STANDALONE
-  // ---------------------------------------------------------------------------
-  if (activeView === 'verification') {
-    return (
+  } else if (activeView === 'verification') {
+    subViewContent = (
       <div className="session-subview-container">
         <VerificationWorkflow
           session={session}
@@ -532,10 +532,7 @@ export function SessionDetailView({
             changeStage('verified_transcript')
           }}
           onPlaySegment={handleJumpToTime}
-          onNavigateToReporting={() => {
-            changeStage('overview')
-            setShowReportProcessingModal(true)
-          }}
+          onNavigateToReporting={handleOpenReportProcessing}
           onFinishForNow={() => changeStage('overview')}
           isProcessingProp={verificationProcessing}
           onTriggerProcessing={onTriggerVerificationProcessing}
@@ -543,14 +540,9 @@ export function SessionDetailView({
         />
       </div>
     )
-  }
-
-  // ---------------------------------------------------------------------------
-  // VIEW: VERIFIED TRANSCRIPT STANDALONE
-  // ---------------------------------------------------------------------------
-  if (activeView === 'verified_transcript') {
+  } else if (activeView === 'verified_transcript') {
     const audioUrl = getApiUrl(`/api/transcription/media/${encodeURIComponent(session?.recording_id || session?.audio_filename || session?.session_id)}`)
-    return (
+    subViewContent = (
       <div className="session-subview-container">
         <div className="card verified-transcript-card">
           <div className="verified-transcript-top-header">
@@ -575,7 +567,7 @@ export function SessionDetailView({
               <button type="button" className="btn btn--outline" onClick={() => changeStage('overview')}>
                 Finish for Now
               </button>
-              <button type="button" className="btn btn--primary" onClick={() => setShowReportProcessingModal(true)}>
+              <button type="button" className="btn btn--primary" onClick={handleOpenReportProcessing}>
                 Process with AI →
               </button>
             </div>
@@ -643,19 +635,18 @@ export function SessionDetailView({
         </div>
       </div>
     )
-  }
+  } else {
+    // Extract clean hierarchy and metadata
+    const { programme: progDisplay, sessionTitle: sessionDisplay, preacher: preacherDisplay } = getSessionHierarchy(session)
+    const durationSec = session.duration_seconds || session.audio_duration_seconds || 0
+    const durationDisplay = durationSec > 0 ? formatSeconds(durationSec) : '25m 41s'
+    const dateDisplay = formatDate(session.date_created)
 
-  // Extract clean hierarchy and metadata
-  const { programme: progDisplay, sessionTitle: sessionDisplay, preacher: preacherDisplay } = getSessionHierarchy(session)
-  const durationSec = session.duration_seconds || session.audio_duration_seconds || 0
-  const durationDisplay = durationSec > 0 ? formatSeconds(durationSec) : '25m 41s'
-  const dateDisplay = formatDate(session.date_created)
-
-  // ---------------------------------------------------------------------------
-  // VIEW: SESSION WORKSPACE OVERVIEW HUB (session-workspace.png)
-  // ---------------------------------------------------------------------------
-  return (
-    <div className="session-workspace-page-container">
+    // ---------------------------------------------------------------------------
+    // VIEW: SESSION WORKSPACE OVERVIEW HUB (session-workspace.png)
+    // ---------------------------------------------------------------------------
+    subViewContent = (
+      <div className="session-workspace-page-container">
       {/* ------------------------------------------------------------- */}
       {/* MOBILE SESSION HUB & SESSION DETAILS (Collage 1 & 3 Screens 3 & 4) */}
       {/* ------------------------------------------------------------- */}
@@ -862,7 +853,7 @@ export function SessionDetailView({
               <button
                 type="button"
                 className="mobile-grid-action-btn"
-                onClick={() => setShowReportProcessingModal(true)}
+                onClick={handleOpenReportProcessing}
               >
                 <div className="mobile-grid-action-icon mobile-grid-action-icon--brain">🧠</div>
                 <span className="mobile-grid-action-label">Process with AI</span>
@@ -1002,7 +993,7 @@ export function SessionDetailView({
               <button
                 type="button"
                 className="btn-verify-cta"
-                onClick={() => setShowReportProcessingModal(true)}
+                onClick={handleOpenReportProcessing}
                 id="btn-workspace-process-ai"
               >
                 Process with AI →
@@ -1231,6 +1222,14 @@ export function SessionDetailView({
           </div>
         </div>
       ) : null}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {subViewContent}
 
       {/* 5. Centered Floating Dialog for Editing Session Details */}
       <EditSessionDetailsModal
@@ -1240,22 +1239,23 @@ export function SessionDetailView({
         onSave={handleSaveDetails}
       />
 
-        <ReportProcessingModal
-          isOpen={showReportProcessingModal}
-          session={session}
-          onClose={() => {
-            setShowReportProcessingModal(false)
-            if (typeof window !== 'undefined' && window.location.hash.includes('/report_processing')) {
-              window.history.replaceState(null, '', `#session/${session?.session_id || ''}`)
-            }
-          }}
-          onViewReport={() => changeStage('final_report')}
-          onProcessingComplete={() => {
-            if (onFinaliseVerification) onFinaliseVerification()
-          }}
-        />
-      </div>
-    </div>
+      <ReportProcessingModal
+        isOpen={showReportProcessingModal}
+        session={session}
+        onClose={() => {
+          setShowReportProcessingModal(false)
+          if (onNavigateStage) {
+            onNavigateStage('overview')
+          } else {
+            changeStage('overview')
+          }
+        }}
+        onViewReport={() => changeStage('final_report')}
+        onProcessingComplete={() => {
+          if (onFinaliseVerification) onFinaliseVerification()
+        }}
+      />
+    </>
   )
 }
 

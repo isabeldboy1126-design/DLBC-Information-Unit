@@ -415,7 +415,7 @@ export function AutomaticProcessingView({
                       isCompleted ? 'stepper-step--completed' : isActive ? 'stepper-step--active' : 'stepper-step--pending'
                     }`}
                   >
-                    <div className="step-indicator">
+                    <div className="step-indicator stepper-circle">
                       {isCompleted ? (
                         <span className="step-check">✓</span>
                       ) : (

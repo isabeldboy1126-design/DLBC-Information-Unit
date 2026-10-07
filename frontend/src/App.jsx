@@ -1250,6 +1250,7 @@ function App() {
               type="button"
               className="btn btn--small btn--primary docked-open-btn"
               onClick={() => {
+                expandActiveProcess()
                 if (activeProcess.jobType === 'report_processing') {
                   if (activeProcess.isCompleted) {
                     navigateTo(`session/${activeProcess.sessionId}/final_report`)
@@ -1257,7 +1258,11 @@ function App() {
                     navigateTo(`session/${activeProcess.sessionId}/report_processing`)
                   }
                 } else if (activeProcess.jobType === 'verification') {
-                  navigateTo(`session/${activeProcess.sessionId}/verification`)
+                  if (activeProcess.isCompleted) {
+                    navigateTo(`session/${activeProcess.sessionId}/verification`)
+                  } else {
+                    navigateTo(`session/${activeProcess.sessionId}/verification/processing`)
+                  }
                 } else {
                   navigateTo(`processing/${activeProcess.sessionId}`)
                 }
