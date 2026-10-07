@@ -62,9 +62,17 @@ async def create_session(payload: CreateSessionRequest, auth: AuthContext = Depe
 
 
 @router.get("/{session_id}")
-async def get_session(session_id: str, auth: AuthContext = Depends(require_account)):
-    """Retrieves full details of a session with linked audio, transcript segments, and flags."""
-    session = await session_repo.get_session(session_id, account_id=auth.account_id)
+async def get_session(
+    session_id: str,
+    include_segments: bool = Query(True, description="Whether to include granular transcript segments"),
+    auth: AuthContext = Depends(require_account),
+):
+    """Retrieves full or lightweight details of a session with linked audio and flags."""
+    session = await session_repo.get_session(
+        session_id,
+        account_id=auth.account_id,
+        include_segments=include_segments,
+    )
     if not session:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
     return {"session": session}

@@ -4,6 +4,7 @@ import { RawTranscriptViewer } from '../transcription/RawTranscriptViewer'
 import { VerificationWorkflow } from '../verification/VerificationWorkflow'
 import { FinalReportView } from '../final_report/FinalReportView'
 import { ReportProcessingModal } from '../reporting/ReportProcessingModal'
+import { SessionDetailSkeleton } from './SessionDetailSkeleton'
 
 function MicIcon() {
   return (
@@ -401,15 +402,7 @@ export function SessionDetailView({
   }, [activeView, onBack, onSubViewChange])
 
   if (!session) {
-    return (
-      <div className="session-workspace-loading-state" role="status" aria-live="polite">
-        <div className="session-loading-spinner" />
-        <p className="session-loading-text">Loading session…</p>
-        <button type="button" className="btn btn--outline btn--small" onClick={onBack}>
-          ← Back to Sessions
-        </button>
-      </div>
-    )
+    return <SessionDetailSkeleton onBack={onBack} />
   }
 
   // Formatting helpers

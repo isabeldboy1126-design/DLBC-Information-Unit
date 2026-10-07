@@ -25,7 +25,7 @@ function UserIcon() {
  * Page-shaped skeleton placeholder for Session Workspace.
  * Renders instantaneously on session click to eliminate perceived lag while full session data loads.
  */
-export function SessionDetailSkeleton({ session = null, onBack }) {
+export function SessionDetailSkeleton({ session = null, onBack, error = null, onRetry = null }) {
   const { programme, preacher } = session ? getSessionHierarchy(session) : {}
   const sessionDisplay = session ? getCleanSessionName(session) : ''
   const progDisplay = programme || ''
@@ -69,8 +69,19 @@ export function SessionDetailSkeleton({ session = null, onBack }) {
             )}
           </div>
 
+          {error && (
+            <div style={{ padding: '12px 14px', margin: '12px 0', background: 'var(--danger-light, #fef2f2)', border: '1px solid var(--danger-border, #fecaca)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <span style={{ color: 'var(--danger, #dc2626)', fontSize: '13px' }}>{error}</span>
+              {onRetry && (
+                <button type="button" className="btn btn--small btn--primary" onClick={onRetry}>
+                  Retry
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="mobile-session-actions-grid" style={{ marginTop: '16px' }}>
-            {[1, 2, 3, 4].map((i) => (
+            {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className="card session-skeleton-block" style={{ height: '90px', borderRadius: '12px' }} />
             ))}
           </div>
@@ -93,6 +104,20 @@ export function SessionDetailSkeleton({ session = null, onBack }) {
               <span>←</span>
               <span>Back to Sessions</span>
             </button>
+          </div>
+        )}
+
+        {/* Optional Error / Retry Notice */}
+        {error && (
+          <div className="card" style={{ padding: '14px 18px', marginBottom: '16px', background: 'var(--danger-light, #fef2f2)', border: '1px solid var(--danger-border, #fecaca)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ color: 'var(--danger, #dc2626)', fontSize: '14px', fontWeight: 500 }}>
+              {error}
+            </div>
+            {onRetry && (
+              <button type="button" className="btn btn--small btn--primary" onClick={onRetry}>
+                Retry
+              </button>
+            )}
           </div>
         )}
 
@@ -137,15 +162,17 @@ export function SessionDetailSkeleton({ session = null, onBack }) {
         {/* 2. Action Strip Skeleton */}
         <div className="card session-skeleton-block session-skeleton-strip" style={{ width: '100%' }} />
 
-        {/* 3. Session Materials Heading & 4 Artifact Tiles */}
+        {/* 3. Session Materials Heading & 6 Artifact Tiles */}
         <section className="session-materials-section" aria-label="Session Materials Loading">
-          <div className="session-skeleton-block" style={{ width: '150px', height: '20px', marginBottom: '1rem' }} />
+          <div className="session-skeleton-block" style={{ width: '160px', height: '22px', marginBottom: '1rem' }} />
 
           <div className="workspace-artifacts-grid">
             {[
               { title: 'Audio Recording', desc: 'Loading duration...' },
               { title: 'Raw Transcript', desc: 'Loading segments...' },
               { title: 'Verified Transcript', desc: 'Loading status...' },
+              { title: 'Reporter Drafts', desc: 'Loading drafts...' },
+              { title: 'Edited Report', desc: 'Loading review...' },
               { title: 'Final Report', desc: 'Loading report...' },
             ].map((tile, idx) => (
               <div key={idx} className="card artifact-tile session-skeleton-card">

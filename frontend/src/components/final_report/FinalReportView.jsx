@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { getApiUrl } from '../../config'
 import { SourceReferenceDrawer } from '../editing/SourceReferenceDrawer'
 import { saveFileWithNativeDialog } from '../../services/desktopPlatform'
+import { FinalReportSkeleton } from '../skeletons'
 
 export function FinalReportView({ session, onBack }) {
   const [finalReportData, setFinalReportData] = useState({
@@ -18,6 +19,7 @@ export function FinalReportView({ session, onBack }) {
 
   const [isFinalizing, setIsFinalizing] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [reportTitle, setReportTitle] = useState('')
   const [reportText, setReportText] = useState('')
   const [isSavingRevision, setIsSavingRevision] = useState(false)
@@ -30,8 +32,12 @@ export function FinalReportView({ session, onBack }) {
   const sessionId = session?.session_id
 
   const fetchFinalReportData = useCallback(async () => {
-    if (!sessionId) return
+    if (!sessionId) {
+      setIsLoading(false)
+      return
+    }
     try {
+      setErrorBanner(null)
       const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}`))
       if (res.ok) {
         const data = await res.json()
@@ -43,9 +49,14 @@ export function FinalReportView({ session, onBack }) {
           setReportTitle(data.source_proofread_report.proofread_title || session?.title || 'Message Report')
           setReportText(data.source_proofread_report.proofread_text || '')
         }
+      } else {
+        setErrorBanner('Failed to load final report data.')
       }
     } catch (e) {
       console.error('Error fetching final report:', e)
+      setErrorBanner(e.message || 'Error loading final report')
+    } finally {
+      setIsLoading(false)
     }
   }, [sessionId, session?.title])
 
@@ -201,6 +212,10 @@ export function FinalReportView({ session, onBack }) {
   }
 
   const hasReportContent = Boolean(reportText && reportText.trim())
+
+  if (isLoading) {
+    return <FinalReportSkeleton onBack={onBack} error={errorBanner} onRetry={fetchFinalReportData} />
+  }
 
   return (
     <div className="final-report-workspace">

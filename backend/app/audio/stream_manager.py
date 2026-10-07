@@ -10,7 +10,7 @@ import os
 import time
 import uuid
 from typing import Dict, Optional
-from app.audio.wav_writer import finalize_pcm_to_wav
+from app.audio.wav_writer import create_wav_header, patch_wav_header, finalize_pcm_to_wav
 
 # Resolve storage directory from central config
 from app.config import STORAGE_AUDIO_DIR
@@ -53,11 +53,20 @@ class AudioStreamSession:
         self.chunk_count = 0
         self.is_finalized = False
 
-        self.pcm_path = os.path.join(STORAGE_AUDIO_DIR, f"active_{self.session_id}.pcm")
         self.wav_path = os.path.join(STORAGE_AUDIO_DIR, f"{self.session_id}.wav")
+        # Direct-WAV streaming: stream directly to destination WAV file with zero-copy finalization
+        self.pcm_path = self.wav_path
 
-        # Open PCM file for appending in binary mode
-        self.file_handle = open(self.pcm_path, "wb")
+        # Open WAV file for read/write in binary mode and write 44-byte placeholder header immediately
+        self.file_handle = open(self.wav_path, "wb+")
+        placeholder = create_wav_header(
+            pcm_data_len=0,
+            sample_rate=self.sample_rate,
+            num_channels=self.channels,
+            bits_per_sample=16,
+        )
+        self.file_handle.write(placeholder)
+        self.file_handle.flush()
 
     def append_chunk(self, data: bytes):
         if self.is_finalized or not self.file_handle:
@@ -72,13 +81,31 @@ class AudioStreamSession:
             return self.get_summary()
 
         self.is_finalized = True
+        duration_seconds = 0.0
+        file_size = 0
+
         if self.file_handle:
             try:
+                # Direct-WAV: Seek to byte offset 0 and patch 44-byte header in place with zero file copy
+                patch_wav_header(
+                    file_handle=self.file_handle,
+                    pcm_data_len=self.total_bytes,
+                    sample_rate=self.sample_rate,
+                    num_channels=self.channels,
+                    bits_per_sample=16,
+                )
                 self.file_handle.flush()
                 self.file_handle.close()
-            except Exception:
-                pass
-            self.file_handle = None
+            except Exception as e:
+                print(f"Error finalizing Direct-WAV header for session {self.session_id}: {e}")
+            finally:
+                self.file_handle = None
+
+        if os.path.exists(self.wav_path):
+            file_size = os.path.getsize(self.wav_path)
+            bytes_per_sample = 2  # 16-bit
+            total_samples = self.total_bytes // (self.channels * bytes_per_sample) if (self.channels * bytes_per_sample) > 0 else 0
+            duration_seconds = round(total_samples / self.sample_rate, 2) if self.sample_rate > 0 else 0.0
 
         summary = {
             "recording_id": self.session_id,
@@ -89,31 +116,12 @@ class AudioStreamSession:
             "channels": self.channels,
             "bits_per_sample": 16,
             "total_bytes": self.total_bytes,
+            "pcm_bytes": self.total_bytes,
             "chunk_count": self.chunk_count,
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self.start_time)),
-            "duration_seconds": 0.0,
-            "file_size": 0,
+            "duration_seconds": duration_seconds,
+            "file_size": file_size,
         }
-
-        # Convert raw PCM to canonical WAV if any data was received
-        if os.path.exists(self.pcm_path) and os.path.getsize(self.pcm_path) > 0:
-            try:
-                wav_info = finalize_pcm_to_wav(
-                    pcm_file_path=self.pcm_path,
-                    wav_file_path=self.wav_path,
-                    sample_rate=self.sample_rate,
-                    num_channels=self.channels,
-                )
-                summary.update(wav_info)
-            except Exception as e:
-                print(f"Error finalizing WAV for session {self.session_id}: {e}")
-            finally:
-                # Remove temporary PCM file
-                try:
-                    if os.path.exists(self.pcm_path):
-                        os.remove(self.pcm_path)
-                except Exception:
-                    pass
 
         # Update persistent manifest
         manifest = load_manifest()

@@ -4,6 +4,7 @@ import { getSessionHierarchy } from '../sessions/SessionDetailView'
 import { ConfirmationModal } from '../common/ConfirmationModal'
 import { SessionCompletionView } from '../sessions/SessionCompletionView'
 import { setActiveProcess } from '../common/activeProcessManager'
+import { VerificationSkeleton } from '../skeletons'
 
 /**
  * VerificationWorkflow — Human verification workspace matching verification-workspace.png.
@@ -305,6 +306,15 @@ export function VerificationWorkflow({
         onFinishForNow={onFinishForNow}
         onViewSessionDetails={onFinishForNow}
         onRetryVerification={handleTriggerAiVerification}
+      />
+    )
+  }
+
+  if (!verificationState || verificationState.session_id !== sessionId) {
+    return (
+      <VerificationSkeleton
+        onBack={onFinishForNow}
+        onRetry={() => onLoadVerificationState && onLoadVerificationState(sessionId)}
       />
     )
   }

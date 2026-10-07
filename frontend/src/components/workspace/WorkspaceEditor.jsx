@@ -9,7 +9,15 @@ import { saveFileWithNativeDialog } from '../../services/desktopPlatform'
  * - Desktop: media_1791012340774.jpg (Panels 2, 8)
  * - Mobile: media_1791012340786.jpg (Panels 2, 3)
  */
-export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
+export function WorkspaceEditor({
+  sessionId,
+  session,
+  isManual = false,
+  editorName = '',
+  onUpdateDocument,
+  onClose,
+  onBack,
+}) {
   const { user } = useAuth()
 
   // Document Content & Metadata
@@ -19,9 +27,41 @@ export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
   const [wordCount, setWordCount] = useState(0)
   const [lastSaved, setLastSaved] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveStatus, setSaveStatus] = useState('Saved') // 'Saved' | 'Unsaved changes' | 'Saving...'
+  const [saveStatus, setSaveStatus] = useState('Saved') // 'Saved' | 'Editing…' | 'Saving…' | 'error'
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
+
+  // Undo / Redo History
+  const historyRef = useRef({
+    past: [],
+    future: [],
+  })
+
+  const pushHistory = (txt) => {
+    historyRef.current.past.push(txt)
+    if (historyRef.current.past.length > 50) historyRef.current.past.shift()
+    historyRef.current.future = []
+  }
+
+  const handleUndo = () => {
+    if (historyRef.current.past.length === 0) return
+    const prev = historyRef.current.past.pop()
+    historyRef.current.future.push(reportText)
+    setReportText(prev)
+    updateWordCount(prev)
+    updateHeadingsList(prev)
+    setSaveStatus('Editing…')
+  }
+
+  const handleRedo = () => {
+    if (historyRef.current.future.length === 0) return
+    const nxt = historyRef.current.future.pop()
+    historyRef.current.past.push(reportText)
+    setReportText(nxt)
+    updateWordCount(nxt)
+    updateHeadingsList(nxt)
+    setSaveStatus('Editing…')
+  }
 
   // Formatting State
   const [fontFamily, setFontFamily] = useState('Inter')
@@ -59,13 +99,39 @@ export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
   const audioPlayerRef = useRef(null)
   const autosaveTimerRef = useRef(null)
 
-  // 1. Fetch Session Report and Verified Transcript Data
+  // 1. Fetch Session Report or Load Standalone Document with Draft Protection
   useEffect(() => {
     let isMounted = true
     async function loadDocument() {
       setIsLoading(true)
       try {
-        // Try Final Report endpoint first
+        // Check for local draft cache first to protect uncommitted changes
+        let cachedDraft = null
+        try {
+          const stored = localStorage.getItem(`dlbc_draft_${sessionId}`)
+          if (stored) {
+            cachedDraft = JSON.parse(stored)
+          }
+        } catch {}
+
+        // If manual/standalone document
+        if (isManual || (typeof sessionId === 'string' && sessionId.startsWith('doc_'))) {
+          const initialTitle = cachedDraft?.title || session?.title || 'Untitled Document'
+          const initialText = cachedDraft?.content ?? session?.content ?? ''
+          if (isMounted) {
+            setReportTitle(initialTitle)
+            setReportText(initialText)
+            setOriginalReportText(initialText)
+            updateWordCount(initialText)
+            updateHeadingsList(initialText)
+            setSaveStatus('Saved')
+            setLastSaved(new Date())
+            setIsLoading(false)
+          }
+          return
+        }
+
+        // Try Final Report endpoint first for session documents
         let reportData = null
         try {
           const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}`), {
@@ -80,36 +146,36 @@ export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
           console.warn('Final report lookup error:', e)
         }
 
-        // If not found in final-report, try editing reports
-        let initialText = ''
-        let initialTitle = session?.session_title || session?.title || 'Ministerial Report'
+        let initialText = cachedDraft?.content || ''
+        let initialTitle = cachedDraft?.title || session?.session_title || session?.title || 'Ministerial Report'
 
-        if (reportData?.active_final_report?.report_text) {
-          initialText = reportData.active_final_report.report_text
-          initialTitle = reportData.active_final_report.report_title || initialTitle
-        } else {
-          try {
-            const editRes = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/reports`), {
-              headers: {
-                ...(user?.token ? { Authorization: `Bearer ${user.token}` } : {}),
-              },
-            })
-            if (editRes.ok) {
-              const editData = await editRes.json()
-              if (editData?.active_edited_report?.report_text) {
-                initialText = editData.active_edited_report.report_text
-                initialTitle = editData.active_edited_report.report_title || initialTitle
+        if (!initialText) {
+          if (reportData?.active_final_report?.report_text) {
+            initialText = reportData.active_final_report.report_text
+            initialTitle = reportData.active_final_report.report_title || initialTitle
+          } else {
+            try {
+              const editRes = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/reports`), {
+                headers: {
+                  ...(user?.token ? { Authorization: `Bearer ${user.token}` } : {}),
+                },
+              })
+              if (editRes.ok) {
+                const editData = await editRes.json()
+                if (editData?.active_edited_report?.report_text) {
+                  initialText = editData.active_edited_report.report_text
+                  initialTitle = editData.active_edited_report.report_title || initialTitle
+                }
               }
+            } catch (e) {
+              console.warn('Editing report lookup error:', e)
             }
-          } catch (e) {
-            console.warn('Editing report lookup error:', e)
           }
         }
 
         // If still empty, fall back to verified_text or clean placeholder
         if (!initialText) {
-          initialText = session?.verified_text || session?.raw_text ||
-            `# 1. Introduction\n\nThe service began with a warm welcome from the church leadership. The message centered on the importance of walking in faith and remaining steadfast in God's word. Several key scriptures were referenced, and practical applications were shared for the congregation.\n\n# 2. Key Points\n\n1. Walk in faith, not by sight\n2. Remain steadfast in God's word\n3. Be a light in your environment\n\n# 3. Scriptures Referenced\n\n- Hebrews 11:1\n- 2 Corinthians 5:7\n- Matthew 5:14-16`
+          initialText = session?.verified_text || session?.raw_text || ''
         }
 
         if (isMounted) {
@@ -161,7 +227,7 @@ export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
 
     loadDocument()
     return () => { isMounted = false }
-  }, [sessionId, session])
+  }, [sessionId, session, isManual])
 
   // Word count & Headings calculation
   const updateWordCount = (txt) => {
@@ -186,24 +252,84 @@ export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
     setHeadingsList(headings)
   }
 
+  // Handle Keyboard Shortcuts (Undo/Redo)
+  const handleKeyDown = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      if (e.shiftKey) {
+        e.preventDefault()
+        handleRedo()
+      } else {
+        e.preventDefault()
+        handleUndo()
+      }
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+      e.preventDefault()
+      handleRedo()
+    }
+  }
+
   // Handle Content Change
   const handleContentChange = (newText) => {
+    pushHistory(reportText)
     setReportText(newText)
     updateWordCount(newText)
     updateHeadingsList(newText)
-    setSaveStatus('Unsaved changes')
+    setSaveStatus('Editing…')
 
-    // Reset autosave timer (30 seconds debounce)
+    // Always protect local draft immediately on every keystroke
+    try {
+      localStorage.setItem(
+        `dlbc_draft_${sessionId}`,
+        JSON.stringify({
+          title: reportTitle,
+          content: newText,
+          updatedAt: Date.now(),
+        })
+      )
+    } catch {}
+
+    // Reset autosave timer (2 seconds debounce)
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = setTimeout(() => {
       saveDocument(newText, reportTitle, true)
-    }, 30000)
+    }, 2000)
   }
 
-  // Save Document to Backend
+  // Save Document to Backend or Local Workspace Store
   const saveDocument = async (textToSave = reportText, titleToSave = reportTitle, isAuto = false) => {
     setIsSaving(true)
-    setSaveStatus(isAuto ? 'Autosaving...' : 'Saving...')
+    setSaveStatus('Saving…')
+
+    // Always protect local draft cache
+    try {
+      localStorage.setItem(
+        `dlbc_draft_${sessionId}`,
+        JSON.stringify({
+          title: titleToSave,
+          content: textToSave,
+          updatedAt: Date.now(),
+        })
+      )
+    } catch {}
+
+    // Standalone / Manual workspace document
+    if (isManual || (typeof sessionId === 'string' && sessionId.startsWith('doc_'))) {
+      if (onUpdateDocument) {
+        onUpdateDocument({
+          id: sessionId,
+          title: titleToSave,
+          content: textToSave,
+          words: textToSave ? textToSave.trim().split(/\s+/).filter(Boolean).length : 0,
+          updatedDate: 'Just now',
+          updatedAt: Date.now(),
+        })
+      }
+      setIsSaving(false)
+      setSaveStatus('Saved')
+      setLastSaved(new Date())
+      return
+    }
+
     try {
       // Save revision to Final Report endpoint
       const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/revisions`), {
@@ -215,6 +341,7 @@ export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
         body: JSON.stringify({
           report_text: textToSave,
           report_title: titleToSave,
+          editor_name: editorName || 'Editor',
         }),
       })
 
@@ -232,18 +359,19 @@ export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
           body: JSON.stringify({
             report_text: textToSave,
             report_title: titleToSave,
+            editor_name: editorName || 'Editor',
           }),
         })
         if (editRes.ok) {
           setSaveStatus('Saved')
           setLastSaved(new Date())
         } else {
-          setSaveStatus('Save error')
+          setSaveStatus('error')
         }
       }
     } catch (e) {
       console.warn('Document save warning:', e)
-      setSaveStatus('Save error')
+      setSaveStatus('error')
     } finally {
       setIsSaving(false)
     }
@@ -252,6 +380,15 @@ export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
   // Export to DOCX
   const handleExportDocx = async () => {
     try {
+      if (isManual || (typeof sessionId === 'string' && sessionId.startsWith('doc_'))) {
+        const cleanTitle = (reportTitle || 'Untitled Document').replace(/[^a-zA-Z0-9_-]/g, '_')
+        const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${reportTitle}</title><style>body{font-family:Arial,sans-serif;line-height:1.6;padding:40px;max-width:800px;margin:auto;}h1{border-bottom:1px solid #ccc;padding-bottom:8px;}</style></head><body><h1>${reportTitle}</h1><div>${(reportText || '').replace(/\n\n/g, '<p></p>').replace(/\n/g, '<br/>')}</div></body></html>`
+        const blob = new Blob([htmlDoc], { type: 'application/msword;charset=utf-8' })
+        const filename = `${cleanTitle}.doc`
+        await saveFileWithNativeDialog(blob, filename, [{ name: 'Word Document', extensions: ['doc', 'docx'] }])
+        return
+      }
+
       const url = getApiUrl(`/api/final-report/sessions/${sessionId}/download/docx`)
       const res = await fetch(url, {
         headers: {
@@ -455,8 +592,13 @@ export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
               className="workspace-title-input"
               value={reportTitle}
               onChange={(e) => {
-                setReportTitle(e.target.value)
-                setSaveStatus('Unsaved changes')
+                const nextTitle = e.target.value
+                setReportTitle(nextTitle)
+                setSaveStatus('Editing…')
+                if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+                autosaveTimerRef.current = setTimeout(() => {
+                  saveDocument(reportText, nextTitle, true)
+                }, 2000)
               }}
               placeholder="Report Title..."
             />
@@ -465,8 +607,29 @@ export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
               <span>·</span>
               <span className="workspace-word-count-badge">{wordCount.toLocaleString()} words</span>
               <span>·</span>
-              <span className={`workspace-save-status ${saveStatus === 'Saved' ? 'status--saved' : 'status--unsaved'}`}>
-                {saveStatus}
+              <span className={`workspace-save-status ${saveStatus === 'Saved' ? 'status--saved' : saveStatus === 'error' ? 'status--error' : 'status--unsaved'}`}>
+                {saveStatus === 'error' ? (
+                  <span style={{ color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    Couldn’t sync changes ·{' '}
+                    <button
+                      type="button"
+                      style={{
+                        padding: 0,
+                        color: '#2563eb',
+                        textDecoration: 'underline',
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                      }}
+                      onClick={() => saveDocument(reportText, reportTitle, false)}
+                    >
+                      Retry
+                    </button>
+                  </span>
+                ) : (
+                  saveStatus
+                )}
               </span>
             </div>
           </div>
@@ -554,6 +717,25 @@ export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
       {/* 2. FORMATTING TOOLBAR                                         */}
       {/* ------------------------------------------------------------- */}
       <div className="workspace-toolbar">
+        {/* Undo / Redo */}
+        <button
+          type="button"
+          className="workspace-tool-btn"
+          onClick={handleUndo}
+          title="Undo (Ctrl+Z)"
+        >
+          ↶
+        </button>
+        <button
+          type="button"
+          className="workspace-tool-btn"
+          onClick={handleRedo}
+          title="Redo (Ctrl+Y)"
+        >
+          ↷
+        </button>
+        <div className="workspace-toolbar-sep" />
+
         {/* Style Dropdown */}
         <select
           className="workspace-tool-select"
@@ -740,6 +922,7 @@ export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
               }}
               value={reportText}
               onChange={(e) => handleContentChange(e.target.value)}
+              onKeyDown={handleKeyDown}
               onSelect={handleEditorSelect}
               onMouseUp={handleEditorSelect}
               onTouchEnd={handleEditorSelect}
@@ -832,155 +1015,186 @@ export function WorkspaceEditor({ sessionId, session, onClose, onBack }) {
             </div>
 
             <div className="workspace-source-content">
-              {/* TAB 1: SOURCE IN TRANSCRIPT (Matches Panel 2) */}
-              {sourceTab === 'source' && (
-                <div className="source-view-stack">
-                  <div className="source-card-box">
-                    <h4 className="source-card-title">Source in transcript</h4>
-                    <p className="source-quote-text">
-                      {selectedSnippet?.text ||
-                        `"The message centered on the importance of walking in faith and remaining steadfast in God's word."`}
-                    </p>
-                    <button
-                      type="button"
-                      className="source-view-link-btn"
-                      onClick={() => setSourceTab('transcript')}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                      View in transcript →
-                    </button>
+              {(isManual || (typeof sessionId === 'string' && sessionId.startsWith('doc_'))) ? (
+                <div className="source-empty-state" style={{ padding: '36px 20px', textAlign: 'center' }}>
+                  <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', borderRadius: '50%', background: 'var(--bg-tertiary, #f1f5f9)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary, #64748b)' }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="16" y1="13" x2="8" y2="13" />
+                      <line x1="16" y1="17" x2="8" y2="17" />
+                      <polyline points="10 9 9 9 8 9" />
+                    </svg>
                   </div>
-
-                  {/* Timestamp Play Card */}
-                  <div className="source-timestamp-card">
-                    <div className="source-timestamp-label">Timestamp</div>
-                    <div className="source-timestamp-player-row">
-                      <button
-                        type="button"
-                        className="source-play-circle-btn"
-                        onClick={() => handlePlayFromTimestamp(selectedSnippet?.startTime || 0)}
-                        title="Play audio from this point"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                          <polygon points="5 3 19 12 5 21 5 3" />
-                        </svg>
-                      </button>
-                      <span className="source-timestamp-text">
-                        {selectedSnippet?.formattedTime || '00:12:28 - 00:13:05'}
-                      </span>
-                      <button
-                        type="button"
-                        className="source-external-link-btn"
-                        onClick={() => setSourceTab('audio')}
-                        title="Open full audio"
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                          <polyline points="15 3 21 3 21 9" />
-                          <line x1="10" y1="14" x2="21" y2="3" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Related Transcript Context */}
-                  <div className="source-related-card">
-                    <h4 className="source-related-title">Related transcript</h4>
-                    <p className="source-related-text">
-                      The preacher emphasized spiritual consistency, drawing direct examples from the patriarchs who triumphed through unwavering obedience to the divine will.
-                    </p>
-                  </div>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    No Session Source Attached
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                    This is a standalone document. Session transcripts and audio are only available for documents created from recorded or imported sessions.
+                  </p>
                 </div>
-              )}
-
-              {/* TAB 2: SEARCHABLE FULL TRANSCRIPT */}
-              {sourceTab === 'transcript' && (
-                <div className="source-transcript-stack">
-                  <div className="source-search-wrap">
-                    <input
-                      type="text"
-                      className="source-search-input"
-                      placeholder="Search verified transcript..."
-                      value={transcriptSearch}
-                      onChange={(e) => setTranscriptSearch(e.target.value)}
-                    />
-                  </div>
-                  <div className="source-segments-list">
-                    {transcriptData
-                      .filter((s) => !transcriptSearch || s.text.toLowerCase().includes(transcriptSearch.toLowerCase()))
-                      .map((seg, idx) => (
-                        <div
-                          key={seg.id || idx}
-                          className="source-segment-item"
-                          onClick={() => handlePlayFromTimestamp(seg.start_time || 0)}
+              ) : (
+                <>
+                  {/* TAB 1: SOURCE IN TRANSCRIPT (Matches Panel 2) */}
+                  {sourceTab === 'source' && (
+                    <div className="source-view-stack">
+                      <div className="source-card-box">
+                        <h4 className="source-card-title">Source in transcript</h4>
+                        <p className="source-quote-text">
+                          {selectedSnippet?.text ||
+                            (transcriptData.length > 0
+                              ? transcriptData[0].text
+                              : 'Select text in the editor to inspect corresponding source transcript references.')}
+                        </p>
+                        <button
+                          type="button"
+                          className="source-view-link-btn"
+                          onClick={() => setSourceTab('transcript')}
                         >
-                          <span className="source-segment-time">
-                            {formatSeconds(seg.start_time || 0)}
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                          View in transcript →
+                        </button>
+                      </div>
+
+                      {/* Timestamp Play Card */}
+                      <div className="source-timestamp-card">
+                        <div className="source-timestamp-label">Timestamp</div>
+                        <div className="source-timestamp-player-row">
+                          <button
+                            type="button"
+                            className="source-play-circle-btn"
+                            onClick={() => handlePlayFromTimestamp(selectedSnippet?.startTime || 0)}
+                            title="Play audio from this point"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                              <polygon points="5 3 19 12 5 21 5 3" />
+                            </svg>
+                          </button>
+                          <span className="source-timestamp-text">
+                            {selectedSnippet?.formattedTime ||
+                              (transcriptData.length > 0 && transcriptData[0].start_time != null
+                                ? formatSeconds(transcriptData[0].start_time)
+                                : '00:00')}
                           </span>
-                          <p className="source-segment-text">{seg.text}</p>
+                          <button
+                            type="button"
+                            className="source-external-link-btn"
+                            onClick={() => setSourceTab('audio')}
+                            title="Open full audio"
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                              <polyline points="15 3 21 3 21 9" />
+                              <line x1="10" y1="14" x2="21" y2="3" />
+                            </svg>
+                          </button>
                         </div>
-                      ))}
-                    {transcriptData.length === 0 && (
-                      <p className="source-empty-note">
-                        Verified transcript is loading or not available for this session.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
+                      </div>
 
-              {/* TAB 3: AUDIO PLAYER */}
-              {sourceTab === 'audio' && (
-                <div className="source-audio-stack">
-                  <div className="source-audio-hero">
-                    <div className="source-audio-icon-wrap">
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                      </svg>
+                      {/* Related Transcript Context */}
+                      <div className="source-related-card">
+                        <h4 className="source-related-title">Related transcript</h4>
+                        <p className="source-related-text">
+                          {selectedSnippet?.text
+                            ? 'Transcript context associated with selected passage.'
+                            : (transcriptData.length > 0
+                                ? transcriptData[0].text
+                                : 'No related transcript context available for this section.')}
+                        </p>
+                      </div>
                     </div>
-                    <h4>Session Audio Feed</h4>
-                    <p>{reportTitle}</p>
-                  </div>
+                  )}
 
-                  <audio
-                    ref={audioPlayerRef}
-                    controls
-                    className="source-audio-element"
-                    src={audioUrl || getApiUrl(`/api/audio/play/${sessionId}`)}
-                    onTimeUpdate={(e) => setAudioCurrentTime(e.target.currentTime)}
-                    onLoadedMetadata={(e) => setAudioDuration(e.target.duration)}
-                  >
-                    Your browser does not support audio playback.
-                  </audio>
-
-                  <div className="source-audio-controls-card">
-                    <div className="source-audio-skip-row">
-                      <button
-                        type="button"
-                        className="btn btn--small btn--secondary"
-                        onClick={() => {
-                          if (audioPlayerRef.current) audioPlayerRef.current.currentTime -= 10
-                        }}
-                      >
-                        -10s
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--small btn--secondary"
-                        onClick={() => {
-                          if (audioPlayerRef.current) audioPlayerRef.current.currentTime += 10
-                        }}
-                      >
-                        +10s
-                      </button>
+                  {/* TAB 2: SEARCHABLE FULL TRANSCRIPT */}
+                  {sourceTab === 'transcript' && (
+                    <div className="source-transcript-stack">
+                      <div className="source-search-wrap">
+                        <input
+                          type="text"
+                          className="source-search-input"
+                          placeholder="Search verified transcript..."
+                          value={transcriptSearch}
+                          onChange={(e) => setTranscriptSearch(e.target.value)}
+                        />
+                      </div>
+                      <div className="source-segments-list">
+                        {transcriptData
+                          .filter((s) => !transcriptSearch || s.text.toLowerCase().includes(transcriptSearch.toLowerCase()))
+                          .map((seg, idx) => (
+                            <div
+                              key={seg.id || idx}
+                              className="source-segment-item"
+                              onClick={() => handlePlayFromTimestamp(seg.start_time || 0)}
+                            >
+                              <span className="source-segment-time">
+                                {formatSeconds(seg.start_time || 0)}
+                              </span>
+                              <p className="source-segment-text">{seg.text}</p>
+                            </div>
+                          ))}
+                        {transcriptData.length === 0 && (
+                          <p className="source-empty-note">
+                            Verified transcript is loading or not available for this session.
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  )}
+
+                  {/* TAB 3: AUDIO PLAYER */}
+                  {sourceTab === 'audio' && (
+                    <div className="source-audio-stack">
+                      <div className="source-audio-hero">
+                        <div className="source-audio-icon-wrap">
+                          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                          </svg>
+                        </div>
+                        <h4>Session Audio Feed</h4>
+                        <p>{reportTitle}</p>
+                      </div>
+
+                      <audio
+                        ref={audioPlayerRef}
+                        controls
+                        className="source-audio-element"
+                        src={audioUrl || getApiUrl(`/api/audio/play/${sessionId}`)}
+                        onTimeUpdate={(e) => setAudioCurrentTime(e.target.currentTime)}
+                        onLoadedMetadata={(e) => setAudioDuration(e.target.duration)}
+                      >
+                        Your browser does not support audio playback.
+                      </audio>
+
+                      <div className="source-audio-controls-card">
+                        <div className="source-audio-skip-row">
+                          <button
+                            type="button"
+                            className="btn btn--small btn--secondary"
+                            onClick={() => {
+                              if (audioPlayerRef.current) audioPlayerRef.current.currentTime -= 10
+                            }}
+                          >
+                            -10s
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--small btn--secondary"
+                            onClick={() => {
+                              if (audioPlayerRef.current) audioPlayerRef.current.currentTime += 10
+                            }}
+                          >
+                            +10s
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

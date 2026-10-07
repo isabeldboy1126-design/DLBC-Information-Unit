@@ -42,12 +42,15 @@ export function useSessions() {
     }
   }, [])
 
-  // Load a single session with full details, segments, and flags
-  const loadSession = useCallback(async (sessionId) => {
+  // Load a single session with full details (or lightweight overview)
+  const loadSession = useCallback(async (sessionId, includeSegments = false) => {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await authFetch(`${API_BASE}/${encodeURIComponent(sessionId)}`)
+      const url = includeSegments
+        ? `${API_BASE}/${encodeURIComponent(sessionId)}`
+        : `${API_BASE}/${encodeURIComponent(sessionId)}?include_segments=false`
+      const res = await authFetch(url)
       if (!res.ok) throw new Error(`Failed to load session details: ${res.status}`)
       const data = await res.json()
       setActiveSession(data.session)

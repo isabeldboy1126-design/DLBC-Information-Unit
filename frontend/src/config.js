@@ -6,6 +6,8 @@
  * - VITE_WS_BASE_URL: Base WS(S) URL for backend WebSockets (default: derived from API_BASE_URL or 'ws://localhost:8000')
  */
 
+import { getSupabaseClient } from './services/supabase'
+
 const PRODUCTION_API_URL = 'https://dlbc-information-unit-api.icycliff-cc807421.southafricanorth.azurecontainerapps.io'
 
 const resolveApiBaseUrl = () => {
@@ -151,11 +153,57 @@ export function getAuthHeaders(customHeaders = {}) {
   return headers
 }
 
-export async function authFetch(url, options = {}) {
+let _refreshPromise = null
+
+export async function refreshAuthToken() {
+  if (_refreshPromise) return _refreshPromise
+
+  _refreshPromise = (async () => {
+    try {
+      const client = getSupabaseClient()
+      if (!client) return null
+      const { data, error } = await client.auth.refreshSession()
+      if (error || !data?.session?.access_token) {
+        const { data: sData } = await client.auth.getSession()
+        if (sData?.session?.access_token) {
+          setAuthToken(sData.session.access_token)
+          return sData.session.access_token
+        }
+        return null
+      }
+      const newToken = data.session.access_token
+      setAuthToken(newToken)
+      return newToken
+    } catch (e) {
+      console.warn('Failed to refresh auth token:', e)
+      return null
+    } finally {
+      _refreshPromise = null
+    }
+  })()
+
+  return _refreshPromise
+}
+
+export async function authFetch(url, options = {}, retryCount = 0) {
   const fullUrl = url.startsWith('http://') || url.startsWith('https://') ? url : getApiUrl(url)
   const headers = getAuthHeaders(options.headers || {})
-  return fetch(fullUrl, {
+  const response = await fetch(fullUrl, {
     ...options,
     headers,
   })
+
+  // Safe single retry on 401 using refreshed Supabase session
+  if (response.status === 401 && retryCount === 0 && !isDemoModeActive()) {
+    const refreshedToken = await refreshAuthToken()
+    if (refreshedToken) {
+      const retryHeaders = getAuthHeaders(options.headers || {})
+      return fetch(fullUrl, {
+        ...options,
+        headers: retryHeaders,
+      })
+    }
+  }
+
+  return response
 }

@@ -605,7 +605,12 @@ class SessionRepository:
 
         return await self.get_session(session_id, account_id=account_id)
 
-    async def get_session(self, session_id: str, account_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def get_session(
+        self,
+        session_id: str,
+        account_id: Optional[str] = None,
+        include_segments: bool = True,
+    ) -> Optional[Dict[str, Any]]:
         """Retrieves a full session with linked audio, transcript segments, and flags."""
         await self.init_db()
         async with get_db_connection() as conn:
@@ -646,26 +651,28 @@ class SessionRepository:
             if not session.get("verification_status"):
                 session["verification_status"] = "not_started"
 
-            # Retrieve segments
-            seg_cursor = await conn.execute(
-                """
-                SELECT * FROM session_segments
-                WHERE session_id = ?
-                ORDER BY segment_index ASC
-                """,
-                (session_id,),
-            )
-            seg_rows = await seg_cursor.fetchall()
-            segments = []
-            for sr in seg_rows:
-                s_dict = dict(sr)
-                s_dict["flags"] = json.loads(s_dict["flags_json"] or "[]")
-                s_dict["words"] = json.loads(s_dict["words_json"] or "[]")
-                del s_dict["flags_json"]
-                del s_dict["words_json"]
-                segments.append(s_dict)
-
-            session["segments"] = segments
+            # Retrieve segments if requested
+            if include_segments:
+                seg_cursor = await conn.execute(
+                    """
+                    SELECT * FROM session_segments
+                    WHERE session_id = ?
+                    ORDER BY segment_index ASC
+                    """,
+                    (session_id,),
+                )
+                seg_rows = await seg_cursor.fetchall()
+                segments = []
+                for sr in seg_rows:
+                    s_dict = dict(sr)
+                    s_dict["flags"] = json.loads(s_dict["flags_json"] or "[]")
+                    s_dict["words"] = json.loads(s_dict["words_json"] or "[]")
+                    del s_dict["flags_json"]
+                    del s_dict["words_json"]
+                    segments.append(s_dict)
+                session["segments"] = segments
+            else:
+                session["segments"] = []
             session["metadata"] = json.loads(session.get("metadata_json") or "{}")
             if session.get("day_number") is None and session["metadata"].get("day_number") is not None:
                 try:

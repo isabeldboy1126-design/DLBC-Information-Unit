@@ -92,3 +92,26 @@ def finalize_pcm_to_wav(pcm_file_path: str, wav_file_path: str, sample_rate: int
         "bits_per_sample": 16,
         "pcm_bytes": pcm_size,
     }
+
+
+def patch_wav_header(
+    file_handle,
+    pcm_data_len: int,
+    sample_rate: int = 48000,
+    num_channels: int = 1,
+    bits_per_sample: int = 16,
+) -> None:
+    """
+    Seeks to byte offset 0 of an open file handle and overwrites the 44-byte
+    canonical WAV header with updated chunk sizes.
+    Eliminates all intermediate file copying on recording stop.
+    """
+    header = create_wav_header(
+        pcm_data_len=pcm_data_len,
+        sample_rate=sample_rate,
+        num_channels=num_channels,
+        bits_per_sample=bits_per_sample,
+    )
+    file_handle.seek(0)
+    file_handle.write(header)
+    file_handle.flush()
