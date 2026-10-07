@@ -24163,3 +24163,43 @@ textarea.form-control {
   font-size: 0.78rem;
   color: var(--text-muted, #64748b);
 }
+
+/* ==========================================================================
+   Session Detail Skeleton Loading & Shimmer
+   ========================================================================== */
+@keyframes session-skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.session-skeleton-block {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: session-skeleton-shimmer 1.5s infinite;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+[data-theme='dark'] .session-skeleton-block,
+.dark .session-skeleton-block {
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+}
+
+.session-skeleton-card {
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.session-skeleton-strip {
+  height: 56px;
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+  border-radius: 8px;
+}

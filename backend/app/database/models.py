@@ -228,7 +228,6 @@ CREATE TABLE IF NOT EXISTS final_reports (
 CREATE INDEX IF NOT EXISTS idx_final_reports_session ON final_reports(session_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_final_reports_rev ON final_reports(session_id, revision_number DESC);
 CREATE INDEX IF NOT EXISTS idx_final_reports_created ON final_reports(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_final_reports_approval ON final_reports(session_id, approval_status);
 
 -- Configurable Programmes & Sessions
 CREATE TABLE IF NOT EXISTS programmes (
@@ -554,6 +553,7 @@ PHASE9_APPROVAL_COLUMNS = [
     "ALTER TABLE final_reports ADD COLUMN approved_revision_id TEXT",
     "ALTER TABLE final_reports ADD COLUMN source_hash TEXT",
     "ALTER TABLE report_processing_runs ADD COLUMN source_hash TEXT",
+    "CREATE INDEX IF NOT EXISTS idx_final_reports_approval ON final_reports(session_id, approval_status)",
 ]
 
 # Stage 6 migration: add AI verification engine workflow columns to sessions & verification_items tables.

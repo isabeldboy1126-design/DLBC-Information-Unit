@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 
 /**
  * LiveRecordingView — Active recording monitor matching live-session-recording.png.
@@ -24,7 +24,21 @@ export function LiveRecordingView({
   onStopRecording,
   onToggleManualFlag,
 }) {
+  const [isStopping, setIsStopping] = useState(false)
   const transcriptContainerRef = useRef(null)
+
+  const handleStop = async () => {
+    if (isStopping) return
+    setIsStopping(true)
+    try {
+      if (onStopRecording) {
+        await onStopRecording()
+      }
+    } catch (err) {
+      console.error('[LiveRecordingView] Stop recording error:', err)
+      setIsStopping(false)
+    }
+  }
 
   const segments = Array.isArray(liveTranscript) ? liveTranscript : (liveTranscript?.segments || [])
   const interimText = liveTranscript?.interimText || ''
@@ -160,11 +174,12 @@ export function LiveRecordingView({
           <button
             type="button"
             className="mobile-btn-stop-recording"
-            onClick={onStopRecording}
+            onClick={handleStop}
             id="mobile-btn-stop-recording"
+            disabled={isStopping}
           >
             <span className="mobile-stop-icon">■</span>
-            <span>Stop Recording</span>
+            <span>{isStopping ? 'Finalizing recording...' : 'Stop Recording'}</span>
           </button>
         </div>
       </div>
@@ -278,12 +293,13 @@ export function LiveRecordingView({
           <button
             type="button"
             className="btn btn--danger btn--stop-session"
-            onClick={onStopRecording}
+            onClick={handleStop}
             id="btn-stop-live-recording"
+            disabled={isStopping}
             title={isPaused ? 'Finalize recording captured so far' : 'Stop and finalize session'}
           >
             <span className="stop-icon">⏹</span>
-            <span>STOP SESSION</span>
+            <span>{isStopping ? 'FINALIZING...' : 'STOP SESSION'}</span>
           </button>
         </div>
       </div>

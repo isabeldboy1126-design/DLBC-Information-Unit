@@ -212,39 +212,44 @@ export async function downloadAndInstallUpdate(updateRef, onProgress) {
   });
 }
 
+let closeProtectionInstalled = false;
+let isRecordingCallback = null;
+let promptCloseCallback = null;
+
 /**
  * Window close protection for active live recording.
- * Subscribes to Tauri window close-requested event.
+ * Subscribes to Tauri window close-requested event once to avoid listener leaks.
  */
 export function setupWindowCloseProtection(getIsRecordingActive, onPromptClose) {
   if (!isTauri()) return () => {};
 
-  let unlisten = null;
-  let active = true;
+  isRecordingCallback = getIsRecordingActive;
+  promptCloseCallback = onPromptClose;
 
-  (async () => {
-    try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      const appWindow = getCurrentWindow();
-      const fn = await appWindow.onCloseRequested(async (event) => {
-        if (!active) return;
-        const recording = getIsRecordingActive();
-        if (recording) {
-          event.preventDefault();
-          if (onPromptClose) {
-            onPromptClose();
+  if (!closeProtectionInstalled) {
+    closeProtectionInstalled = true;
+    (async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const appWindow = getCurrentWindow();
+        await appWindow.onCloseRequested(async (event) => {
+          const recording = isRecordingCallback ? Boolean(isRecordingCallback()) : false;
+          if (recording) {
+            event.preventDefault();
+            if (promptCloseCallback) {
+              promptCloseCallback();
+            }
           }
-        }
-      });
-      unlisten = fn;
-    } catch (err) {
-      console.warn('[DesktopPlatform] Close protection listener failed:', err);
-    }
-  })();
+        });
+      } catch (err) {
+        console.warn('[DesktopPlatform] Close protection listener failed:', err);
+        closeProtectionInstalled = false;
+      }
+    })();
+  }
 
   return () => {
-    active = false;
-    if (unlisten) unlisten();
+    // Keep the single listener alive; callbacks are updated via references
   };
 }
 
@@ -266,9 +271,17 @@ export async function relaunchApplication() {
 
 /**
  * Force exit the application window after safe finalization.
+ * Prioritizes @tauri-apps/plugin-process exit(0), falling back to window destroy and window.close.
  */
 export async function forceExitApplication() {
   if (isTauri()) {
+    try {
+      const { exit } = await import('@tauri-apps/plugin-process');
+      await exit(0);
+      return;
+    } catch (err) {
+      console.warn('[DesktopPlatform] Process exit failed, attempting window destroy:', err);
+    }
     try {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
       await getCurrentWindow().destroy();

@@ -10,11 +10,11 @@ import { NewLiveSessionView } from './components/sessions/NewLiveSessionView'
 import { LiveRecordingView } from './components/recording/LiveRecordingView'
 import { FloatingRecordingController } from './components/recording/FloatingRecordingController'
 import { FloatingProcessController } from './components/common/FloatingProcessController'
-import { GlobalLoadingOverlay } from './components/common/GlobalLoadingOverlay'
 import { useActiveProcess, expandActiveProcess } from './components/common/activeProcessManager'
 import { SessionCompletionView } from './components/sessions/SessionCompletionView'
 import { SessionHistoryList } from './components/sessions/SessionHistoryList'
 import { SessionDetailView, getCleanSessionName } from './components/sessions/SessionDetailView'
+import { SessionDetailSkeleton } from './components/sessions/SessionDetailSkeleton'
 import { AutomaticProcessingView } from './components/processing/AutomaticProcessingView'
 import { DesktopUploadRecordingView } from './components/transcription/DesktopUploadRecordingView'
 import { SettingsView } from './components/settings/SettingsView'
@@ -162,6 +162,10 @@ function App() {
     const parsed = parseRoute(getActiveRoute())
     return parsed.view === 'workspace' ? parsed.sessionId : null
   })
+  const [selectedSessionId, setSelectedSessionId] = useState(() => {
+    const parsed = parseRoute(getActiveRoute())
+    return parsed.view === 'sessions' ? parsed.sessionId : null
+  })
 
   const [sessionMetadata, setSessionMetadata] = useState({
     title: 'Sunday Morning Worship Service',
@@ -197,6 +201,11 @@ function App() {
       const parsed = parseRoute(routeStr)
       if (parsed.view) {
         setCurrentView(parsed.view)
+        if (parsed.view === 'sessions') {
+          setSelectedSessionId(parsed.sessionId || null)
+        } else {
+          setSelectedSessionId(null)
+        }
         if (parsed.stage) setSessionInitialStage(parsed.stage)
         if (parsed.sessionId) setCompletedSessionId(parsed.sessionId)
         if (parsed.subAction === 'processing') setVerificationProcessing(true)
@@ -246,16 +255,17 @@ function App() {
     }
   }, [user, isOnboarded])
 
-  // Desktop Windows close protection during live recording
+  // Desktop Windows close protection during live recording (both active & paused)
   const [showCloseRecordingModal, setShowCloseRecordingModal] = useState(false)
+  const isRecordingRef = useRef(false)
+  isRecordingRef.current = liveAudio.isRecording
 
   useEffect(() => {
-    const cleanup = setupWindowCloseProtection(
-      () => liveAudio.isRecording,
+    setupWindowCloseProtection(
+      () => isRecordingRef.current,
       () => setShowCloseRecordingModal(true)
     )
-    return cleanup
-  }, [liveAudio.isRecording])
+  }, [])
 
   const handleConfirmStopAndClose = async () => {
     try {
@@ -310,6 +320,7 @@ function App() {
 
     if (route.view === 'sessions') {
       setCurrentView('sessions')
+      setSelectedSessionId(route.sessionId || null)
       if (route.sessionId) {
         if (sessionsHook.activeSession?.session_id !== route.sessionId) {
           sessionsHook.loadSession(route.sessionId)
@@ -326,12 +337,14 @@ function App() {
 
     if (route.view === 'media_upload') {
       setCurrentView('media_upload')
+      setSelectedSessionId(null)
       setMediaUploadToken(route.token)
       return
     }
 
     if (route.view === 'workspace') {
       setCurrentView('workspace')
+      setSelectedSessionId(null)
       if (route.sessionId) {
         setWorkspaceSessionId(route.sessionId)
         if (sessionsHook.activeSession?.session_id !== route.sessionId) {
@@ -344,6 +357,7 @@ function App() {
     }
 
     setCurrentView(route.view)
+    setSelectedSessionId(null)
     sessionsHook.closeActiveSession()
     setSessionInitialStage('overview')
     setVerificationProcessing(false)
@@ -586,22 +600,28 @@ function App() {
   const handleStopRecording = async () => {
     setIsRecorderMinimized(false)
     const recordingResult = await liveAudio.stopRecording()
-    await sessionsHook.fetchSessions()
     const targetId =
       recordingResult?.session_id ||
       recordingResult?.session?.session_id ||
       liveAudio.latestSession?.session_id ||
       liveAudio.latestRecording?.session_id
 
-    await remoteControl.stopRecordingSync(targetId)
-
     if (targetId) {
       setCompletedSessionId(targetId)
-      await sessionsHook.loadSession(targetId)
       navigateTo(`processing/${targetId}`)
     } else {
       navigateTo('dashboard')
     }
+
+    // Run background sync operations asynchronously without blocking the UI transition
+    Promise.allSettled([
+      sessionsHook.fetchSessions(),
+      remoteControl.stopRecordingSync(targetId),
+      targetId ? sessionsHook.loadSession(targetId) : Promise.resolve(),
+    ]).catch((err) => {
+      console.warn('[handleStopRecording] Background sync error:', err)
+    })
+
     return recordingResult
   }
   handleStopRecordingRef.current = handleStopRecording
@@ -609,6 +629,7 @@ function App() {
   // Navigation Handler for AppShell Sidebar
   const handleNavigate = (view) => {
     if (view === 'sessions') {
+      setSelectedSessionId(null)
       sessionsHook.closeActiveSession()
       sessionsHook.fetchSessions()
       setSessionsStatusFilter('all')
@@ -867,8 +888,6 @@ function App() {
       )}
 
       <ErrorBoundary onReset={() => navigateTo('dashboard')}>
-      {/* Reusable 3-blue-dots loading treatment with ~180ms threshold */}
-      <GlobalLoadingOverlay isVisible={sessionsHook.loading && !sessionsHook.activeSession} delayMs={180} />
 
       {/* ------------------------------------------------------------- */}
       {/* VIEW: LIVE RECORDING ACTIVE (Full Screen Mode)               */}
@@ -996,7 +1015,7 @@ function App() {
         /* ----------------------------------------------------------- */
         /* VIEW 3: SESSIONS HISTORY & WORKSPACE                        */
         /* ----------------------------------------------------------- */
-        !sessionsHook.activeSession ? (
+        !selectedSessionId ? (
           <SessionHistoryList
             sessions={sessionsHook.sessions}
             onOpenSession={(sessionId, initialStage = 'overview') => {
@@ -1005,6 +1024,7 @@ function App() {
                 setIsRecorderMinimized(false)
                 return
               }
+              setSelectedSessionId(sessionId)
               navigateTo(`session/${sessionId}${initialStage && initialStage !== 'overview' ? `/${initialStage}` : ''}`)
             }}
             onDeleteSession={sessionsHook.deleteSession}
@@ -1022,38 +1042,54 @@ function App() {
             initialStatusFilter={sessionsStatusFilter}
           />
         ) : (
-          <SessionDetailView
-            session={sessionsHook.activeSession}
-            initialStage={sessionInitialStage}
-            onBack={handleInAppBack}
-            onUpdateTitle={sessionsHook.updateSessionTitle}
-            onUpdateDetails={sessionsHook.updateSessionDetails}
-            onDeleteSession={sessionsHook.deleteSession}
-            onSubViewChange={setSessionSubViewInfo}
-            verificationState={sessionsHook.verificationState}
-            onStartVerification={sessionsHook.startVerification}
-            onLoadVerificationState={sessionsHook.loadVerificationState}
-            onResolveVerificationItem={sessionsHook.resolveVerificationItem}
-            onAddVerificationItem={sessionsHook.addVerificationItem}
-            onConfirmAllRemaining={sessionsHook.confirmAllRemaining}
-            onFinaliseVerification={sessionsHook.finaliseVerification}
-            onConfirmRawAsVerified={sessionsHook.confirmRawAsVerified}
-            onNavigateStage={(stage) => {
-              const sId = sessionsHook.activeSession?.session_id
-              if (!sId) return
-              const target = stage && stage !== 'overview' ? `session/${sId}/${stage}` : `session/${sId}`
-              navigateTo(target)
-            }}
-            verificationProcessing={verificationProcessing}
-            onTriggerVerificationProcessing={() => {
-              const sId = sessionsHook.activeSession?.session_id
-              if (!sId) return
-              navigateTo(`session/${sId}/verification/processing`)
-            }}
-            onCloseVerificationProcessing={() => {
-              handleInAppBack()
-            }}
-          />
+          (() => {
+            const hasFullLoaded = sessionsHook.activeSession && sessionsHook.activeSession.session_id === selectedSessionId
+            if (hasFullLoaded) {
+              return (
+                <SessionDetailView
+                  session={sessionsHook.activeSession}
+                  initialStage={sessionInitialStage}
+                  onBack={handleInAppBack}
+                  onUpdateTitle={sessionsHook.updateSessionTitle}
+                  onUpdateDetails={sessionsHook.updateSessionDetails}
+                  onDeleteSession={sessionsHook.deleteSession}
+                  onSubViewChange={setSessionSubViewInfo}
+                  verificationState={sessionsHook.verificationState}
+                  onStartVerification={sessionsHook.startVerification}
+                  onLoadVerificationState={sessionsHook.loadVerificationState}
+                  onResolveVerificationItem={sessionsHook.resolveVerificationItem}
+                  onAddVerificationItem={sessionsHook.addVerificationItem}
+                  onConfirmAllRemaining={sessionsHook.confirmAllRemaining}
+                  onFinaliseVerification={sessionsHook.finaliseVerification}
+                  onConfirmRawAsVerified={sessionsHook.confirmRawAsVerified}
+                  onNavigateStage={(stage) => {
+                    const sId = sessionsHook.activeSession?.session_id || selectedSessionId
+                    if (!sId) return
+                    const target = stage && stage !== 'overview' ? `session/${sId}/${stage}` : `session/${sId}`
+                    navigateTo(target)
+                  }}
+                  verificationProcessing={verificationProcessing}
+                  onTriggerVerificationProcessing={() => {
+                    const sId = sessionsHook.activeSession?.session_id || selectedSessionId
+                    if (!sId) return
+                    navigateTo(`session/${sId}/verification/processing`)
+                  }}
+                  onCloseVerificationProcessing={() => {
+                    handleInAppBack()
+                  }}
+                />
+              )
+            }
+
+            // If activeSession is still loading for selectedSessionId, show page-shaped skeleton immediately
+            const summarySession = sessionsHook.sessions.find((s) => s.session_id === selectedSessionId)
+            return (
+              <SessionDetailSkeleton
+                session={summarySession}
+                onBack={handleInAppBack}
+              />
+            )
+          })()
         )
       ) : currentView === 'transcribe' ? (
         /* ----------------------------------------------------------- */
@@ -1229,6 +1265,39 @@ function App() {
             >
               Open
             </button>
+            {!activeProcess.isCompleted && (
+              <button
+                type="button"
+                className="btn btn--small btn--ghost docked-cancel-btn"
+                style={{ color: '#ef4444', fontSize: '13px', padding: '4px 8px' }}
+                onClick={async () => {
+                  const jobName = activeProcess.jobType === 'verification' ? 'verification' : 'processing'
+                  if (window.confirm(`Cancel ${jobName} for "${activeProcess.sessionTitle}"?\n\nThe session and existing data will remain available.`)) {
+                    try {
+                      if (activeProcess.jobType === 'report_processing') {
+                        if (activeProcess.sessionId) {
+                          await authFetch(getApiUrl(`/api/report-processing/sessions/${encodeURIComponent(activeProcess.sessionId)}/cancel`), { method: 'POST' })
+                        }
+                        if (activeProcess.runId) {
+                          await authFetch(getApiUrl(`/api/report-processing/cancel/${encodeURIComponent(activeProcess.runId)}`), { method: 'POST' })
+                        }
+                      } else if (activeProcess.jobType === 'verification') {
+                        if (activeProcess.sessionId) {
+                          await authFetch(getApiUrl(`/api/sessions/${encodeURIComponent(activeProcess.sessionId)}/verification/cancel`), { method: 'POST' })
+                        }
+                      }
+                    } catch (e) {
+                      console.error('Failed to cancel active process:', e)
+                    } finally {
+                      clearActiveProcess()
+                    }
+                  }
+                }}
+                title="Cancel processing"
+              >
+                Cancel
+              </button>
+            )}
             {activeProcess.isCompleted && (
               <button
                 type="button"

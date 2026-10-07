@@ -157,7 +157,7 @@ export function useActiveProcess() {
                 stageLabel: 'Verification complete',
               }
               setActiveProcess(updated)
-            } else if (st === 'failed') {
+            } else if (st === 'failed' || st === 'cancelled') {
               clearActiveProcess()
             }
           }

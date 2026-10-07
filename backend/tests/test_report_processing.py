@@ -534,3 +534,85 @@ async def test_api_completed_reports_archive_filtering():
     assert res3.status_code == 200
     items3 = res3.json()
     assert not any(i["session_id"] == session_id for i in items3)
+
+
+@pytest.mark.asyncio
+async def test_cancel_report_processing_lifecycle():
+    """
+    Cancellation tests:
+    - active run can be cancelled
+    - cancelled run is terminal and no longer considered active
+    - session and its underlying data are preserved
+    - completed run cannot be cancelled
+    - starting processing after cancellation creates a fresh new run
+    """
+    session_id = f"test_cancel_{int(time.time())}"
+    await session_repo.create_session(
+        session_id=session_id,
+        title="Faithful Stewardship Message",
+        raw_text="The transcript for stewardship sermon.",
+    )
+
+    # 1. Create run
+    run = await report_processing_repo.create_run(session_id)
+    run_id = run["run_id"]
+    assert run["status"] == "preparing_transcript"
+
+    # Active run lookup returns it
+    active = await report_processing_repo.get_active_run(session_id)
+    assert active is not None
+    assert active["run_id"] == run_id
+
+    # 2. Cancel run
+    cancelled = await report_processing_repo.cancel_run(run_id)
+    assert cancelled is True
+
+    # 3. Cancelled run becomes terminal
+    updated_run = await report_processing_repo.get_run(run_id)
+    assert updated_run["status"] == "cancelled"
+    assert updated_run["error_message"] == "Cancelled by user"
+
+    # 4. Cancelled run is NO LONGER returned by get_active_run
+    active_after = await report_processing_repo.get_active_run(session_id)
+    assert active_after is None
+
+    # 5. Cancelling already cancelled run is idempotent (returns True)
+    second_cancel = await report_processing_repo.cancel_run(run_id)
+    assert second_cancel is True
+
+    # 6. Session data is completely preserved
+    sess = await session_repo.get_session(session_id)
+    assert sess is not None
+    assert sess["title"] == "Faithful Stewardship Message"
+    assert sess["raw_text"] == "The transcript for stewardship sermon."
+    assert sess["report_processing_status"] == "cancelled"
+
+    # 7. Restarting processing creates a fresh run, not reconnecting to the cancelled run
+    new_run = await report_processing_repo.create_run(session_id)
+    assert new_run["run_id"] != run_id
+    assert new_run["status"] == "preparing_transcript"
+
+    # 8. Completed run cannot be cancelled
+    await report_processing_repo.update_run_status(new_run["run_id"], status="completed")
+    completed_cancel = await report_processing_repo.cancel_run(new_run["run_id"])
+    assert completed_cancel is False
+
+    # 8. Test cancel via API endpoint
+    auth_header = {"Authorization": "Bearer test_token_cancel_api:cancel_api@dlbc.org"}
+    onboard_res = client.post(
+        "/api/auth/onboarding/complete",
+        headers=auth_header,
+        json={"sector": "Adult", "church_state": "Lagos", "terminal_level": "state_headquarters"},
+    )
+    account_id = onboard_res.json()["account"]["id"]
+    api_sess_id = f"test_api_cancel_{int(time.time())}"
+    await session_repo.create_session(session_id=api_sess_id, title="API Cancel Session", account_id=account_id)
+    await report_processing_repo.create_run(api_sess_id)
+
+    res = client.post(f"/api/report-processing/sessions/{api_sess_id}/cancel", headers=auth_header)
+    assert res.status_code == 200
+    assert res.json()["status"] == "cancelled"
+
+    active_api = await report_processing_repo.get_active_run(api_sess_id)
+    assert active_api is None
+

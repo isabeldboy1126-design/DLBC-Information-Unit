@@ -392,6 +392,7 @@ class ReportProcessingRepository:
             row = await cur.fetchone()
             return dict(row) if row else None
 
+
     async def create_run(self, session_id: str, run_id: Optional[str] = None) -> Dict[str, Any]:
         """Creates a new durable report processing run record in state preparing_transcript."""
         await self.init_db()
@@ -549,7 +550,7 @@ class ReportProcessingRepository:
         )
         if run.get("session_id"):
             await session_repo.set_report_processing_status(
-                run["session_id"], 'idle', run_id=run_id
+                run["session_id"], 'cancelled', run_id=run_id
             )
         return True
 
@@ -560,6 +561,10 @@ class ReportProcessingRepository:
         if not active:
             return True
         return await self.cancel_run(active["run_id"])
+
+    async def cancel_session_processing(self, session_id: str) -> bool:
+        """Alias for cancel_active_run_for_session used by remote control router."""
+        return await self.cancel_active_run_for_session(session_id)
 
     # -------------------------------------------------------------------------
     # STANDARDS & INSTRUCTIONS VERSIONING

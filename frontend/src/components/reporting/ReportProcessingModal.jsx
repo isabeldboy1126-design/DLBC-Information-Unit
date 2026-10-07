@@ -88,6 +88,7 @@ export function ReportProcessingModal({
   const [runId, setRunId] = useState(null)
   const [runData, setRunData] = useState(null)
   const [isCancelling, setIsCancelling] = useState(false)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [errorMsg, setErrorMsg] = useState(null)
 
@@ -292,7 +293,11 @@ export function ReportProcessingModal({
     }
   }, [isOpen, sessionId, startProcessing])
 
-  const handleCancel = async () => {
+  const handleCancelClick = () => {
+    setShowCancelConfirm(true)
+  }
+
+  const handleConfirmCancel = async () => {
     if (!runId && !sessionId) {
       onClose()
       return
@@ -311,9 +316,10 @@ export function ReportProcessingModal({
       }
       setCurrentStage('cancelled')
       clearActiveProcess()
+      setShowCancelConfirm(false)
       setTimeout(() => {
         if (isMountedRef.current) onClose()
-      }, 500)
+      }, 700)
     } catch (e) {
       console.error('Error cancelling run:', e)
       onClose()
@@ -514,17 +520,52 @@ export function ReportProcessingModal({
           </div>
         )}
 
+        {/* Cancelled State Banner */}
+        {currentStage === 'cancelled' && (
+          <div style={{ textAlign: 'center', padding: '16px', color: 'var(--color-text-secondary, #64748b)', fontSize: '14px', fontWeight: 500 }}>
+            Processing cancelled.
+          </div>
+        )}
+
         {/* Bottom Cancel Action */}
-        {currentStage !== 'completed' && currentStage !== 'failed' && (
+        {currentStage !== 'completed' && currentStage !== 'failed' && currentStage !== 'cancelled' && (
           <div className="report-processing-bottom-bar">
-            <button
-              type="button"
-              className="btn-cancel-report-process"
-              onClick={handleCancel}
-              disabled={isCancelling}
-            >
-              {isCancelling ? 'Cancelling...' : 'Cancel processing'}
-            </button>
+            {showCancelConfirm ? (
+              <div className="report-cancel-confirm-card" style={{ width: '100%', padding: '14px', background: 'var(--color-bg-secondary, #f8fafc)', borderRadius: '8px', border: '1px solid var(--color-border, #e2e8f0)' }}>
+                <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', fontWeight: 600 }}>Cancel processing?</h4>
+                <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: 'var(--color-text-secondary, #64748b)', lineHeight: 1.4 }}>
+                  Processing for &ldquo;{session?.title || 'Sunday Worship Service'}&rdquo; will stop. The session and existing data will remain available.
+                </p>
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="btn btn--outline btn--small"
+                    onClick={() => setShowCancelConfirm(false)}
+                    disabled={isCancelling}
+                  >
+                    Keep Processing
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--small"
+                    style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }}
+                    onClick={handleConfirmCancel}
+                    disabled={isCancelling}
+                  >
+                    {isCancelling ? 'Cancelling...' : 'Cancel Processing'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="btn-cancel-report-process"
+                onClick={handleCancelClick}
+                disabled={isCancelling}
+              >
+                Cancel processing
+              </button>
+            )}
           </div>
         )}
       </div>
