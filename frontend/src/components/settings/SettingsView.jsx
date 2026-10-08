@@ -5,11 +5,26 @@ import { useTheme } from '../../hooks/useTheme'
 import { ProgrammesSettingsSection } from './ProgrammesSettingsSection'
 import { SettingsIcon } from './SettingsIcon'
 import { APP_VERSION } from '../../utils/version'
-import { isDesktop, checkForAppUpdates, downloadAndInstallUpdate, relaunchApplication } from '../../services/desktopPlatform'
+import { isDesktop, checkForAppUpdates, downloadAndInstallUpdate, relaunchApplication, getAppVersion } from '../../services/desktopPlatform'
 
 export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
   const { account, user, demoMode, signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
+
+  // Native application version state
+  const [nativeVersion, setNativeVersion] = useState(APP_VERSION)
+
+  useEffect(() => {
+    let isMounted = true
+    getAppVersion().then((v) => {
+      if (isMounted && v) {
+        setNativeVersion(v)
+      }
+    })
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   // Active Settings Tab / Destination (default: profile)
   const [activeTab, setActiveTab] = useState('profile')
@@ -151,19 +166,29 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
     setUpdateState('checking')
     try {
       const result = await checkForAppUpdates()
-      if (result && result.available) {
+      if (result && result.error) {
+        // CASE C: Application could not check for updates or encountered an error
+        setUpdateInfo(null)
+        setUpdateState('failed')
+        setUpdateError(result.error)
+        setFeedback(`Unable to check for updates: ${result.error}`)
+      } else if (result && result.available) {
+        // CASE A: A newer compatible release exists
         setUpdateInfo(result)
         setUpdateState('available')
-        setFeedback(`Update ${result.version} is available!`)
+        setFeedback(`Update v${result.version} is available!`)
       } else {
+        // CASE B: The installed version is genuinely up to date
         setUpdateInfo(null)
         setUpdateState('up_to_date')
-        setFeedback('Application is up to date.')
+        setFeedback('Your app is up to date.')
       }
     } catch (err) {
       console.error('Update check failed:', err)
-      setUpdateError(err.message || 'Could not check for updates.')
+      const errorMsg = err.message || 'Unable to check for updates. Please try again.'
+      setUpdateError(errorMsg)
       setUpdateState('failed')
+      setFeedback('Unable to check for updates. Please try again.')
     } finally {
       setIsCheckingUpdate(false)
     }
@@ -184,8 +209,11 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
       setFeedback('Update downloaded and verified. Restart to apply.')
     } catch (err) {
       console.error('Download update failed:', err)
-      setUpdateError(err.message || 'Failed to download update.')
+      // CASE D: A newer release exists but cannot be downloaded or verified
+      const msg = err.message || 'Failed to download or verify update.'
+      setUpdateError(msg)
       setUpdateState('failed')
+      setFeedback(`Cannot install update: ${msg}`)
     }
   }
 
@@ -510,7 +538,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
                   <div className="mobile-item-icon-box">ℹ️</div>
                   <div className="mobile-item-text">
                     <span className="mobile-item-label">About</span>
-                    <span className="mobile-item-sub">{`App version ${APP_VERSION}`}</span>
+                    <span className="mobile-item-sub">{`App version ${nativeVersion}`}</span>
                   </div>
                 </div>
                 <span className="mobile-chevron">›</span>
@@ -906,7 +934,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
               <div className="card" style={{ padding: '1.25rem', textAlign: 'center' }}>
                 <img src="/dlbc-logo.png" alt="DLBC" style={{ width: '48px', height: '48px', margin: '0 auto 0.75rem' }} />
                 <h3 style={{ margin: '0 0 0.25rem' }}>DLBC Information Unit</h3>
-                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>Version {APP_VERSION}</span>
+                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>Version {nativeVersion}</span>
                 <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginTop: '0.75rem', lineHeight: 1.5 }}>
                   Institutional ministerial platform for high-integrity sermon audio recording, automatic acoustic verification, and publication-ready report synthesis.
                 </p>
@@ -1447,7 +1475,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
                   <div className="settings-key-val-box">
                     <span className="settings-box-label">App Semantic Version</span>
                     <span className="settings-box-val" style={{ color: '#2563eb', fontWeight: 600 }}>
-                      v{APP_VERSION}
+                      v{nativeVersion}
                     </span>
                   </div>
                   <div className="settings-key-val-box">
@@ -1463,11 +1491,11 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
                     <div style={{ fontWeight: 600, color: 'var(--color-text, #1e293b)' }}>Signed Software Updates</div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)' }}>
                       {updateState === 'checking' && 'Checking for signed updates...'}
-                      {updateState === 'available' && `Update ${updateInfo?.version || ''} available for download`}
+                      {updateState === 'available' && `Update v${updateInfo?.version || ''} available for download`}
                       {updateState === 'downloading' && 'Downloading update in background...'}
                       {updateState === 'ready' && 'Update ready to install. Restart when safe.'}
-                      {updateState === 'up_to_date' && 'Application is fully up to date.'}
-                      {updateState === 'failed' && (updateError || 'Update could not be checked.')}
+                      {updateState === 'up_to_date' && 'Your app is up to date.'}
+                      {updateState === 'failed' && (updateError || 'Unable to check for updates. Please try again.')}
                       {updateState === 'idle' && (isDesktop() ? 'Automated cryptographic signature checks enabled' : 'Web application automatically uses current server build')}
                     </div>
                   </div>
@@ -1574,7 +1602,7 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
                       Deeper Life Bible Church
                     </h3>
                     <div style={{ fontSize: '0.9rem', color: '#2563eb', fontWeight: 600 }}>
-                      Information Unit Application v{APP_VERSION}
+                      Information Unit Application v{nativeVersion}
                     </div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #64748b)', marginTop: '0.2rem' }}>
                       Desktop Platform · Windows Native

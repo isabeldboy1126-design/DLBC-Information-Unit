@@ -18,6 +18,23 @@ export function isDesktop() {
   return isTauri();
 }
 
+/**
+ * Retrieves the true native application version from Tauri runtime if on desktop,
+ * otherwise falls back to the static APP_VERSION.
+ */
+export async function getAppVersion() {
+  if (isTauri()) {
+    try {
+      const { getVersion } = await import('@tauri-apps/api/app');
+      const v = await getVersion();
+      if (v) return v;
+    } catch (e) {
+      console.warn('[DesktopPlatform] Failed to get native app version:', e);
+    }
+  }
+  return APP_VERSION;
+}
+
 export function getPlatformInfo() {
   if (isTauri()) {
     return {
@@ -166,7 +183,7 @@ export async function checkForAppUpdates() {
     return { isDesktop: true, available: false };
   } catch (err) {
     console.warn('[DesktopPlatform] Updater check failed:', err);
-    return { isDesktop: true, available: false, error: err.message };
+    return { isDesktop: true, available: false, error: err.message || String(err) };
   }
 }
 
