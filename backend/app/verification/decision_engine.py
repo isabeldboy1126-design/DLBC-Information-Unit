@@ -15,11 +15,13 @@ Core Verification Principles:
    and AI audit traces are stored separately in SQLite.
 """
 
+import asyncio
 import json
 import logging
 import os
 import re
 import time
+import uuid
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from google.genai import types
@@ -564,6 +566,46 @@ Return a JSON array of decision objects matching this schema:
         self,
         session_id: str,
         auto_resolve: bool = True,
+        run_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Coordinates Session-Level Batch Verification for an entire session.
+        Guarantees that an unhandled exception or cancellation gracefully transitions
+        sessions.ai_verification_status to a terminal state ('failed' or 'cancelled')
+        instead of hanging indefinitely.
+        """
+        try:
+            return await self._execute_verification_workflow(
+                session_id=session_id,
+                auto_resolve=auto_resolve,
+                run_id=run_id,
+            )
+        except asyncio.CancelledError:
+            logger.info("[%s] Verification task received CancelledError; setting status to cancelled.", session_id)
+            await session_repo.set_ai_verification_status(
+                session_id,
+                "cancelled",
+                run_id=run_id,
+                expected_run_id=run_id,
+            )
+            return {"status": "cancelled", "session_id": session_id, "run_id": run_id}
+        except Exception as e:
+            logger.error("[%s] Verification failed with unhandled exception: %s", session_id, e, exc_info=True)
+            err_summary = {"error": str(e), "run_id": run_id}
+            await session_repo.set_ai_verification_status(
+                session_id,
+                "failed",
+                summary=err_summary,
+                run_id=run_id,
+                expected_run_id=run_id,
+            )
+            return {"status": "failed", "error": str(e), "session_id": session_id, "run_id": run_id}
+
+    async def _execute_verification_workflow(
+        self,
+        session_id: str,
+        auto_resolve: bool = True,
+        run_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Coordinates Session-Level Batch Verification for an entire session.
@@ -576,19 +618,33 @@ Return a JSON array of decision objects matching this schema:
         Independent acoustic evidence is mandatory: if master audio/reel is missing, items
         must never auto-verify and are marked UNRESOLVED (AUDIO_UNAVAILABLE).
         """
-        # Step 1: Set state to compiling
-        await session_repo.set_ai_verification_status(session_id, "compiling")
+        if not run_id:
+            cur_v = await session_repo.get_ai_verification_status(session_id)
+            run_id = cur_v.get("ai_verification_run_id") or cur_v.get("run_id") or f"vr_{uuid.uuid4().hex[:12]}"
+
+        async def _is_cancelled_or_superseded() -> bool:
+            cur = await session_repo.get_ai_verification_status(session_id)
+            st = cur.get("ai_verification_status")
+            active_run = cur.get("ai_verification_run_id") or cur.get("run_id")
+            if st in ("cancelled", "cancel_requested"):
+                return True
+            if run_id and active_run and active_run != run_id:
+                return True
+            return False
+
+        # Step 1: Set state to compiling with stable run_id
+        await session_repo.set_ai_verification_status(session_id, "compiling", run_id=run_id)
 
         # Step 2: Ensure verification items are initialized
         init_res = await session_repo.init_verification(session_id)
         if "error" in init_res:
-            await session_repo.set_ai_verification_status(session_id, "failed")
-            return {"error": init_res["error"]}
+            await session_repo.set_ai_verification_status(session_id, "failed", run_id=run_id, expected_run_id=run_id)
+            return {"error": init_res["error"], "run_id": run_id}
 
         session = await session_repo.get_session(session_id)
         if not session:
-            await session_repo.set_ai_verification_status(session_id, "failed")
-            return {"error": "Session not found"}
+            await session_repo.set_ai_verification_status(session_id, "failed", run_id=run_id, expected_run_id=run_id)
+            return {"error": "Session not found", "run_id": run_id}
 
         segments = session.get("segments", [])
         seg_dict = {s["segment_index"]: s for s in segments}
@@ -604,13 +660,25 @@ Return a JSON array of decision objects matching this schema:
                 "verified_count": len(items),
                 "corrected_count": 0,
                 "unresolved_count": 0,
+                "run_id": run_id,
             }
-            await session_repo.set_ai_verification_status(session_id, "completed_verified", summary=summary)
+            await session_repo.set_ai_verification_status(
+                session_id,
+                "completed_verified",
+                summary=summary,
+                run_id=run_id,
+                expected_run_id=run_id,
+                guard_not_cancelled=True,
+            )
             await session_repo.finalise_verification(session_id)
-            return {"status": "completed_verified", "summary": summary}
+            return {"status": "completed_verified", "summary": summary, "run_id": run_id}
 
-        # Step 4: Transition to verifying
-        await session_repo.set_ai_verification_status(session_id, "verifying")
+        if await _is_cancelled_or_superseded():
+            logger.info("[%s] AI verification cancelled before assigning IDs; halting run %s.", session_id, run_id)
+            return {"status": "cancelled", "session_id": session_id, "run_id": run_id}
+
+        # Step 4: Transition to verifying with run_id guard
+        await session_repo.set_ai_verification_status(session_id, "verifying", run_id=run_id, expected_run_id=run_id)
 
         # Step 5: Assign stable sequential clean IDs (V001, V002, ...)
         ordered_items: List[Dict[str, Any]] = []
@@ -664,6 +732,7 @@ Return a JSON array of decision objects matching this schema:
 
         # Mark and persist any items without acoustic evidence as UNRESOLVED (AUDIO_UNAVAILABLE)
         missing_audio_items = [it for it in ordered_items if it["clean_id"] not in items_with_audio]
+        missing_batch_results = []
         for it in missing_audio_items:
             cid = it["clean_id"]
             s_idx = it["segment_index"]
@@ -685,25 +754,26 @@ Return a JSON array of decision objects matching this schema:
             all_decisions[cid] = missing_decision
             all_eval_results.append(missing_decision)
             unresolved_count += 1
-            await session_repo.save_ai_verification_item_result(
-                session_id=session_id,
-                segment_index=s_idx,
-                ai_decision="UNRESOLVED",
-                ai_verified_text=azure_text,
-                ai_confidence=0.50,
-                ai_explanation=missing_decision["explanation"],
-                ai_model_name="system",
-                ai_scriptures=[],
-                auto_resolve=False,
-            )
+            missing_batch_results.append({
+                "segment_index": s_idx,
+                "ai_decision": "UNRESOLVED",
+                "ai_verified_text": azure_text,
+                "ai_confidence": 0.50,
+                "ai_explanation": missing_decision["explanation"],
+                "ai_model_name": "system",
+                "ai_scriptures": [],
+                "auto_resolve": False,
+            })
+
+        if missing_batch_results:
+            await session_repo.save_ai_verification_batch_results(session_id, missing_batch_results, run_id=run_id)
 
         audio_items = [it for it in ordered_items if it["clean_id"] in items_with_audio]
 
         # Check cancellation before audio transcription
-        cur_v = await session_repo.get_ai_verification_status(session_id)
-        if cur_v.get("ai_verification_status") in ("cancelled", "cancel_requested"):
-            logger.info("[%s] AI verification cancelled before audio call; halting.", session_id)
-            return {"status": "cancelled", "session_id": session_id}
+        if await _is_cancelled_or_superseded():
+            logger.info("[%s] AI verification cancelled before audio call; halting run %s.", session_id, run_id)
+            return {"status": "cancelled", "session_id": session_id, "run_id": run_id}
 
         # -------------------------------------------------------------
         # LOGICAL AI CALL 1: Independent Audio Listener Batch (ONCE)
@@ -754,10 +824,9 @@ Return a JSON array of decision objects matching this schema:
 
         for chunk_idx, chunk_items in enumerate(reasoning_chunks):
             # Check cancellation before processing chunk
-            cur_v = await session_repo.get_ai_verification_status(session_id)
-            if cur_v.get("ai_verification_status") in ("cancelled", "cancel_requested"):
-                logger.info("[%s] AI verification cancelled before chunk %d; halting.", session_id, chunk_idx + 1)
-                return {"status": "cancelled", "session_id": session_id}
+            if await _is_cancelled_or_superseded():
+                logger.info("[%s] AI verification cancelled before chunk %d; halting run %s.", session_id, chunk_idx + 1, run_id)
+                return {"status": "cancelled", "session_id": session_id, "run_id": run_id}
 
             chunk_num = chunk_idx + 1
             total_chunks = len(reasoning_chunks)
@@ -917,7 +986,13 @@ Return a JSON array of decision objects matching this schema:
 
             all_decisions.update(chunk_decisions)
 
-            # Step 9: Persist validated decisions immediately per chunk
+            # Check cancellation immediately after reasoning call returns and BEFORE persisting decisions
+            if await _is_cancelled_or_superseded():
+                logger.info("[%s] AI verification cancelled after chunk %d reasoning; discarding decisions and halting run %s.", session_id, chunk_num, run_id)
+                return {"status": "cancelled", "session_id": session_id, "run_id": run_id}
+
+            # Step 9: Persist validated decisions immediately per chunk using single batch transaction
+            chunk_batch_results: List[Dict[str, Any]] = []
             for it in chunk_items:
                 cid = it["clean_id"]
                 s_idx = it["segment_index"]
@@ -961,23 +1036,24 @@ Return a JSON array of decision objects matching this schema:
                 if reason_code and reason_code not in explanation_to_store:
                     explanation_to_store = f"[{reason_code}] {explanation_to_store}"
 
-                await session_repo.save_ai_verification_item_result(
-                    session_id=session_id,
-                    segment_index=s_idx,
-                    ai_decision=decision,
-                    ai_verified_text=decision_data["verified_text"],
-                    ai_confidence=confidence,
-                    ai_explanation=explanation_to_store,
-                    ai_model_name=decision_data.get("model_name", resp_model_name),
-                    ai_scriptures=decision_data.get("scripture_references", []),
-                    auto_resolve=item_auto_resolve,
-                )
+                chunk_batch_results.append({
+                    "segment_index": s_idx,
+                    "ai_decision": decision,
+                    "ai_verified_text": decision_data["verified_text"],
+                    "ai_confidence": confidence,
+                    "ai_explanation": explanation_to_store,
+                    "ai_model_name": decision_data.get("model_name", resp_model_name),
+                    "ai_scriptures": decision_data.get("scripture_references", []),
+                    "auto_resolve": item_auto_resolve,
+                })
+
+            if chunk_batch_results:
+                await session_repo.save_ai_verification_batch_results(session_id, chunk_batch_results, run_id=run_id)
 
         # Step 10: Determine final verification status
-        cur_v = await session_repo.get_ai_verification_status(session_id)
-        if cur_v.get("ai_verification_status") in ("cancelled", "cancel_requested"):
-            logger.info("[%s] AI verification was cancelled; discarding final completion.", session_id)
-            return {"status": "cancelled", "session_id": session_id}
+        if await _is_cancelled_or_superseded():
+            logger.info("[%s] AI verification was cancelled; discarding final completion for run %s.", session_id, run_id)
+            return {"status": "cancelled", "session_id": session_id, "run_id": run_id}
 
         final_state = await session_repo.get_verification_state(session_id)
         remaining_pending = len([i for i in final_state.get("items", []) if i.get("action") == "pending"])
@@ -987,6 +1063,7 @@ Return a JSON array of decision objects matching this schema:
             "verified_count": verified_count,
             "corrected_count": corrected_count,
             "unresolved_count": remaining_pending,
+            "run_id": run_id,
         }
 
         # Only mark ai_unavailable if ALL items were gateway-unavailable AND 0 items were resolved
@@ -1000,29 +1077,39 @@ Return a JSON array of decision objects matching this schema:
             final_status = "completed_needs_review"
             await session_repo.finalise_verification(session_id, allow_partial=True)
 
-        # Stage 7: Auto-process after verification if enabled
+        status_res = await session_repo.set_ai_verification_status(
+            session_id,
+            final_status,
+            summary=summary,
+            run_id=run_id,
+            expected_run_id=run_id,
+            guard_not_cancelled=True,
+        )
+        was_updated = status_res.get("updated", True)
+        if not was_updated:
+            logger.info("[%s] AI verification final completion discarded: run %s was cancelled or superseded.", session_id, run_id)
+            return {"status": "cancelled", "session_id": session_id, "run_id": run_id}
+
+        # Stage 7: Auto-process after verification if enabled and status update was not rejected
         if final_status in ("completed_verified", "completed_needs_review"):
             try:
                 from app.database.report_processing_repo import report_processing_repo
                 is_auto = await report_processing_repo.get_setting("auto_process_after_verification", default="true")
                 if str(is_auto).strip().lower() in ("true", "1", "yes", "on"):
                     from app.report_processing.engine import report_processing_engine
-                    import asyncio
                     asyncio.create_task(report_processing_engine.start_processing(session_id))
             except Exception as e:
-                import logging
-                logging.getLogger("app.verification.decision_engine").warning(f"Auto-process trigger error: {e}")
+                logger.warning("[%s] Auto-process trigger error: %s", session_id, e)
 
         logger.info(
-            "[%s] AI verification complete: status=%s, verified=%d, corrected=%d, remaining_unresolved=%d",
-            session_id, final_status, verified_count, corrected_count, remaining_pending
+            "[%s] AI verification complete: status=%s, run_id=%s, verified=%d, corrected=%d, remaining_unresolved=%d",
+            session_id, final_status, run_id, verified_count, corrected_count, remaining_pending
         )
-
-        await session_repo.set_ai_verification_status(session_id, final_status, summary=summary)
 
         return {
             "status": final_status,
             "session_id": session_id,
+            "run_id": run_id,
             "summary": summary,
             "message": (
                 "AI verification service is temporarily unavailable. Flagged segments are preserved for human review."

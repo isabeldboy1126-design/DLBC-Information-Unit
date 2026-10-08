@@ -141,6 +141,10 @@ class BibleContextService:
         self._church_vocab: List[Dict[str, Any]] = []
         self._all_names: List[Dict[str, Any]] = []
         self._names_by_phonetic: Dict[str, List[Dict[str, Any]]] = {}
+        self._names_by_exact: Dict[str, List[Dict[str, Any]]] = {}
+        self._names_by_len: Dict[int, List[Dict[str, Any]]] = {}
+        self._compound_names: List[Dict[str, Any]] = []
+        self._token_match_cache: Dict[str, List[Tuple[Dict[str, Any], float, str]]] = {}
         self._initialized = False
 
         if self.db_path.exists():
@@ -196,6 +200,21 @@ class BibleContextService:
                     }
                     self._all_names.append(name_entry)
                     self._names_by_phonetic.setdefault(p_key, []).append(name_entry)
+
+                    # Exact name and alias index for O(1) matching
+                    norm_lower = row["normalized_name"].lower()
+                    self._names_by_exact.setdefault(norm_lower, []).append(name_entry)
+                    for alias in aliases:
+                        self._names_by_exact.setdefault(alias.lower(), []).append(name_entry)
+
+                    # Length-based index for fast fuzzy candidate pruning
+                    self._names_by_len.setdefault(len(norm_lower), []).append(name_entry)
+                    for alias in aliases:
+                        self._names_by_len.setdefault(len(alias), []).append(name_entry)
+
+                    # Compound name index (multi-word or hyphenated, e.g. Maher-shalal-hash-baz)
+                    if " " in norm_lower or "-" in row["canonical_name"]:
+                        self._compound_names.append(name_entry)
 
             self._initialized = True
         except Exception as e:
@@ -438,78 +457,177 @@ class BibleContextService:
                 except Exception:
                     pass
 
+    def _match_token_candidates(self, token: str) -> List[Tuple[Dict[str, Any], float, str]]:
+        """
+        Evaluates base similarity matches for a single token against the biblical names dictionary.
+        Results are cached to avoid redundant computation across repeated words in transcripts.
+        """
+        t_lower = token.lower()
+        if t_lower in self._token_match_cache:
+            return self._token_match_cache[t_lower]
+
+        len_t = len(t_lower)
+        t_soundex = soundex(token)
+        results: List[Tuple[Dict[str, Any], float, str]] = []
+        seen_canonical = set()
+
+        # 1. Exact match (O(1))
+        exact_matches = self._names_by_exact.get(t_lower, [])
+        for entry in exact_matches:
+            c_name = entry["canonical_name"]
+            if c_name not in seen_canonical:
+                seen_canonical.add(c_name)
+                results.append((entry, 1.0, "exact"))
+
+        # 2. Soundex match
+        for entry in self._names_by_phonetic.get(t_soundex, []):
+            c_name = entry["canonical_name"]
+            if c_name in seen_canonical:
+                continue
+            n_name = entry["normalized_name"]
+            sim = difflib.SequenceMatcher(None, t_lower, n_name).ratio()
+            score = 0.70 + (sim * 0.20)
+            seen_canonical.add(c_name)
+            results.append((entry, score, "phonetic"))
+
+        # 3. Fuzzy similarity match (bounded length candidates only)
+        # Mathematical constraint: 2 * min(len_t, len_n) / (len_t + len_n) >= 0.75
+        # Implies 0.6 * len_t <= len_n <= 1.67 * len_t
+        min_len = max(3, int(len_t * 0.6))
+        max_len = int(len_t * 1.67) + 1
+
+        candidate_entries: Dict[str, Dict[str, Any]] = {}
+        for l in range(min_len, max_len + 1):
+            for entry in self._names_by_len.get(l, []):
+                c_name = entry["canonical_name"]
+                if c_name not in seen_canonical and c_name not in candidate_entries:
+                    candidate_entries[c_name] = entry
+
+        for entry in candidate_entries.values():
+            n_name = entry["normalized_name"]
+            len_n = len(n_name)
+            sim = 0.0
+            if (2 * min(len_t, len_n) / (len_t + len_n)) >= 0.75:
+                sim = difflib.SequenceMatcher(None, t_lower, n_name).ratio()
+                for alias in entry["aliases"]:
+                    len_a = len(alias)
+                    if (2 * min(len_t, len_a) / (len_t + len_a)) >= 0.75:
+                        a_sim = difflib.SequenceMatcher(None, t_lower, alias.lower()).ratio()
+                        if a_sim > sim:
+                            sim = a_sim
+                if sim >= 0.75:
+                    score = sim * 0.85
+                    results.append((entry, score, "fuzzy"))
+
+        if len(self._token_match_cache) < 8192:
+            self._token_match_cache[t_lower] = results
+        return results
+
+    def find_name_candidates(
+        self,
+        text: str,
+        nearby_reference: Optional[str] = None,
+        max_candidates: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """
+        Identifies potential biblical names from a transcript text using a 4-layer
+        matching pipeline: exact match -> phonetic Soundex -> fuzzy similarity -> contextual boost.
+        """
+        if not text or not self._all_names:
+            return []
+
+        tokens = re.findall(r"\b[A-Za-z]+\b", text)
+        if not tokens:
+            return []
+
+        chapter_verses_text = ""
+        nearby_book = None
+        nearby_chapter = None
+
+        if nearby_reference:
+            parsed_nearby = self.parse_reference(nearby_reference)
+            if parsed_nearby:
+                nearby_book = parsed_nearby["book"]
+                nearby_chapter = parsed_nearby["chapter"]
+            else:
+                # Try simple "Book Chapter" pattern like "1 Samuel 22"
+                m_chap = re.match(r"^([1-3]?\s*[A-Za-z]+(?:\s+[A-Za-z]+)?)\s+(\d+)$", nearby_reference.strip())
+                if m_chap:
+                    candidate_b = " ".join(m_chap.group(1).lower().split())
+                    if candidate_b in self._aliases:
+                        nearby_book = self._aliases[candidate_b]
+                        nearby_chapter = int(m_chap.group(2))
+
+            if nearby_book and nearby_chapter:
+                try:
+                    with self._get_connection() as conn:
+                        cur = conn.cursor()
+                        cur.execute(
+                            "SELECT text FROM bible_verses WHERE book = ? AND chapter = ?",
+                            (nearby_book, nearby_chapter),
+                        )
+                        rows = cur.fetchall()
+                        chapter_verses_text = " ".join([r["text"] for r in rows]).lower()
+                except Exception:
+                    pass
+
         # Score candidates across unique tokens
         scored: Dict[str, Dict[str, Any]] = {}
+
+        # 1. Exact match for compound biblical names (e.g. Maher-shalal-hash-baz, Mary Magdalene)
+        text_clean = " " + " ".join(text.lower().replace("-", " ").replace("’", "'").split()) + " "
+        for entry in self._compound_names:
+            c_target = " " + entry["normalized_name"] + " "
+            if c_target in text_clean:
+                c_name = entry["canonical_name"]
+                scored[c_name] = {
+                    "canonical_name": c_name,
+                    "category": entry["category"],
+                    "phonetic_key": entry["phonetic_key"],
+                    "match_type": "exact",
+                    "score": 1.0,
+                    "context_boosted": False,
+                    "reference_examples": entry["reference_examples"][:3],
+                }
+
         unique_tokens = {t for t in tokens if len(t) >= 3}
 
         for token in unique_tokens:
-            t_lower = token.lower()
-            len_t = len(t_lower)
-            t_soundex = soundex(token)
-
-            for entry in self._all_names:
+            matches = self._match_token_candidates(token)
+            for entry, score, match_type in matches:
                 c_name = entry["canonical_name"]
                 n_name = entry["normalized_name"]
                 p_key = entry["phonetic_key"]
-                aliases = [a.lower() for a in entry["aliases"]]
 
-                score = 0.0
-                match_type = "none"
+                # 4. Apply Contextual Boost
+                boost = 0.0
+                context_matched = False
 
-                # 1. Exact match
-                if t_lower == n_name or t_lower in aliases:
-                    score = 1.0
-                    match_type = "exact"
-                # 2. Soundex match
-                elif t_soundex == p_key:
-                    sim = difflib.SequenceMatcher(None, t_lower, n_name).ratio()
-                    score = 0.70 + (sim * 0.20)
-                    match_type = "phonetic"
-                # 3. Fuzzy similarity match (with mathematical length filter)
-                else:
-                    len_n = len(n_name)
-                    if (2 * min(len_t, len_n) / (len_t + len_n)) >= 0.75:
-                        sim = difflib.SequenceMatcher(None, t_lower, n_name).ratio()
-                        for alias in aliases:
-                            len_a = len(alias)
-                            if (2 * min(len_t, len_a) / (len_t + len_a)) >= 0.75:
-                                a_sim = difflib.SequenceMatcher(None, t_lower, alias).ratio()
-                                if a_sim > sim:
-                                    sim = a_sim
-                        if sim >= 0.75:
-                            score = sim * 0.85
-                            match_type = "fuzzy"
+                # Check if the name appears in the chapter's verses
+                if chapter_verses_text and n_name in chapter_verses_text:
+                    boost += 0.35
+                    context_matched = True
 
-                if score > 0.0:
-                    # 4. Apply Contextual Boost
-                    boost = 0.0
-                    context_matched = False
+                # Check if reference examples match nearby reference
+                if nearby_book and not context_matched:
+                    for ref_ex in entry["reference_examples"]:
+                        if nearby_book.lower()[:3] in ref_ex.lower() or (nearby_chapter and f"{nearby_chapter}:" in ref_ex):
+                            boost += 0.25
+                            context_matched = True
+                            break
 
-                    # Check if the name appears in the chapter's verses
-                    if chapter_verses_text and n_name in chapter_verses_text:
-                        boost += 0.35
-                        context_matched = True
+                final_score = round(min(1.5, score + boost), 3)
 
-                    # Check if reference examples match nearby reference
-                    if nearby_book and not context_matched:
-                        for ref_ex in entry["reference_examples"]:
-                            if nearby_book.lower()[:3] in ref_ex.lower() or (nearby_chapter and f"{nearby_chapter}:" in ref_ex):
-                                boost += 0.25
-                                context_matched = True
-                                break
-
-                    final_score = round(min(1.5, score + boost), 3)
-
-                    if c_name not in scored or final_score > scored[c_name]["score"]:
-                        scored[c_name] = {
-                            "canonical_name": c_name,
-                            "category": entry["category"],
-                            "phonetic_key": p_key,
-                            "match_type": match_type,
-                            "score": final_score,
-                            "context_boosted": context_matched,
-                            "reference_examples": entry["reference_examples"][:3],
-                        }
+                if c_name not in scored or final_score > scored[c_name]["score"]:
+                    scored[c_name] = {
+                        "canonical_name": c_name,
+                        "category": entry["category"],
+                        "phonetic_key": p_key,
+                        "match_type": match_type,
+                        "score": final_score,
+                        "context_boosted": context_matched,
+                        "reference_examples": entry["reference_examples"][:3],
+                    }
 
         sorted_results = sorted(scored.values(), key=lambda x: x["score"], reverse=True)
         limit = min(max(max_candidates, 1), 8)

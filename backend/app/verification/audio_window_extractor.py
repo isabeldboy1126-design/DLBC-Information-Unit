@@ -16,9 +16,59 @@ import io
 import os
 import wave
 import logging
+import tempfile
+import subprocess
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("app.verification.audio_window_extractor")
+
+
+def _ensure_pcm_wav_path(source_path: str) -> Tuple[Optional[str], bool]:
+    """
+    Ensures that source_path can be read as a PCM WAV file.
+    If source_path is already a valid WAV file, returns (source_path, False).
+    If it is an MP3, M4A, AAC, or other non-WAV container, decodes it to a temporary
+    PCM WAV file using FFmpeg and returns (temp_wav_path, True).
+    The caller is responsible for deleting the temp file if True is returned.
+    """
+    if not source_path or not os.path.isfile(source_path):
+        return None, False
+
+    try:
+        with wave.open(source_path, "rb") as test_wf:
+            if test_wf.getframerate() > 0 and test_wf.getnframes() > 0:
+                return source_path, False
+    except Exception:
+        pass
+
+    # Attempt conversion using bundled FFmpeg
+    try:
+        from app.transcription.audio_extractor import get_ffmpeg_binary
+        ffmpeg_exe = get_ffmpeg_binary()
+        tmp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        tmp_path = tmp_file.name
+        tmp_file.close()
+
+        cmd = [
+            ffmpeg_exe,
+            "-y",
+            "-i", source_path,
+            "-vn",
+            "-acodec", "pcm_s16le",
+            "-ar", "16000",
+            "-ac", "1",
+            tmp_path,
+        ]
+        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        return tmp_path, True
+    except Exception as conv_err:
+        logger.warning("Failed to decode non-WAV audio %s via ffmpeg: %s", source_path, conv_err)
+        if 'tmp_path' in locals() and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        return None, False
 
 
 def compute_bounded_windows(
@@ -122,8 +172,12 @@ def extract_audio_window_bytes(
         logger.warning("Audio file does not exist on disk: %s", wav_path)
         return None
 
+    effective_path, is_temp = _ensure_pcm_wav_path(wav_path)
+    if not effective_path:
+        return None
+
     try:
-        with wave.open(wav_path, "rb") as wf:
+        with wave.open(effective_path, "rb") as wf:
             nchannels = wf.getnchannels()
             sampwidth = wf.getsampwidth()
             framerate = wf.getframerate()
@@ -155,6 +209,12 @@ def extract_audio_window_bytes(
     except Exception as e:
         logger.error("Failed to extract audio window from %s: %s", wav_path, e)
         return None
+    finally:
+        if is_temp and os.path.exists(effective_path):
+            try:
+                os.remove(effective_path)
+            except Exception:
+                pass
 
 
 def batch_extract_windows(
@@ -225,8 +285,13 @@ def build_verification_reel(
     if not audio_file_path or not os.path.isfile(audio_file_path) or not flagged_items:
         return None, [], 0.0
 
+    effective_path, is_temp = _ensure_pcm_wav_path(audio_file_path)
+    if not effective_path:
+        logger.warning("Could not read or decode audio path for verification reel: %s", audio_file_path)
+        return None, [], 0.0
+
     try:
-        with wave.open(audio_file_path, "rb") as wf:
+        with wave.open(effective_path, "rb") as wf:
             nchannels = wf.getnchannels()
             sampwidth = wf.getsampwidth()
             framerate = wf.getframerate()
@@ -312,4 +377,10 @@ def build_verification_reel(
     except Exception as e:
         logger.error("Failed to construct verification reel from %s: %s", audio_file_path, e)
         return None, [], 0.0
+    finally:
+        if is_temp and os.path.exists(effective_path):
+            try:
+                os.remove(effective_path)
+            except Exception:
+                pass
 

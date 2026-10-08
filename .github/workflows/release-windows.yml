@@ -17,9 +17,29 @@ permissions:
 jobs:
   build-and-release:
     runs-on: windows-latest
+    env:
+      VITE_SUPABASE_URL: "https://szgdxynzjzgtingwbwcu.supabase.co"
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Validate Supabase Authentication Configuration
+        shell: pwsh
+        env:
+          VITE_SUPABASE_URL: "https://szgdxynzjzgtingwbwcu.supabase.co"
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          Write-Host "Validating Supabase authentication configuration for Windows release..."
+          if (-not $env:VITE_SUPABASE_PUBLISHABLE_KEY -or $env:VITE_SUPABASE_PUBLISHABLE_KEY.Trim() -eq "") {
+            Write-Error "CRITICAL: VITE_SUPABASE_PUBLISHABLE_KEY Actions secret is missing or empty! Release packaging cannot proceed without Supabase authentication keys."
+            exit 1
+          }
+          if (-not $env:VITE_SUPABASE_URL -or $env:VITE_SUPABASE_URL.Trim() -eq "") {
+            Write-Error "CRITICAL: VITE_SUPABASE_URL is missing or empty! Release packaging cannot proceed."
+            exit 1
+          }
+          Write-Host "Supabase configuration verified successfully (URL and publishable key present)."
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -42,6 +62,9 @@ jobs:
         run: npm ci --prefix frontend
 
       - name: Run frontend tests and build
+        env:
+          VITE_SUPABASE_URL: "https://szgdxynzjzgtingwbwcu.supabase.co"
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: npm run build --prefix frontend
 
       - name: Build Tauri Desktop & Publish Release
@@ -50,6 +73,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          VITE_SUPABASE_URL: "https://szgdxynzjzgtingwbwcu.supabase.co"
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
         with:
           projectPath: frontend
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}

@@ -6,10 +6,13 @@ indexing, and Phase 5 human verification workflow for church message sessions in
 """
 
 import json
+import logging
 import os
 import time
 import uuid
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("app.database.session_repo")
 
 from app.database.connection import DB_PATH, get_db_connection
 from app.database.models import (
@@ -1739,8 +1742,11 @@ class SessionRepository:
     async def set_ai_verification_status(
         self,
         session_id: str,
-        status: str,  # 'idle' | 'compiling' | 'verifying' | 'completed_verified' | 'completed_needs_review' | 'ai_unavailable' | 'failed'
+        status: str,  # 'idle' | 'compiling' | 'verifying' | 'completed_verified' | 'completed_needs_review' | 'ai_unavailable' | 'failed' | 'cancelled'
         summary: Optional[Dict[str, Any]] = None,
+        run_id: Optional[str] = None,
+        expected_run_id: Optional[str] = None,
+        guard_not_cancelled: bool = False,
     ) -> Dict[str, Any]:
         """Updates the session's AI verification processing lifecycle status."""
         await self.init_db()
@@ -1755,29 +1761,57 @@ class SessionRepository:
             updates.append("ai_verification_completed_at = ?")
             params.append(now_iso)
 
-        if summary is not None:
+        if run_id is not None:
+            updates.append("ai_verification_run_id = ?")
+            params.append(run_id)
+
+        # Merge run_id into summary for transparent persistence across DB engines
+        effective_summary = dict(summary) if summary is not None else None
+        if run_id and effective_summary is not None:
+            effective_summary["run_id"] = run_id
+
+        if effective_summary is not None:
             updates.append("ai_verification_summary_json = ?")
-            params.append(json.dumps(summary, ensure_ascii=False))
+            params.append(json.dumps(effective_summary, ensure_ascii=False))
 
-        params.append(session_id)
-        query = f"UPDATE sessions SET {', '.join(updates)} WHERE session_id = ?"
+        where_clauses = ["session_id = ?"]
+        where_params = [session_id]
 
+        if guard_not_cancelled:
+            where_clauses.append("ai_verification_status NOT IN ('cancelled', 'failed')")
+
+        if expected_run_id:
+            where_clauses.append("(ai_verification_run_id IS NULL OR ai_verification_run_id = ?)")
+            where_params.append(expected_run_id)
+
+        all_params = params + where_params
+        query = f"UPDATE sessions SET {', '.join(updates)} WHERE {' AND '.join(where_clauses)}"
+
+        rows_affected = -1
         async with get_db_connection() as conn:
-            await conn.execute(query, tuple(params))
-            await conn.commit()
+            try:
+                cursor = await conn.execute(query, tuple(all_params))
+                await conn.commit()
+                rows_affected = getattr(cursor, "rowcount", -1)
+            except Exception:
+                await conn.rollback()
+                raise
 
-        return await self.get_ai_verification_status(session_id)
+        result = await self.get_ai_verification_status(session_id)
+        if guard_not_cancelled or expected_run_id:
+            result["updated"] = bool(rows_affected != 0)
+        return result
 
     async def get_ai_verification_status(self, session_id: str) -> Dict[str, Any]:
-        """Returns the current AI verification lifecycle state and summary for a session."""
+        """Returns the current AI verification lifecycle state, run ID, and summary for a session."""
         await self.init_db()
         async with get_db_connection() as conn:
             cursor = await conn.execute(
                 """
                 SELECT session_id, verification_status, ai_verification_status,
                        ai_verification_started_at, ai_verification_completed_at,
-                       ai_verification_summary_json, verification_items_total,
-                       verification_items_resolved
+                       ai_verification_summary_json, ai_verification_run_id,
+                       verification_items_total, verification_items_resolved
                 FROM sessions WHERE session_id = ?
                 """,
                 (session_id,),
@@ -1794,10 +1828,14 @@ class SessionRepository:
                 except Exception:
                     summary = {}
 
+            run_id = row_dict.get("ai_verification_run_id") or summary.get("run_id")
+
             return {
                 "session_id": session_id,
                 "verification_status": row_dict.get("verification_status") or "not_started",
                 "ai_verification_status": row_dict.get("ai_verification_status") or "idle",
+                "ai_verification_run_id": run_id,
+                "run_id": run_id,
                 "started_at": row_dict.get("ai_verification_started_at"),
                 "completed_at": row_dict.get("ai_verification_completed_at"),
                 "summary": summary,
@@ -1831,76 +1869,80 @@ class SessionRepository:
         scriptures_json = json.dumps(ai_scriptures or [], ensure_ascii=False)
 
         async with get_db_connection() as conn:
-            cursor = await conn.execute(
-                "SELECT item_id, action, verified_text FROM verification_items WHERE session_id = ? AND segment_index = ?",
-                (session_id, segment_index),
-            )
-            item_row = await cursor.fetchone()
-            if not item_row:
-                return {"error": f"Verification item for segment {segment_index} not found"}
+            try:
+                cursor = await conn.execute(
+                    "SELECT item_id, action, verified_text FROM verification_items WHERE session_id = ? AND segment_index = ?",
+                    (session_id, segment_index),
+                )
+                item_row = await cursor.fetchone()
+                if not item_row:
+                    return {"error": f"Verification item for segment {segment_index} not found"}
 
-            item_id = item_row["item_id"]
-            current_action = item_row["action"]
+                item_id = item_row["item_id"]
+                current_action = item_row["action"]
 
-            new_action = current_action
-            new_verified_text = item_row["verified_text"]
-            correction_note = None
+                new_action = current_action
+                new_verified_text = item_row["verified_text"]
+                correction_note = None
 
-            if auto_resolve:
-                if ai_decision == "VERIFIED":
-                    new_action = "confirmed"
-                    new_verified_text = ai_verified_text
-                    correction_note = f"AI Verified: {ai_explanation}"
-                elif ai_decision == "CORRECTED":
-                    new_action = "corrected"
-                    new_verified_text = ai_verified_text
-                    correction_note = f"AI Corrected: {ai_explanation}"
-            else:
-                correction_note = f"AI Suggested ({ai_decision}): {ai_explanation}"
+                if auto_resolve:
+                    if ai_decision == "VERIFIED":
+                        new_action = "confirmed"
+                        new_verified_text = ai_verified_text
+                        correction_note = f"AI Verified: {ai_explanation}"
+                    elif ai_decision == "CORRECTED":
+                        new_action = "corrected"
+                        new_verified_text = ai_verified_text
+                        correction_note = f"AI Corrected: {ai_explanation}"
+                else:
+                    correction_note = f"AI Suggested ({ai_decision}): {ai_explanation}"
 
-            await conn.execute(
-                """
-                UPDATE verification_items
-                SET ai_decision = ?,
-                    ai_verified_text = ?,
-                    ai_confidence = ?,
-                    ai_explanation = ?,
-                    ai_model_name = ?,
-                    ai_scriptures_json = ?,
-                    action = ?,
-                    verified_text = ?,
-                    correction_note = COALESCE(?, correction_note),
-                    verified_at = CASE WHEN ? IN ('confirmed', 'corrected') THEN ? ELSE verified_at END
-                WHERE item_id = ?
-                """,
-                (
-                    ai_decision,
-                    ai_verified_text,
-                    ai_confidence,
-                    ai_explanation,
-                    ai_model_name,
-                    scriptures_json,
-                    new_action,
-                    new_verified_text,
-                    correction_note,
-                    new_action,
-                    now_iso,
-                    item_id,
-                ),
-            )
+                await conn.execute(
+                    """
+                    UPDATE verification_items
+                    SET ai_decision = ?,
+                        ai_verified_text = ?,
+                        ai_confidence = ?,
+                        ai_explanation = ?,
+                        ai_model_name = ?,
+                        ai_scriptures_json = ?,
+                        action = ?,
+                        verified_text = ?,
+                        correction_note = COALESCE(?, correction_note),
+                        verified_at = CASE WHEN ? IN ('confirmed', 'corrected') THEN ? ELSE verified_at END
+                    WHERE item_id = ?
+                    """,
+                    (
+                        ai_decision,
+                        ai_verified_text,
+                        ai_confidence,
+                        ai_explanation,
+                        ai_model_name,
+                        scriptures_json,
+                        new_action,
+                        new_verified_text,
+                        correction_note,
+                        new_action,
+                        now_iso,
+                        item_id,
+                    ),
+                )
 
-            # Update resolved count in sessions
-            count_cursor = await conn.execute(
-                "SELECT COUNT(*) as resolved FROM verification_items WHERE session_id = ? AND action IN ('confirmed', 'corrected')",
-                (session_id,),
-            )
-            resolved_count = (await count_cursor.fetchone())["resolved"]
+                # Update resolved count in sessions
+                count_cursor = await conn.execute(
+                    "SELECT COUNT(*) as resolved FROM verification_items WHERE session_id = ? AND action IN ('confirmed', 'corrected')",
+                    (session_id,),
+                )
+                resolved_count = (await count_cursor.fetchone())["resolved"]
 
-            await conn.execute(
-                "UPDATE sessions SET verification_items_resolved = ? WHERE session_id = ?",
-                (resolved_count, session_id),
-            )
-            await conn.commit()
+                await conn.execute(
+                    "UPDATE sessions SET verification_items_resolved = ? WHERE session_id = ?",
+                    (resolved_count, session_id),
+                )
+                await conn.commit()
+            except Exception:
+                await conn.rollback()
+                raise
 
         return {
             "status": "success",
@@ -1911,6 +1953,140 @@ class SessionRepository:
             "action": new_action,
             "verified_text": new_verified_text,
         }
+
+    async def save_ai_verification_batch_results(
+        self,
+        session_id: str,
+        results: List[Dict[str, Any]],
+        run_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Stores AI evaluation results for multiple verification items in a single transaction.
+        Guarded against cancelled runs or superseded run_ids to prevent obsolete or cancelled
+        background tasks from writing to the database.
+        """
+        if not results:
+            return {"status": "success", "session_id": session_id, "count": 0}
+
+        await self.init_db()
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        async with get_db_connection() as conn:
+            try:
+                # 1. Guard check: abort immediately if session was cancelled or superseded
+                status_cursor = await conn.execute(
+                    "SELECT ai_verification_status, ai_verification_run_id, ai_verification_summary_json FROM sessions WHERE session_id = ?",
+                    (session_id,),
+                )
+                s_row = await status_cursor.fetchone()
+                if not s_row:
+                    return {"status": "error", "message": "Session not found", "count": 0}
+
+                cur_status = s_row["ai_verification_status"]
+                cur_run_id = s_row["ai_verification_run_id"]
+                if not cur_run_id and s_row["ai_verification_summary_json"]:
+                    try:
+                        cur_run_id = json.loads(s_row["ai_verification_summary_json"]).get("run_id")
+                    except Exception:
+                        cur_run_id = None
+
+                if cur_status in ("cancelled", "cancel_requested"):
+                    logger.info("[%s] save_ai_verification_batch_results aborted: session is %s", session_id, cur_status)
+                    return {"status": "cancelled", "session_id": session_id, "count": 0}
+
+                if run_id and cur_run_id and cur_run_id != run_id:
+                    logger.info("[%s] save_ai_verification_batch_results aborted: run superseded (%s != %s)", session_id, cur_run_id, run_id)
+                    return {"status": "superseded", "session_id": session_id, "count": 0}
+
+                cursor = await conn.execute(
+                    "SELECT item_id, segment_index, action, verified_text FROM verification_items WHERE session_id = ?",
+                    (session_id,),
+                )
+                rows = await cursor.fetchall()
+                items_by_segment = {r["segment_index"]: r for r in rows}
+
+                for res in results:
+                    s_idx = res["segment_index"]
+                    item_row = items_by_segment.get(s_idx)
+                    if not item_row:
+                        continue
+
+                    item_id = item_row["item_id"]
+                    current_action = item_row["action"]
+                    ai_decision = res.get("ai_decision", "UNRESOLVED")
+                    ai_verified_text = res.get("ai_verified_text", "")
+                    ai_confidence = res.get("ai_confidence", 0.5)
+                    ai_explanation = res.get("ai_explanation", "")
+                    ai_model_name = res.get("ai_model_name", "gemini-3.8-flash")
+                    ai_scriptures = res.get("ai_scriptures") or []
+                    auto_resolve = res.get("auto_resolve", False)
+
+                    scriptures_json = json.dumps(ai_scriptures, ensure_ascii=False)
+
+                    new_action = current_action
+                    new_verified_text = item_row["verified_text"]
+                    correction_note = None
+
+                    if auto_resolve:
+                        if ai_decision == "VERIFIED":
+                            new_action = "confirmed"
+                            new_verified_text = ai_verified_text
+                            correction_note = f"AI Verified: {ai_explanation}"
+                        elif ai_decision == "CORRECTED":
+                            new_action = "corrected"
+                            new_verified_text = ai_verified_text
+                            correction_note = f"AI Corrected: {ai_explanation}"
+                    else:
+                        correction_note = f"AI Suggested ({ai_decision}): {ai_explanation}"
+
+                    await conn.execute(
+                        """
+                        UPDATE verification_items
+                        SET ai_decision = ?,
+                            ai_verified_text = ?,
+                            ai_confidence = ?,
+                            ai_explanation = ?,
+                            ai_model_name = ?,
+                            ai_scriptures_json = ?,
+                            action = ?,
+                            verified_text = ?,
+                            correction_note = COALESCE(?, correction_note),
+                            verified_at = CASE WHEN ? IN ('confirmed', 'corrected') THEN ? ELSE verified_at END
+                        WHERE item_id = ?
+                        """,
+                        (
+                            ai_decision,
+                            ai_verified_text,
+                            ai_confidence,
+                            ai_explanation,
+                            ai_model_name,
+                            scriptures_json,
+                            new_action,
+                            new_verified_text,
+                            correction_note,
+                            new_action,
+                            now_iso,
+                            item_id,
+                        ),
+                    )
+
+                # Update resolved count in sessions once
+                count_cursor = await conn.execute(
+                    "SELECT COUNT(*) as resolved FROM verification_items WHERE session_id = ? AND action IN ('confirmed', 'corrected')",
+                    (session_id,),
+                )
+                resolved_count = (await count_cursor.fetchone())["resolved"]
+
+                await conn.execute(
+                    "UPDATE sessions SET verification_items_resolved = ? WHERE session_id = ?",
+                    (resolved_count, session_id),
+                )
+                await conn.commit()
+            except Exception:
+                await conn.rollback()
+                raise
+
+        return {"status": "success", "session_id": session_id, "count": len(results)}
 
     async def set_report_processing_status(
         self,

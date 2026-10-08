@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { getApiUrl } from '../../config'
-import { minimizeActiveProcess } from '../common/activeProcessManager'
+import { getApiUrl, authFetch } from '../../config'
+import { minimizeActiveProcess, clearActiveProcess } from '../common/activeProcessManager'
 
 /**
  * SessionCompletionView — Contained floating processing panel matching
@@ -14,7 +14,8 @@ import { minimizeActiveProcess } from '../common/activeProcessManager'
  *      horizontal progress bar, 4-step vertical timeline.
  *    - Verification Complete state: Mint/green check badge, title, 2-column stats box,
  *      full-width blue continue button.
- *    - Unavailable state: Soft amber badge, safe message, Try Again + Review Manually buttons.
+ *    - Cancelled state: Neutral slate badge, title, restart + review buttons.
+ *    - Unavailable / Failed state: Soft amber badge, safe message, Try Again + Review Manually buttons.
  */
 export function SessionCompletionView({
   session,
@@ -44,19 +45,23 @@ export function SessionCompletionView({
     if (!sessionId) return
     try {
       setIsCancelling(true)
-      await fetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/cancel`), {
+      await authFetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/cancel`), {
         method: 'POST',
       })
-      if (onBeginVerification) {
-        await onBeginVerification()
-      } else if (onFinishForNow) {
+      clearActiveProcess()
+      setAiStatus('cancelled')
+      if (onFinishForNow) {
         onFinishForNow()
       } else if (onViewSessionDetails) {
         onViewSessionDetails()
+      } else if (onBeginVerification) {
+        await onBeginVerification()
       }
     } catch (e) {
       console.error('Error cancelling verification:', e)
-      if (onBeginVerification) onBeginVerification()
+      clearActiveProcess()
+      setAiStatus('cancelled')
+      if (onFinishForNow) onFinishForNow()
     } finally {
       setIsCancelling(false)
     }
@@ -74,7 +79,7 @@ export function SessionCompletionView({
 
     const checkStatus = async () => {
       try {
-        const res = await fetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/ai-status`))
+        const res = await authFetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/ai-status`))
         if (!res.ok) return
         const data = await res.json()
         if (isMounted && data) {
@@ -87,7 +92,7 @@ export function SessionCompletionView({
           if (data.items_pending !== undefined) setItemsPending(data.items_pending)
           if (data.items_resolved !== undefined) setItemsResolved(data.items_resolved)
 
-          if (['completed_verified', 'completed_needs_review', 'ai_unavailable', 'failed'].includes(status)) {
+          if (['completed_verified', 'completed_needs_review', 'ai_unavailable', 'failed', 'cancelled'].includes(status)) {
             if (pollInterval) clearInterval(pollInterval)
           }
         }
@@ -135,11 +140,10 @@ export function SessionCompletionView({
   const isVerifying =
     (skipCompiling && (aiStatus === 'compiling' || aiStatus === 'verifying')) ||
     (!skipCompiling && aiStatus === 'verifying')
-  const isVerifiedSuccess =
-    aiStatus === 'completed_verified' || (aiStatus === 'idle' && itemsPending === 0 && rawFlagCount === 0)
-  const isNeedsReview =
-    aiStatus === 'completed_needs_review' || (aiStatus === 'idle' && itemsPending > 0)
-  const isAiUnavailable = aiStatus === 'ai_unavailable' || aiStatus === 'failed'
+  const isCancelled = aiStatus === 'cancelled'
+  const isFailed = aiStatus === 'failed'
+  const isAiUnavailable = aiStatus === 'ai_unavailable'
+  const isCompleted = !isCompiling && !isVerifying && !isCancelled && !isFailed && !isAiUnavailable
 
   const remainingToReview = summary?.unresolved_count !== undefined ? summary.unresolved_count : itemsPending
   const verifiedCount = summary?.verified_count !== undefined ? summary.verified_count : Math.max(0, itemsTotal - remainingToReview)
@@ -294,7 +298,7 @@ export function SessionCompletionView({
           )}
 
           {/* 2. Verification Complete State (media_1790599569328.png) */}
-          {!isCompiling && !isVerifying && !isAiUnavailable && (
+          {isCompleted && (
             <div className="completion-state-complete">
               <div className="completion-success-badge">
                 <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -343,8 +347,53 @@ export function SessionCompletionView({
             </div>
           )}
 
-          {/* 3. Unavailable State */}
-          {!isCompiling && !isVerifying && isAiUnavailable && (
+          {/* 3. Cancelled State */}
+          {isCancelled && (
+            <div className="completion-state-cancelled" style={{ textAlign: 'center' }}>
+              <div className="completion-unavailable-badge" style={{ backgroundColor: '#f1f5f9', color: '#64748b' }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="15" y1="9" x2="9" y2="15" />
+                  <line x1="9" y1="9" x2="15" y2="15" />
+                </svg>
+              </div>
+
+              <h2 className="floating-card-title">Verification cancelled</h2>
+
+              <p className="floating-card-desc">
+                Automated verification was cancelled. Your recording, transcript, and previously resolved items remain safe.
+              </p>
+
+              <div className="floating-card-actions-row">
+                {onRetryVerification && (
+                  <button
+                    type="button"
+                    className="btn-floating-secondary"
+                    id="btn-restart-verification-completion"
+                    onClick={() => {
+                      setAiStatus('compiling')
+                      onRetryVerification()
+                    }}
+                  >
+                    ↻ Restart Verification
+                  </button>
+                )}
+                {onBeginVerification && (
+                  <button
+                    type="button"
+                    className="btn-floating-primary btn-floating-primary--auto"
+                    id="btn-manual-verify-cancelled"
+                    onClick={onBeginVerification}
+                  >
+                    Review Flagged Items →
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 4. Unavailable or Failed State */}
+          {(isFailed || isAiUnavailable) && (
             <div className="completion-state-unavailable">
               <div className="completion-unavailable-badge">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -354,7 +403,7 @@ export function SessionCompletionView({
                 </svg>
               </div>
 
-              <h2 className="floating-card-title">Verification unavailable</h2>
+              <h2 className="floating-card-title">{isFailed ? 'Verification failed' : 'Verification unavailable'}</h2>
 
               <p className="floating-card-desc">
                 Your recording and transcript are safe. Automated verification could not be completed right now.

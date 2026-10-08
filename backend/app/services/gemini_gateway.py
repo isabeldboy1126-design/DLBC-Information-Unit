@@ -219,6 +219,8 @@ class GeminiGateway:
         from google import genai
         from google.genai import types
 
+        timeout_ms = int(os.environ.get("GEMINI_HTTP_TIMEOUT_MS", "60000"))
+
         if slot == "primary":
             key = self._get_primary_key()
             if not key:
@@ -226,7 +228,7 @@ class GeminiGateway:
             if self._primary_client is None or self._cached_primary_key != key:
                 self._primary_client = genai.Client(
                     api_key=key,
-                    http_options=types.HttpOptions(timeout=120000),
+                    http_options=types.HttpOptions(timeout=timeout_ms),
                 )
                 self._cached_primary_key = key
             return self._primary_client
@@ -238,7 +240,7 @@ class GeminiGateway:
             if self._backup_client is None or self._cached_backup_key != key:
                 self._backup_client = genai.Client(
                     api_key=key,
-                    http_options=types.HttpOptions(timeout=120000),
+                    http_options=types.HttpOptions(timeout=timeout_ms),
                 )
                 self._cached_backup_key = key
             return self._backup_client

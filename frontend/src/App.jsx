@@ -1229,7 +1229,7 @@ function App() {
       {/* ------------------------------------------------------------- */}
       {/* COMPACT IN-APP STATUS INDICATOR: Persistent across views      */}
       {/* ------------------------------------------------------------- */}
-      {activeProcess && currentView !== 'processing' && (
+      {activeProcess && activeProcess.isMinimized && currentView !== 'processing' && !verificationProcessing && (
         <aside className="docked-processing-bar" role="status" aria-live="polite">
           <div className="docked-processing-content">
             <div className="docked-processing-title-row">

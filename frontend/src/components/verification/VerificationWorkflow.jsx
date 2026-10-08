@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 import { getSessionHierarchy } from '../sessions/SessionDetailView'
 import { ConfirmationModal } from '../common/ConfirmationModal'
 import { SessionCompletionView } from '../sessions/SessionCompletionView'
@@ -245,11 +245,16 @@ export function VerificationWorkflow({
   // Automatically finalise verification when all items are resolved
   const autoFinalisedRef = useRef(false)
   useEffect(() => {
-    if (itemsTotal > 0 && pendingCount === 0 && !isFinalising && !autoFinalisedRef.current) {
+    // Never auto-finalise on initial load if the session is already completed or verified
+    const isAlreadyCompleted = session?.verification_status === 'complete' ||
+      session?.ai_verification_status === 'completed_verified' ||
+      session?.ai_verification_status === 'completed_needs_review'
+
+    if (itemsTotal > 0 && pendingCount === 0 && !isFinalising && !autoFinalisedRef.current && !isAlreadyCompleted) {
       autoFinalisedRef.current = true
       handleConfirmFinalise()
     }
-  }, [itemsTotal, pendingCount, isFinalising, handleConfirmFinalise])
+  }, [itemsTotal, pendingCount, isFinalising, handleConfirmFinalise, session?.verification_status, session?.ai_verification_status])
 
   const handleTriggerAiVerification = async () => {
     if (!sessionId) return
@@ -261,6 +266,7 @@ export function VerificationWorkflow({
       sessionTitle: sessionDisplay || session?.title || 'Sunday Worship Service',
       stageLabel: 'Verifying transcript',
       isCompleted: false,
+      isMinimized: false,
     })
     if (onTriggerProcessing) {
       onTriggerProcessing()
@@ -268,7 +274,7 @@ export function VerificationWorkflow({
       setShowProcessingScreen(true)
     }
     try {
-      const res = await fetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/verify-ai`), {
+      const res = await authFetch(getApiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/verification/verify-ai`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, auto_resolve: true, background: true }),

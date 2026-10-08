@@ -11,7 +11,7 @@ Tests:
 
 import pytest
 import uuid
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock, MagicMock, ANY
 from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.database.session_repo import session_repo
@@ -101,7 +101,7 @@ async def test_trigger_ai_verification_synchronous():
             data = resp.json()
             assert data["status"] == "completed_verified"
             assert data["summary"]["verified_count"] == 2
-            mock_verify.assert_called_once_with(session_id, auto_resolve=True)
+            mock_verify.assert_called_once_with(session_id, auto_resolve=True, run_id=ANY)
 
 
 @pytest.mark.asyncio
@@ -324,4 +324,101 @@ async def test_d_gemini_primary_to_backup_failover():
     assert resp.provider_slot == "backup"
     assert resp.attempts == 2
     assert "VERIFIED" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_e_unhandled_exception_transitions_to_failed():
+    """
+    Test E: Unhandled exceptions inside background verification do NOT hang.
+    The outer verify_session exception boundary must catch unexpected errors,
+    log them, set sessions.ai_verification_status to 'failed', and return a failed dict.
+    """
+    from app.verification.decision_engine import VerificationDecisionEngine
+
+    session_id = f"test_err_{uuid.uuid4().hex[:8]}"
+    await session_repo.create_session(
+        session_id=session_id,
+        title="Unhandled Exception Test",
+        status="completed",
+    )
+
+    engine = VerificationDecisionEngine()
+    # Force an unexpected RuntimeError inside the inner execution workflow
+    with patch.object(engine, "_execute_verification_workflow", side_effect=RuntimeError("Unexpected pipeline fault")):
+        res = await engine.verify_session(session_id)
+
+    assert res["status"] == "failed"
+    assert "Unexpected pipeline fault" in res["error"]
+
+    status_info = await session_repo.get_ai_verification_status(session_id)
+    assert status_info.get("ai_verification_status") == "failed"
+    assert "Unexpected pipeline fault" in str(status_info.get("summary", {}).get("error"))
+
+
+@pytest.mark.asyncio
+async def test_f_cooperative_cancellation_stops_processing_and_sets_cancelled():
+    """
+    Test F: Cancellation via POST /verification/cancel stops in-memory tasks,
+    sets database status to 'cancelled', and prevents post-cancellation finalisation.
+    """
+    import asyncio
+    from app.verification.router import _active_verification_tasks
+
+    auth_header, account_id = await get_test_auth()
+    session_id = f"test_cancel_{uuid.uuid4().hex[:8]}"
+    await session_repo.create_session(
+        session_id=session_id,
+        title="Cancellation Test",
+        status="completed",
+        account_id=account_id,
+    )
+    await session_repo.set_ai_verification_status(session_id, "verifying")
+
+    # Simulate an active long-running verification background task
+    async def long_running_task():
+        await asyncio.sleep(10)
+
+    task = asyncio.create_task(long_running_task())
+    _active_verification_tasks[session_id] = task
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        cancel_resp = await client.post(
+            f"/api/sessions/{session_id}/verification/cancel",
+            headers=auth_header,
+        )
+        assert cancel_resp.status_code == 200
+        data = cancel_resp.json()
+        assert data["status"] == "cancelled"
+
+    # Verify task was cancelled and removed from active registry
+    assert task.cancelled() or task.cancelling()
+    assert session_id not in _active_verification_tasks
+
+    # Verify DB status is 'cancelled'
+    status_info = await session_repo.get_ai_verification_status(session_id)
+    assert status_info.get("ai_verification_status") == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_g_audio_window_extractor_non_wav_fallback():
+    """
+    Test G: _ensure_pcm_wav_path gracefully handles non-WAV / MP3 format inputs.
+    """
+    import tempfile
+    import os
+    from app.verification.audio_window_extractor import _ensure_pcm_wav_path
+
+    # Create dummy text/non-WAV file
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+        f.write(b"NOT_A_VALID_WAV_HEADER_DATA")
+        tmp_name = f.name
+
+    try:
+        # Since dummy data cannot be decoded by ffmpeg, it must return (None, False) without crashing
+        path, is_temp = _ensure_pcm_wav_path(tmp_name)
+        assert path is None
+        assert is_temp is False
+    finally:
+        if os.path.exists(tmp_name):
+            os.remove(tmp_name)
 

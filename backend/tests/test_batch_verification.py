@@ -207,7 +207,7 @@ def test_verification_reel_construction():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("flag_count", [1, 59, 100])
+@pytest.mark.parametrize("flag_count", [1, 14, 59, 100])
 async def test_session_batch_budget_exactly_two_calls(flag_count):
     wav_path = create_dummy_wav_file(duration_sec=float(flag_count * 4.0 + 30.0))
     session_id = await create_session_with_n_flags(flag_count, audio_path=wav_path)

@@ -8,6 +8,7 @@ Verified Transcript.
 Does NOT modify Raw Transcript or session.status.
 """
 
+import logging
 import asyncio
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,13 +19,23 @@ from app.auth.dependencies import require_account
 from app.database.session_repo import session_repo
 from app.verification.decision_engine import verification_decision_engine
 
+logger = logging.getLogger("app.verification.router")
 router = APIRouter(prefix="/api/sessions", tags=["Verification"])
+
+# In-memory registry of active verification tasks for graceful cancellation
+_active_verification_tasks: Dict[str, asyncio.Task] = {}
 
 
 class VerifyAIRequest(BaseModel):
     session_id: Optional[str] = None
     auto_resolve: bool = True
     background: bool = True
+    run_id: Optional[str] = None
+    force: bool = False
+
+
+class CancelVerifyRequest(BaseModel):
+    run_id: Optional[str] = None
 
 
 class ResolveItemRequest(BaseModel):
@@ -168,27 +179,76 @@ async def _execute_ai_verification(
     run_background = payload.background if payload else True
 
     # If already running, return current status without duplication
-    cur_status = await session_repo.get_ai_verification_status(target_id)
-    if cur_status.get("ai_verification_status") in ("compiling", "verifying"):
+    existing_task = _active_verification_tasks.get(target_id)
+    if existing_task and not existing_task.done():
+        cur_status = await session_repo.get_ai_verification_status(target_id)
         return {
             "message": "AI verification already in progress",
             "session_id": target_id,
-            "status": cur_status["ai_verification_status"],
+            "status": cur_status.get("ai_verification_status", "verifying"),
             "summary": cur_status.get("summary", {}),
         }
+    if existing_task and existing_task.done():
+        _active_verification_tasks.pop(target_id, None)
+
+    cur_status = await session_repo.get_ai_verification_status(target_id)
+    if cur_status.get("ai_verification_status") in ("compiling", "verifying"):
+        is_stale = False
+        started_at_str = cur_status.get("started_at")
+        if payload and payload.force:
+            is_stale = True
+            logger.info("[%s] Force verification requested; overriding current status %s", target_id, cur_status.get("ai_verification_status"))
+        elif started_at_str and not existing_task:
+            try:
+                import datetime
+                started_dt = datetime.datetime.fromisoformat(started_at_str.replace("Z", "+00:00"))
+                age_seconds = (datetime.datetime.now(datetime.timezone.utc) - started_dt).total_seconds()
+                if age_seconds > 900:  # 15 minutes
+                    is_stale = True
+                    logger.warning("[%s] Stale verification run detected (%ds old with no active local task). Overriding with new run.", target_id, int(age_seconds))
+            except Exception:
+                pass
+
+        if not is_stale:
+            return {
+                "message": "AI verification already in progress",
+                "session_id": target_id,
+                "status": cur_status["ai_verification_status"],
+                "summary": cur_status.get("summary", {}),
+            }
+
+    import uuid
+    run_id = (payload.run_id if payload and payload.run_id else None) or f"vr_{uuid.uuid4().hex[:12]}"
 
     if run_background:
-        await session_repo.set_ai_verification_status(target_id, "compiling")
-        asyncio.create_task(
-            verification_decision_engine.verify_session(target_id, auto_resolve=auto_resolve)
+        await session_repo.set_ai_verification_status(target_id, "compiling", run_id=run_id)
+        task = asyncio.create_task(
+            verification_decision_engine.verify_session(target_id, auto_resolve=auto_resolve, run_id=run_id)
         )
+        _active_verification_tasks[target_id] = task
+
+        def _on_task_done(t: asyncio.Task):
+            _active_verification_tasks.pop(target_id, None)
+            if not t.cancelled():
+                exc = t.exception()
+                if exc:
+                    logger.error(
+                        "Verification background task failed for session %s (run %s): %s",
+                        target_id,
+                        run_id,
+                        exc,
+                        exc_info=exc,
+                    )
+
+        task.add_done_callback(_on_task_done)
         return {
             "message": "AI verification initiated",
             "session_id": target_id,
+            "run_id": run_id,
             "status": "compiling",
         }
     else:
-        res = await verification_decision_engine.verify_session(target_id, auto_resolve=auto_resolve)
+        res = await verification_decision_engine.verify_session(target_id, auto_resolve=auto_resolve, run_id=run_id)
         if res.get("status") == "failed" and "error" in res:
             raise HTTPException(status_code=400, detail=res["error"])
         return res
@@ -251,24 +311,44 @@ async def get_ai_verification_status_endpoint(session_id: str, auth: AuthContext
 @router.post("/{session_id}/verification/cancel")
 @router.post("/{session_id}/verification/verify-ai/cancel")
 @router.post("/{session_id}/verify-ai/cancel")
-async def cancel_ai_verification(session_id: str, auth: AuthContext = Depends(require_account)):
+async def cancel_ai_verification(
+    session_id: str,
+    payload: Optional[CancelVerifyRequest] = None,
+    run_id: Optional[str] = None,
+    auth: AuthContext = Depends(require_account),
+):
     """
     Cancels an in-progress automated AI verification run for a session.
-    Idempotent. Preserves previously resolved items and allows manual completion.
+    Guarantees reliable cancellation across multiple Azure Container Apps instances
+    by setting status in the database with run-aware conditional updates,
+    and cancelling any local in-memory asyncio task.
     """
     session = await session_repo.get_session(session_id, account_id=auth.account_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    target_run_id = (payload.run_id if payload and payload.run_id else None) or run_id
+
+    # Cancel active in-memory task on this container instance if present
+    task = _active_verification_tasks.pop(session_id, None)
+    if task and not task.done():
+        task.cancel()
+        logger.info("[%s] Cancelled active in-memory asyncio verification task", session_id)
+
     cur_status = await session_repo.get_ai_verification_status(session_id)
     current_ai_status = cur_status.get("ai_verification_status")
 
-    if current_ai_status in ("compiling", "verifying"):
-        await session_repo.set_ai_verification_status(session_id, "cancelled")
+    if current_ai_status in ("compiling", "verifying", "idle"):
+        await session_repo.set_ai_verification_status(
+            session_id,
+            "cancelled",
+            expected_run_id=target_run_id,
+        )
 
     return {
         "status": "cancelled",
         "session_id": session_id,
+        "run_id": target_run_id or cur_status.get("ai_verification_run_id") or cur_status.get("run_id"),
         "message": "AI verification was cancelled.",
     }
 
