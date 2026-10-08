@@ -207,3 +207,24 @@ export async function authFetch(url, options = {}, retryCount = 0) {
 
   return response
 }
+
+/**
+ * Returns the public web base URL for external links (e.g. Media Upload links).
+ * In Tauri desktop app or local environments, resolves to the deployed public web portal
+ * so that links copied for the media team can be opened on phones or external devices.
+ */
+export function getPublicWebBaseUrl() {
+  const envUrl = (import.meta.env?.VITE_PUBLIC_WEB_URL || '').trim()
+  if (envUrl) {
+    return envUrl.replace(/\/+$/, '')
+  }
+  if (typeof window !== 'undefined' && window.location) {
+    const origin = (window.location.origin || '').trim()
+    const isLocal = origin.includes('localhost') || origin.includes('127.0.0.1') || origin.startsWith('tauri://') || origin.startsWith('capacitor://') || origin.startsWith('file://')
+    if (origin && !isLocal) {
+      return origin.replace(/\/+$/, '')
+    }
+  }
+  return 'https://dlbc-information-unit.vercel.app'
+}
+

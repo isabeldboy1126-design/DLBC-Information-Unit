@@ -504,6 +504,60 @@ CREATE TABLE IF NOT EXISTS media_recordings (
 );
 CREATE INDEX IF NOT EXISTS idx_media_recordings_account ON media_recordings(account_id, status);
 CREATE INDEX IF NOT EXISTS idx_media_recordings_created ON media_recordings(created_at DESC);
+
+-- Media Submissions & Multi-Asset Gallery
+CREATE TABLE IF NOT EXISTS media_submissions (
+    submission_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    token_id TEXT,
+    sender_name TEXT,
+    note TEXT,
+    programme TEXT,
+    event TEXT,
+    day_number INTEGER,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_media_subs_account ON media_submissions(account_id);
+
+CREATE TABLE IF NOT EXISTS media_assets (
+    asset_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    submission_id TEXT,
+    asset_type TEXT NOT NULL,
+    original_filename TEXT,
+    file_path TEXT NOT NULL,
+    file_size INTEGER DEFAULT 0,
+    mime_type TEXT,
+    width INTEGER DEFAULT 0,
+    height INTEGER DEFAULT 0,
+    duration_seconds REAL DEFAULT 0,
+    title TEXT,
+    caption TEXT,
+    status TEXT NOT NULL DEFAULT 'ready',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_media_assets_account ON media_assets(account_id, asset_type);
+CREATE INDEX IF NOT EXISTS idx_media_assets_submission ON media_assets(submission_id);
+CREATE INDEX IF NOT EXISTS idx_media_assets_created ON media_assets(created_at DESC);
+
+-- Workspace Manual Documents
+CREATE TABLE IF NOT EXISTS workspace_documents (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT,
+    words INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'Draft',
+    editor_name TEXT,
+    is_starred INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_workspace_docs_account ON workspace_documents(account_id);
 """
 
 # Phase 5 migration: add verification columns to sessions table.
@@ -1181,6 +1235,71 @@ CREATE INDEX idx_media_recordings_account ON media_recordings(account_id, status
 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_media_recordings_created')
 CREATE INDEX idx_media_recordings_created ON media_recordings(created_at DESC);
+
+IF OBJECT_ID(N'media_submissions', N'U') IS NULL
+CREATE TABLE media_submissions (
+    submission_id VARCHAR(255) PRIMARY KEY,
+    account_id VARCHAR(255) NOT NULL,
+    token_id VARCHAR(255),
+    sender_name NVARCHAR(255),
+    note NVARCHAR(MAX),
+    programme NVARCHAR(MAX),
+    event NVARCHAR(MAX),
+    day_number INT,
+    created_at VARCHAR(255) NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_media_subs_account')
+CREATE INDEX idx_media_subs_account ON media_submissions(account_id);
+
+IF OBJECT_ID(N'media_assets', N'U') IS NULL
+CREATE TABLE media_assets (
+    asset_id VARCHAR(255) PRIMARY KEY,
+    account_id VARCHAR(255) NOT NULL,
+    submission_id VARCHAR(255),
+    asset_type VARCHAR(50) NOT NULL,
+    original_filename NVARCHAR(MAX),
+    file_path NVARCHAR(MAX) NOT NULL,
+    file_size BIGINT DEFAULT 0,
+    mime_type VARCHAR(100),
+    width INT DEFAULT 0,
+    height INT DEFAULT 0,
+    duration_seconds FLOAT DEFAULT 0,
+    title NVARCHAR(MAX),
+    caption NVARCHAR(MAX),
+    status VARCHAR(50) NOT NULL DEFAULT 'ready',
+    created_at VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(255) NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_media_assets_account')
+CREATE INDEX idx_media_assets_account ON media_assets(account_id, asset_type);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_media_assets_submission')
+CREATE INDEX idx_media_assets_submission ON media_assets(submission_id);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_media_assets_created')
+CREATE INDEX idx_media_assets_created ON media_assets(created_at DESC);
+
+IF OBJECT_ID(N'workspace_documents', N'U') IS NULL
+CREATE TABLE workspace_documents (
+    id VARCHAR(255) PRIMARY KEY,
+    account_id VARCHAR(255) NOT NULL,
+    title NVARCHAR(MAX) NOT NULL,
+    content NVARCHAR(MAX),
+    words INT DEFAULT 0,
+    status VARCHAR(50) DEFAULT 'Draft',
+    editor_name NVARCHAR(255),
+    is_starred INT DEFAULT 0,
+    created_at VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(255) NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_workspace_docs_account')
+CREATE INDEX idx_workspace_docs_account ON workspace_documents(account_id);
 """
 
 PHASE5_MIGRATION_COLUMNS_MSSQL = [

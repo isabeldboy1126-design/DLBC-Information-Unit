@@ -22,7 +22,7 @@ from app.auth.auth_context import AuthContext
 from app.auth.dependencies import require_account
 from app.config import STORAGE_UPLOADS_DIR
 from app.database.account_repo import account_repo
-from app.database.media_repo import media_repo
+from app.database.media_repo import extract_image_metadata, media_repo
 from app.database.programmes_repo import programmes_repo
 from app.database.session_repo import session_repo
 from app.transcription.audio_extractor import probe_media_duration
@@ -32,6 +32,9 @@ router = APIRouter(prefix="/api/media", tags=["Media Receiver"])
 
 ALLOWED_AUDIO_EXTENSIONS = {
     ".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".webm", ".wma", ".opus"
+}
+ALLOWED_IMAGE_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".webp"
 }
 MAX_UPLOAD_SIZE = 500 * 1024 * 1024  # 500 MB
 
@@ -86,6 +89,134 @@ async def regenerate_media_token(
         "label": token_data["label"],
         "has_pin": bool(token_data.get("pin_code")),
         "created_at": token_data["created_at"],
+    }
+
+
+@router.post("/token/revoke")
+async def revoke_media_token(auth: AuthContext = Depends(require_account)):
+    """Revokes the active media upload link for the account."""
+    await media_repo.revoke_token(auth.account_id)
+    return {"status": "success", "message": "Upload link has been revoked."}
+
+
+# -------------------------------------------------------------------------
+# PHOTO ASSETS ENDPOINTS
+# -------------------------------------------------------------------------
+
+@router.get("/assets")
+async def list_media_assets(
+    asset_type: Optional[str] = Query(default="photo"),
+    search: Optional[str] = Query(default=None),
+    auth: AuthContext = Depends(require_account),
+):
+    """Lists media assets (photos by default) for the authenticated account."""
+    assets = await media_repo.list_assets(
+        account_id=auth.account_id,
+        asset_type=asset_type,
+        search_query=search,
+    )
+    return {
+        "status": "success",
+        "total": len(assets),
+        "assets": assets,
+    }
+
+
+@router.get("/assets/{asset_id}")
+async def get_media_asset(
+    asset_id: str,
+    auth: AuthContext = Depends(require_account),
+):
+    """Gets details of a single media asset."""
+    asset = await media_repo.get_asset(auth.account_id, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Media asset not found")
+    return asset
+
+
+@router.get("/assets/{asset_id}/view")
+async def view_media_asset(
+    asset_id: str,
+    auth: AuthContext = Depends(require_account),
+):
+    """Streams the media asset image for in-app viewing."""
+    asset = await media_repo.get_asset(auth.account_id, asset_id)
+    if not asset or not asset.get("file_path") or not os.path.exists(asset["file_path"]):
+        raise HTTPException(status_code=404, detail="Media asset file not found on disk.")
+
+    mime = asset.get("mime_type") or "image/jpeg"
+    return FileResponse(
+        asset["file_path"],
+        media_type=mime,
+        filename=asset.get("original_filename") or f"{asset_id}.jpg",
+    )
+
+
+@router.delete("/assets/{asset_id}")
+async def delete_media_asset(
+    asset_id: str,
+    auth: AuthContext = Depends(require_account),
+):
+    """Deletes a media asset and its physical file from disk."""
+    success = await media_repo.delete_asset(auth.account_id, asset_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Media asset not found")
+    return {"status": "success", "deleted_id": asset_id}
+
+
+@router.post("/assets/upload")
+async def in_app_upload_photo(
+    files: List[UploadFile] = File(...),
+    caption: Optional[str] = Form(default=None),
+    auth: AuthContext = Depends(require_account),
+):
+    """Direct in-app photo upload for Information Unit staff."""
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+
+    os.makedirs(STORAGE_UPLOADS_DIR, exist_ok=True)
+    saved = []
+    for f in files:
+        if not f or not f.filename:
+            continue
+        ext = os.path.splitext(f.filename)[1].lower()
+        if ext not in ALLOWED_IMAGE_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported image format '{ext}'. Allowed formats: {', '.join(sorted(ALLOWED_IMAGE_EXTENSIONS))}",
+            )
+        f_path = os.path.join(STORAGE_UPLOADS_DIR, f"photo_{uuid.uuid4().hex[:10]}_{f.filename}")
+        file_size = 0
+        with open(f_path, "wb") as f_out:
+            while chunk := await f.read(1024 * 1024):
+                file_size += len(chunk)
+                if file_size > MAX_UPLOAD_SIZE:
+                    f_out.close()
+                    if os.path.exists(f_path):
+                        os.remove(f_path)
+                    raise HTTPException(status_code=413, detail="File exceeds 500MB limit.")
+                f_out.write(chunk)
+
+        meta = extract_image_metadata(f_path)
+        asset = await media_repo.create_asset(
+            account_id=auth.account_id,
+            file_path=f_path,
+            original_filename=f.filename,
+            file_size=file_size,
+            mime_type=meta.get("mime_type") or "image/jpeg",
+            asset_type="photo",
+            submission_id=None,
+            width=meta.get("width") or 0,
+            height=meta.get("height") or 0,
+            title=f.filename,
+            caption=caption,
+        )
+        saved.append(asset)
+
+    return {
+        "status": "success",
+        "total": len(saved),
+        "assets": saved,
     }
 
 
@@ -402,7 +533,13 @@ async def get_public_upload_info(token: str):
 @router.post("/public/upload/{token}")
 async def upload_via_public_link(
     token: str,
-    file: UploadFile = File(...),
+    photos: List[UploadFile] = File(default=[]),
+    files: List[UploadFile] = File(default=[]),
+    file: Optional[UploadFile] = File(default=None),
+    audio: Optional[UploadFile] = File(default=None),
+    sender_name: Optional[str] = Form(default=None),
+    note: Optional[str] = Form(default=None),
+    caption: Optional[str] = Form(default=None),
     event: Optional[str] = Form(default=None),
     programme: Optional[str] = Form(default=None),
     day_number: Optional[int] = Form(default=None),
@@ -411,8 +548,9 @@ async def upload_via_public_link(
 ):
     """
     Public file upload handler for the secure Media Upload link.
-    Validates token, file type, file size, saves audio file, and registers in Media inbox.
-    If metadata is complete, automatically triggers pipeline.
+    Photo-First: Accepts multiple photos (.jpg, .jpeg, .png, .webp) and/or optional audio recordings.
+    - Photos are registered as visual assets in media_assets (no session/transcription pipeline!).
+    - Audio recordings are registered in media_recordings (and auto-processed if metadata is complete).
     """
     token_data = await media_repo.get_token_by_value(token)
     if not token_data or not token_data.get("is_active"):
@@ -424,143 +562,230 @@ async def upload_via_public_link(
 
     account_id = token_data["account_id"]
 
-    # Validate file extension
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in ALLOWED_AUDIO_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file format '{ext}'. Allowed formats: WAV, MP3, M4A, AAC, FLAC, OGG, WEBM."
-        )
+    # Collect all uploaded files across potential field names
+    all_uploads: List[UploadFile] = []
+    for item in photos:
+        if item and item.filename:
+            all_uploads.append(item)
+    for item in files:
+        if item and item.filename:
+            all_uploads.append(item)
+    if file and file.filename:
+        all_uploads.append(file)
+    if audio and audio.filename:
+        all_uploads.append(audio)
 
-    # Save uploaded audio file to storage/uploads
+    if not all_uploads:
+        raise HTTPException(status_code=400, detail="No files provided for upload.")
+
+    # Classify files
+    image_files: List[UploadFile] = []
+    audio_files: List[UploadFile] = []
+    for f in all_uploads:
+        ext = os.path.splitext(f.filename or "")[1].lower()
+        if ext in ALLOWED_IMAGE_EXTENSIONS:
+            image_files.append(f)
+        elif ext in ALLOWED_AUDIO_EXTENSIONS:
+            audio_files.append(f)
+        else:
+            allowed_all = sorted(list(ALLOWED_IMAGE_EXTENSIONS) + list(ALLOWED_AUDIO_EXTENSIONS))
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported format '{ext}' on '{f.filename}'. Supported formats: {', '.join(allowed_all)}",
+            )
+
     os.makedirs(STORAGE_UPLOADS_DIR, exist_ok=True)
-    saved_filename = f"media_{uuid.uuid4().hex[:10]}_{file.filename}"
-    file_path = os.path.join(STORAGE_UPLOADS_DIR, saved_filename)
 
-    file_size = 0
-    try:
-        with open(file_path, "wb") as f_dest:
-            while chunk := await file.read(1024 * 1024):
-                file_size += len(chunk)
-                if file_size > MAX_UPLOAD_SIZE:
-                    os.remove(file_path)
-                    raise HTTPException(status_code=413, detail="File exceeds maximum 500 MB limit.")
-                f_dest.write(chunk)
-    except Exception as e:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        raise HTTPException(status_code=500, detail=f"Failed to save audio file: {str(e)}")
-
-    # Probe duration
-    duration = 0.0
-    try:
-        duration = probe_media_duration(file_path) or 0.0
-    except Exception:
-        pass
-
-    # Build title
+    clean_sender = (sender_name or "").strip() or None
+    clean_note = (note or caption or "").strip() or None
     clean_event = (event or "").strip() or None
     clean_prog = (programme or "").strip() or None
     clean_pastor = (pastor_name or "").strip() or None
 
-    title_parts = [clean_prog or clean_event or os.path.splitext(file.filename)[0]]
-    if day_number:
-        title_parts.append(f"Day {day_number}")
-    title = " - ".join(title_parts)
+    # 1. Create submission record if we have photos or metadata
+    submission = None
+    if image_files or clean_sender or clean_note:
+        submission = await media_repo.create_submission(
+            account_id=account_id,
+            token_id=token_data["token_id"],
+            sender_name=clean_sender,
+            note=clean_note,
+            programme=clean_prog,
+            event=clean_event,
+            day_number=day_number,
+        )
 
-    # Check whether metadata is complete
-    is_metadata_complete = bool(clean_prog and clean_pastor)
-    initial_status = "new" if is_metadata_complete else "needs_details"
-
-    # Register in media repository
-    recording = await media_repo.create_recording(
-        account_id=account_id,
-        token_id=token_data["token_id"],
-        title=title,
-        file_path=file_path,
-        original_filename=file.filename or "media_upload.wav",
-        file_size=file_size,
-        file_format=ext.replace(".", "").upper(),
-        duration_seconds=duration,
-        source="media_link",
-        event=clean_event,
-        programme=clean_prog,
-        day_number=day_number,
-        pastor_name=clean_pastor,
-        status=initial_status,
-        uploaded_by="Media Team (Link)",
-    )
-
-    # Auto-process if complete
-    auto_started = False
-    session_id = None
-    if is_metadata_complete:
+    # 2. Process photo assets (NO audio/session pipeline for photos!)
+    saved_assets = []
+    for img_file in image_files:
+        ext = os.path.splitext(img_file.filename)[1].lower()
+        saved_name = f"photo_{uuid.uuid4().hex[:10]}_{img_file.filename}"
+        f_path = os.path.join(STORAGE_UPLOADS_DIR, saved_name)
+        file_size = 0
         try:
-            session_id = f"session_media_{uuid.uuid4().hex[:10]}"
-            now_ts = time.time()
-            await session_repo.create_session(
-                session_id=session_id,
-                title=title,
-                recording_id=recording["recording_id"],
-                status="processing",
-                provider_name="faster_whisper",
-                language_code="en-NG",
-                start_time=now_ts,
-                metadata={
-                    "source": "media_link",
-                    "recording_id": recording["recording_id"],
-                    "event": clean_event,
-                    "programme": clean_prog,
-                    "minister": clean_pastor,
-                    "day_number": day_number,
-                    "audio_file": file_path,
-                    "original_filename": file.filename,
-                },
-                account_id=account_id,
-                day_number=day_number,
-            )
+            with open(f_path, "wb") as f_out:
+                while chunk := await img_file.read(1024 * 1024):
+                    file_size += len(chunk)
+                    if file_size > MAX_UPLOAD_SIZE:
+                        f_out.close()
+                        if os.path.exists(f_path):
+                            os.remove(f_path)
+                        raise HTTPException(status_code=413, detail=f"Photo '{img_file.filename}' exceeds maximum 500MB limit.")
+                    f_out.write(chunk)
+        except HTTPException:
+            raise
+        except Exception as e:
+            if os.path.exists(f_path):
+                os.remove(f_path)
+            raise HTTPException(status_code=500, detail=f"Failed to save photo: {str(e)}")
 
-            await media_repo.update_recording(account_id, recording["recording_id"], {
-                "status": "processing",
-                "session_id": session_id,
-            })
+        meta = extract_image_metadata(f_path)
+        asset = await media_repo.create_asset(
+            account_id=account_id,
+            file_path=f_path,
+            original_filename=img_file.filename,
+            file_size=file_size,
+            mime_type=meta.get("mime_type") or "image/jpeg",
+            asset_type="photo",
+            submission_id=submission["submission_id"] if submission else None,
+            width=meta.get("width") or 0,
+            height=meta.get("height") or 0,
+            title=img_file.filename,
+            caption=clean_note,
+        )
+        saved_assets.append(asset)
 
-            upload_meta = {
-                "upload_id": recording["recording_id"],
-                "original_filename": file.filename,
-                "saved_filename": saved_filename,
-                "file_path": file_path,
-                "is_video": False,
-                "title": title,
-                "programme": clean_prog,
-                "session_name": clean_prog,
-                "minister": clean_pastor,
-                "day_number": day_number,
-                "account_id": account_id,
-            }
-            job = transcription_manager.create_job(
-                upload_id=recording["recording_id"],
-                original_filename=file.filename or "upload.wav",
-                language_code="en-NG",
-            )
-            asyncio.create_task(
-                transcription_manager.start_transcription_task(
-                    job_id=job.job_id,
-                    upload_meta=upload_meta,
+    # 3. Process audio recordings (retaining existing pipeline)
+    saved_recordings = []
+    for aud_file in audio_files:
+        ext = os.path.splitext(aud_file.filename)[1].lower()
+        saved_filename = f"media_{uuid.uuid4().hex[:10]}_{aud_file.filename}"
+        f_path = os.path.join(STORAGE_UPLOADS_DIR, saved_filename)
+        file_size = 0
+        try:
+            with open(f_path, "wb") as f_dest:
+                while chunk := await aud_file.read(1024 * 1024):
+                    file_size += len(chunk)
+                    if file_size > MAX_UPLOAD_SIZE:
+                        f_dest.close()
+                        if os.path.exists(f_path):
+                            os.remove(f_path)
+                        raise HTTPException(status_code=413, detail="File exceeds maximum 500 MB limit.")
+                    f_dest.write(chunk)
+        except HTTPException:
+            raise
+        except Exception as e:
+            if os.path.exists(f_path):
+                os.remove(f_path)
+            raise HTTPException(status_code=500, detail=f"Failed to save audio file: {str(e)}")
+
+        duration = 0.0
+        try:
+            duration = probe_media_duration(f_path) or 0.0
+        except Exception:
+            pass
+
+        title_parts = [clean_prog or clean_event or os.path.splitext(aud_file.filename)[0]]
+        if day_number:
+            title_parts.append(f"Day {day_number}")
+        title = " - ".join(title_parts)
+
+        is_metadata_complete = bool(clean_prog and clean_pastor)
+        initial_status = "new" if is_metadata_complete else "needs_details"
+
+        recording = await media_repo.create_recording(
+            account_id=account_id,
+            token_id=token_data["token_id"],
+            title=title,
+            file_path=f_path,
+            original_filename=aud_file.filename or "media_upload.wav",
+            file_size=file_size,
+            file_format=ext.replace(".", "").upper(),
+            duration_seconds=duration,
+            source="media_link",
+            event=clean_event,
+            programme=clean_prog,
+            day_number=day_number,
+            pastor_name=clean_pastor,
+            status=initial_status,
+            uploaded_by=clean_sender or "Media Team (Link)",
+        )
+        saved_recordings.append(recording)
+
+        # Auto-process if metadata is complete
+        if is_metadata_complete:
+            try:
+                session_id = f"session_media_{uuid.uuid4().hex[:10]}"
+                now_ts = time.time()
+                await session_repo.create_session(
+                    session_id=session_id,
+                    title=title,
+                    recording_id=recording["recording_id"],
+                    status="processing",
                     provider_name="faster_whisper",
                     language_code="en-NG",
+                    start_time=now_ts,
+                    metadata={
+                        "source": "media_link",
+                        "recording_id": recording["recording_id"],
+                        "event": clean_event,
+                        "programme": clean_prog,
+                        "minister": clean_pastor,
+                        "day_number": day_number,
+                        "audio_file": f_path,
+                        "original_filename": aud_file.filename,
+                    },
+                    account_id=account_id,
+                    day_number=day_number,
                 )
-            )
-            auto_started = True
-        except Exception as e:
-            print(f"Auto-process startup notice: {e}")
+
+                await media_repo.update_recording(account_id, recording["recording_id"], {
+                    "status": "processing",
+                    "session_id": session_id,
+                })
+
+                upload_meta = {
+                    "upload_id": recording["recording_id"],
+                    "original_filename": aud_file.filename,
+                    "saved_filename": saved_filename,
+                    "file_path": f_path,
+                    "is_video": False,
+                    "title": title,
+                    "programme": clean_prog,
+                    "session_name": clean_prog,
+                    "minister": clean_pastor,
+                    "day_number": day_number,
+                    "account_id": account_id,
+                }
+                job = transcription_manager.create_job(
+                    upload_id=recording["recording_id"],
+                    original_filename=aud_file.filename or "upload.wav",
+                    language_code="en-NG",
+                )
+                asyncio.create_task(
+                    transcription_manager.start_transcription_task(
+                        job_id=job.job_id,
+                        upload_meta=upload_meta,
+                        provider_name="faster_whisper",
+                        language_code="en-NG",
+                    )
+                )
+            except Exception as e:
+                print(f"Auto-process startup notice: {e}")
+
+    summary_parts = []
+    if saved_assets:
+        summary_parts.append(f"{len(saved_assets)} photo(s)")
+    if saved_recordings:
+        summary_parts.append(f"{len(saved_recordings)} audio recording(s)")
+
+    msg = f"Successfully uploaded {', and '.join(summary_parts)} to the Information Unit." if summary_parts else "Upload complete."
 
     return {
         "status": "success",
-        "recording_id": recording["recording_id"],
-        "title": title,
-        "is_complete": is_metadata_complete,
-        "auto_started": auto_started,
-        "session_id": session_id,
-        "message": "Recording uploaded successfully and sent to the Information Unit.",
+        "photos_count": len(saved_assets),
+        "recordings_count": len(saved_recordings),
+        "submission_id": submission["submission_id"] if submission else None,
+        "recording_id": saved_recordings[0]["recording_id"] if saved_recordings else None,
+        "message": msg,
     }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, authFetch } from '../../config'
 import { useAuth } from '../../context/AuthContext'
 import { saveFileWithNativeDialog } from '../../services/desktopPlatform'
 
@@ -116,8 +116,25 @@ export function WorkspaceEditor({
 
         // If manual/standalone document
         if (isManual || (typeof sessionId === 'string' && sessionId.startsWith('doc_'))) {
-          const initialTitle = cachedDraft?.title || session?.title || 'Untitled Document'
-          const initialText = cachedDraft?.content ?? session?.content ?? ''
+          let initialTitle = cachedDraft?.title || session?.title
+          let initialText = cachedDraft?.content ?? session?.content
+
+          if (!initialTitle || initialText === undefined) {
+            try {
+              const res = await authFetch(`/api/workspace/documents/${sessionId}`)
+              if (res.ok) {
+                const docData = await res.json()
+                initialTitle = docData.title || initialTitle || 'Untitled Document'
+                initialText = docData.content ?? initialText ?? ''
+              }
+            } catch (e) {
+              console.warn('Failed to load document from backend:', e)
+            }
+          }
+
+          initialTitle = initialTitle || 'Untitled Document'
+          initialText = initialText ?? ''
+
           if (isMounted) {
             setReportTitle(initialTitle)
             setReportText(initialText)
@@ -134,11 +151,7 @@ export function WorkspaceEditor({
         // Try Final Report endpoint first for session documents
         let reportData = null
         try {
-          const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}`), {
-            headers: {
-              ...(user?.token ? { Authorization: `Bearer ${user.token}` } : {}),
-            },
-          })
+          const res = await authFetch(`/api/final-report/sessions/${sessionId}`)
           if (res.ok) {
             reportData = await res.json()
           }
@@ -155,11 +168,7 @@ export function WorkspaceEditor({
             initialTitle = reportData.active_final_report.report_title || initialTitle
           } else {
             try {
-              const editRes = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/reports`), {
-                headers: {
-                  ...(user?.token ? { Authorization: `Bearer ${user.token}` } : {}),
-                },
-              })
+              const editRes = await authFetch(`/api/editing/sessions/${sessionId}/reports`)
               if (editRes.ok) {
                 const editData = await editRes.json()
                 if (editData?.active_edited_report?.report_text) {
@@ -190,11 +199,7 @@ export function WorkspaceEditor({
 
         // Fetch verified transcript segments if available
         try {
-          const sRes = await fetch(getApiUrl(`/api/sessions/${sessionId}`), {
-            headers: {
-              ...(user?.token ? { Authorization: `Bearer ${user.token}` } : {}),
-            },
-          })
+          const sRes = await authFetch(`/api/sessions/${sessionId}`)
           if (sRes.ok) {
             const sData = await sRes.json()
             const sObj = sData.session || sData
@@ -324,19 +329,36 @@ export function WorkspaceEditor({
           updatedAt: Date.now(),
         })
       }
-      setIsSaving(false)
-      setSaveStatus('Saved')
-      setLastSaved(new Date())
+      try {
+        const res = await authFetch(`/api/workspace/documents/${sessionId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: titleToSave,
+            content: textToSave,
+          }),
+        })
+        if (res.ok) {
+          setSaveStatus('Saved')
+          setLastSaved(new Date())
+        } else {
+          setSaveStatus('error')
+        }
+      } catch (e) {
+        console.warn('Failed to persist manual document to server:', e)
+        setSaveStatus('error')
+      } finally {
+        setIsSaving(false)
+      }
       return
     }
 
     try {
       // Save revision to Final Report endpoint
-      const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/revisions`), {
+      const res = await authFetch(`/api/final-report/sessions/${sessionId}/revisions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(user?.token ? { Authorization: `Bearer ${user.token}` } : {}),
         },
         body: JSON.stringify({
           report_text: textToSave,
@@ -350,11 +372,10 @@ export function WorkspaceEditor({
         setLastSaved(new Date())
       } else {
         // Fallback to editing endpoint
-        const editRes = await fetch(getApiUrl(`/api/editing/sessions/${sessionId}/edit`), {
+        const editRes = await authFetch(`/api/editing/sessions/${sessionId}/edit`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(user?.token ? { Authorization: `Bearer ${user.token}` } : {}),
           },
           body: JSON.stringify({
             report_text: textToSave,

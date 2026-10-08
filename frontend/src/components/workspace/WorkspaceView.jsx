@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { authFetch } from '../../config'
 import { WorkspaceEditor } from './WorkspaceEditor'
 
 /**
@@ -44,6 +45,50 @@ export function WorkspaceView({
     }
   })
 
+  // Load documents from backend and merge with local
+  useEffect(() => {
+    let isMounted = true
+    async function fetchServerDocuments() {
+      try {
+        const res = await authFetch('/api/workspace/documents')
+        if (res.ok && isMounted) {
+          const data = await res.json()
+          const serverDocs = (data.documents || []).map((d) => ({
+            id: d.id,
+            sessionId: d.id,
+            title: d.title || 'Untitled Document',
+            content: d.content || '',
+            updatedDate: d.updated_at ? new Date(d.updated_at).toLocaleDateString() : 'Recent',
+            updatedAt: d.updated_at ? new Date(d.updated_at).getTime() : Date.now(),
+            status: d.status || 'Draft',
+            words: d.words || (d.content ? d.content.trim().split(/\s+/).filter(Boolean).length : 0),
+            isManual: true,
+          }))
+
+          setCustomDocuments((prev) => {
+            const map = new Map()
+            serverDocs.forEach((d) => map.set(d.id, d))
+            prev.forEach((d) => {
+              const existing = map.get(d.id)
+              if (!existing || (d.updatedAt && d.updatedAt >= (existing.updatedAt || 0))) {
+                map.set(d.id, d)
+              }
+            })
+            const merged = Array.from(map.values())
+            try {
+              localStorage.setItem('dlbc_workspace_documents', JSON.stringify(merged))
+            } catch {}
+            return merged
+          })
+        }
+      } catch (err) {
+        console.warn('Failed to load server workspace documents:', err)
+      }
+    }
+    fetchServerDocuments()
+    return () => { isMounted = false }
+  }, [])
+
   // Synchronize with external activeSessionId prop
   const currentEditingId = activeSessionId || selectedSessionId
 
@@ -58,6 +103,9 @@ export function WorkspaceView({
       localStorage.setItem('dlbc_workspace_starred', JSON.stringify(next))
     } catch (err) {
       // ignore
+    }
+    if (typeof sId === 'string' && sId.startsWith('doc_')) {
+      authFetch(`/api/workspace/documents/${sId}/star`, { method: 'POST' }).catch(() => {})
     }
   }
 
@@ -119,6 +167,18 @@ export function WorkspaceView({
     } catch (e) {
       console.warn('Failed to save new document:', e)
     }
+
+    // Persist new document to backend
+    authFetch('/api/workspace/documents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: newDocId,
+        title: 'Untitled Document',
+        content: '',
+      }),
+    }).catch((e) => console.warn('Async doc creation warning:', e))
+
     // Immediately open in editor WITHOUT asking "Who is editing?"
     openDocDirectly(newDocId)
   }

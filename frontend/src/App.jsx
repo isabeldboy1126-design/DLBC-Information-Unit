@@ -347,7 +347,11 @@ function App() {
       setSelectedSessionId(null)
       if (route.sessionId) {
         setWorkspaceSessionId(route.sessionId)
-        if (sessionsHook.activeSession?.session_id !== route.sessionId) {
+        const isManualDoc = typeof route.sessionId === 'string' && route.sessionId.startsWith('doc_')
+        if (isManualDoc) {
+          // Standalone manual document: never query session API, clear any session errors
+          sessionsHook.clearError?.()
+        } else if (sessionsHook.activeSession?.session_id !== route.sessionId) {
           sessionsHook.loadSession(route.sessionId)
         }
       } else {
