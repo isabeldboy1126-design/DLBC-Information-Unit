@@ -26,7 +26,13 @@ DEFAULT_ANTI_SLOP_RULES = """1. Absolute prohibition of AI buzzwords, generic id
    Every scripture citation must strictly correspond to what was read or referenced in the message.
    Do not fabricate mnemonics, alliterations, or sub-points not uttered in the sermon.
 4. Faithful preservation of doctrinal focus:
-   Retain the clear evangelical message of salvation, sanctification, holy living, and Christian service."""
+   Retain the clear evangelical message of salvation, sanctification, holy living, and Christian service.
+5. Source-grounding and zero unsupported illustrations or figures:
+   Every biblical character, story, illustration, testimony, and prayer point must come directly from the source transcript. Under no circumstances may unmentioned figures (such as Joseph, Mary Magdalene, Samuel, Elijah) or personal anecdotes be introduced simply because they support the theme. The report documents what was preached; it does not compose a new sermon.
+6. Sermon outline and division sequence fidelity:
+   When the transcript contains identifiable sermon divisions (e.g. 3 main points) and enumerated subpoints, preserve their exact sequence, intended meaning, and the preacher's distinctive terminology. Do not reorder, merge, omit, or synthesize extra subpoints.
+7. Accurate scripture demarcation:
+   Distinguish clearly between direct Scripture quotations, biblical narrative references, the preacher's theological interpretation, and the preacher's personal practical application. Do not present an interpretation or pastoral application as if the cited passage explicitly states it. Cite all primary sermon texts in the metadata header."""
 
 DEFAULT_REPORTER_EXTRACTION_INSTRUCTIONS = """Extract the full factual structure of the sermon across the 20 fundamental Information Unit categories:
 1. Primary speaker identification and ministerial role.

@@ -28,6 +28,10 @@ export function FinalReportView({ session, onBack }) {
   const [successBanner, setSuccessBanner] = useState(null)
   const [copied, setCopied] = useState(false)
   const [showSourceContext, setShowSourceContext] = useState(false)
+  const [isShortening, setIsShortening] = useState(false)
+  const [shortenedData, setShortenedData] = useState(null)
+  const [showShortenModal, setShowShortenModal] = useState(false)
+  const [shortenTab, setShortenTab] = useState('shortened')
 
   const sessionId = session?.session_id
 
@@ -116,6 +120,61 @@ export function FinalReportView({ session, onBack }) {
       } else {
         const err = await res.json()
         setErrorBanner(err.detail || 'Failed to save revision.')
+      }
+    } catch (e) {
+      setErrorBanner(`Error saving revision: ${e.message}`)
+    } finally {
+      setIsSavingRevision(false)
+    }
+  }
+
+  const handleShortenReport = async () => {
+    if (isShortening || !hasReportContent) return
+    try {
+      setIsShortening(true)
+      setErrorBanner(null)
+      const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/shorten`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || 'Failed to generate shortened report.')
+      }
+      const data = await res.json()
+      setShortenedData(data)
+      setShowShortenModal(true)
+      setShortenTab('shortened')
+    } catch (e) {
+      console.error('Error shortening report:', e)
+      setErrorBanner(`Shortening failed: ${e.message}`)
+    } finally {
+      setIsShortening(false)
+    }
+  }
+
+  const handleApplyShortenedReport = async () => {
+    if (!shortenedData || !shortenedData.shortened_text) return
+    try {
+      setIsSavingRevision(true)
+      setErrorBanner(null)
+      const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/save-revision`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          report_title: shortenedData.shortened_title || `${reportTitle} (Concise)`,
+          report_text: shortenedData.shortened_text,
+        }),
+      })
+      if (res.ok) {
+        setShowShortenModal(false)
+        const nextRev = (finalReportData.active_final_report?.revision_number || 1) + 1
+        setSuccessBanner(`✓ Shortened report saved as Revision ${nextRev}! Original version remains safely preserved in history.`)
+        setTimeout(() => setSuccessBanner(null), 4500)
+        await fetchFinalReportData()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setErrorBanner(err.detail || 'Failed to save shortened revision.')
       }
     } catch (e) {
       setErrorBanner(`Error saving revision: ${e.message}`)
@@ -259,6 +318,17 @@ export function FinalReportView({ session, onBack }) {
             title="Copy formatted text"
           >
             {copied ? '✓ Copied!' : '📋 Copy text'}
+          </button>
+
+          <button
+            type="button"
+            className="btn btn--secondary btn--small"
+            onClick={handleShortenReport}
+            disabled={isShortening || !hasReportContent}
+            id="btn-shorten-report"
+            title="Generate a concise 40-60% shortened report while preserving essential doctrine, outline, and metadata"
+          >
+            {isShortening ? '⏳ Shortening...' : '✂️ Shorten Report'}
           </button>
 
           <button
@@ -501,6 +571,144 @@ export function FinalReportView({ session, onBack }) {
                   </li>
                 ))}
               </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shorten Report Review Modal */}
+      {showShortenModal && shortenedData && (
+        <div className="modal-backdrop" onClick={() => setShowShortenModal(false)}>
+          <div className="modal-container" style={{ maxWidth: '860px', width: '92%' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span style={{ fontSize: '1.4rem' }}>✂️</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Shortened Report Review</h3>
+                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>
+                    Derived non-destructively • Original report is preserved
+                  </p>
+                </div>
+              </div>
+              <button type="button" className="btn-close" onClick={() => setShowShortenModal(false)}>
+                ✕
+              </button>
+            </div>
+
+            {/* Statistics Bar */}
+            <div style={{
+              display: 'flex',
+              gap: '1.25rem',
+              background: '#f8fafc',
+              padding: '0.75rem 1.25rem',
+              borderBottom: '1px solid #e2e8f0',
+              fontSize: '0.88rem',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}>
+              <div>
+                <span style={{ color: '#64748b' }}>Original: </span>
+                <strong>{shortenedData.original_word_count} words</strong>
+              </div>
+              <span style={{ color: '#cbd5e1' }}>→</span>
+              <div>
+                <span style={{ color: '#64748b' }}>Shortened: </span>
+                <strong style={{ color: '#0369a1' }}>{shortenedData.shortened_word_count} words</strong>
+              </div>
+              <div style={{
+                marginLeft: 'auto',
+                background: '#e0f2fe',
+                color: '#0369a1',
+                padding: '0.2rem 0.6rem',
+                borderRadius: '999px',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+              }}>
+                {shortenedData.reduction_percentage}% Reduction
+              </div>
+            </div>
+
+            {/* Tab Navigation */}
+            <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', padding: '0 1.25rem', gap: '1rem', background: '#fff' }}>
+              <button
+                type="button"
+                onClick={() => setShortenTab('shortened')}
+                style={{
+                  padding: '0.75rem 0.5rem',
+                  border: 'none',
+                  background: 'none',
+                  fontWeight: shortenTab === 'shortened' ? 700 : 500,
+                  color: shortenTab === 'shortened' ? '#0f2947' : '#64748b',
+                  borderBottom: shortenTab === 'shortened' ? '2px solid #0f2947' : '2px solid transparent',
+                  cursor: 'pointer',
+                }}
+              >
+                Shortened Version ({shortenedData.shortened_word_count} words)
+              </button>
+              <button
+                type="button"
+                onClick={() => setShortenTab('original')}
+                style={{
+                  padding: '0.75rem 0.5rem',
+                  border: 'none',
+                  background: 'none',
+                  fontWeight: shortenTab === 'original' ? 700 : 500,
+                  color: shortenTab === 'original' ? '#0f2947' : '#64748b',
+                  borderBottom: shortenTab === 'original' ? '2px solid #0f2947' : '2px solid transparent',
+                  cursor: 'pointer',
+                }}
+              >
+                Original Full Report ({shortenedData.original_word_count} words)
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="modal-body" style={{ maxHeight: '55vh', overflowY: 'auto', padding: '1.25rem' }}>
+              {shortenTab === 'shortened' ? (
+                <div className="final-archival-paper-card" style={{ boxShadow: 'none', border: '1px solid #e2e8f0', padding: '1.5rem' }}>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 0.5rem 0' }}>
+                    {shortenedData.shortened_title}
+                  </h2>
+                  <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem' }}>
+                    Delivered by {shortenedData.minister || 'Minister not provided'} on {shortenedData.service_date || ''}
+                  </div>
+                  <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.95rem', lineHeight: '1.7', margin: 0 }}>
+                    {shortenedData.shortened_text}
+                  </pre>
+                </div>
+              ) : (
+                <div className="final-archival-paper-card" style={{ boxShadow: 'none', border: '1px solid #e2e8f0', padding: '1.5rem' }}>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 0.5rem 0' }}>
+                    {reportTitle}
+                  </h2>
+                  <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem' }}>
+                    Full Original Document ({wordCount} words)
+                  </div>
+                  <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.95rem', lineHeight: '1.7', margin: 0 }}>
+                    {reportText}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem 1.25rem', borderTop: '1px solid #e2e8f0' }}>
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={() => setShowShortenModal(false)}
+              >
+                Discard / Keep Original
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={handleApplyShortenedReport}
+                disabled={isSavingRevision}
+                id="btn-apply-shortened-report"
+              >
+                {isSavingRevision ? 'Saving Revision...' : '💾 Keep & Save as New Revision'}
+              </button>
             </div>
           </div>
         </div>

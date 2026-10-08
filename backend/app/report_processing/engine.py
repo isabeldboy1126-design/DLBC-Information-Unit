@@ -57,7 +57,7 @@ class ReportProcessingEngine:
         self.gateway = gateway or gemini_gateway
         self.repo = repo or report_processing_repo
         self.final_repo = final_repo or final_report_repo
-        self._default_model = os.getenv("GEMINI_REPORTING_MODEL", "gemini-3.8-flash")
+        self._default_model = os.getenv("GEMINI_REPORTING_MODEL", "gemini-2.5-flash")
 
     async def get_active_or_latest_run(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Returns the active run if one exists, otherwise the latest completed or failed run."""
@@ -65,6 +65,68 @@ class ReportProcessingEngine:
         if active:
             return active
         return await self.repo.get_latest_run_for_session(session_id)
+
+    def _extract_metadata(self, session: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extracts verified, authoritative session metadata from all possible locations
+        (metadata dict, metadata_json string, session top-level fields) to prevent
+        ground-truth details from being lost or overwritten with generic defaults.
+        """
+        meta = session.get("metadata") or {}
+        if isinstance(meta, str):
+            try:
+                meta = json.loads(meta)
+            except Exception:
+                meta = {}
+        meta_json = session.get("metadata_json")
+        if meta_json and isinstance(meta_json, str):
+            try:
+                parsed_meta_json = json.loads(meta_json)
+                if isinstance(parsed_meta_json, dict):
+                    meta = {**parsed_meta_json, **meta}
+            except Exception:
+                pass
+
+        title = (
+            meta.get("messageTitle")
+            or meta.get("programmeSession")
+            or meta.get("session_name")
+            or session.get("title")
+            or "Sunday Worship Service"
+        )
+        minister = (
+            meta.get("minister")
+            or meta.get("pastor_name")
+            or meta.get("speaker")
+            or session.get("minister_name")
+            or session.get("minister")
+            or "Minister not provided"
+        )
+        service_date = (
+            meta.get("service_date")
+            or meta.get("date")
+            or session.get("date_created", "")[:10]
+        )
+        programme = (
+            meta.get("programme")
+            or meta.get("eventType")
+            or meta.get("event")
+            or "Deeper Christian Life Ministry"
+        )
+        scripture_reference = (
+            meta.get("scripture_reference")
+            or meta.get("main_text")
+            or meta.get("scriptures")
+            or meta.get("bible_text")
+            or ""
+        )
+        return {
+            "title": str(title).strip(),
+            "minister": str(minister).strip(),
+            "service_date": str(service_date).strip(),
+            "programme": str(programme).strip(),
+            "scripture_reference": str(scripture_reference).strip(),
+        }
 
     async def _extract_legacy_material(self, session_id: str) -> Optional[str]:
         """
@@ -123,23 +185,12 @@ class ReportProcessingEngine:
         5. Legacy Material (if available)
         6. Full Authoritative Verified Transcript
         """
-        title = session.get("title") or "Sunday Worship Service"
-        minister = session.get("minister") or "Minister not provided"
-        service_date = session.get("date_created", "")[:10]
-        programme = "Deeper Christian Life Ministry"
-
-        meta_json = session.get("metadata_json")
-        if meta_json:
-            try:
-                meta = json.loads(meta_json) if isinstance(meta_json, str) else meta_json
-                if meta.get("programme"):
-                    programme = meta["programme"]
-                if meta.get("minister"):
-                    minister = meta["minister"]
-                if meta.get("programmeSession"):
-                    title = meta["programmeSession"]
-            except Exception:
-                pass
+        meta = self._extract_metadata(session)
+        title = meta["title"]
+        minister = meta["minister"]
+        service_date = meta["service_date"]
+        programme = meta["programme"]
+        scripture_reference = meta["scripture_reference"]
 
         # Build few-shot examples block
         examples_str = ""
@@ -214,12 +265,31 @@ APPROVED REFERENCE EXEMPLARS FROM THE LIBRARY
 {examples_str.strip()}
 {legacy_block}
 ================================================================================
-MESSAGE METADATA
+VERIFIED MESSAGE METADATA (AUTHORITATIVE - MUST BE PRESERVED)
 ================================================================================
 Session Title: {title}
 Programme: {programme}
 Minister: {minister}
 Service Date: {service_date}
+Main Bible Text(s): {scripture_reference if scripture_reference else "Extract all primary passages read from the transcript"}
+
+MANDATORY EDITORIAL FIDELITY RULES:
+1. MINISTER PRESERVATION: If a minister is identified above ({minister}), you MUST use it in the JSON output and report header. DO NOT replace a known minister with "Minister not provided".
+2. SCRIPTURE CITATIONS: Cite ALL primary passages read or referenced in the message opening (e.g. if Romans 12:2 and 2 Corinthians 2:14 were read, list both "Romans 12:2; 2 Corinthians 2:14").
+3. SERMON OUTLINE FIDELITY:
+   - Faithfully preserve the preacher's major sermon divisions (e.g. 3 Roman-numeral points: I, II, III).
+   - Faithfully preserve any enumerated subpoints in their exact preached order. Do NOT reorder, merge, or omit subpoints to fit an artificial pattern. Do NOT invent synthetic subpoints.
+   - Correct obvious speech garbles, but retain the preacher's distinctive terminology.
+4. SCRIPTURE DEMARCATION:
+   - Accurately distinguish: (a) Direct Scripture quotation; (b) Biblical narrative/history; (c) Preacher's exposition/interpretation; (d) Preacher's personal application.
+   - Do NOT present a pastoral application or interpretation as though the cited verse explicitly states it.
+5. ZERO UNSUPPORTED CONTENT (ANTI-HALLUCINATION GUARD):
+   - Every biblical figure, story, illustration, testimony, and prayer point MUST come directly from the verified transcript.
+   - STRICTLY FORBIDDEN: Do not introduce unmentioned biblical figures (such as Joseph, Mary Magdalene, Samuel, Elijah) or personal anecdotes simply because they fit the sermon theme.
+   - The report must document what was actually preached, not compose a new sermon.
+6. DEPTH WITHOUT ORAL REPETITION:
+   - Maintain substantive theological depth and full expository coverage.
+   - Condense repetitive oral loops, platform pauses, and filler phrases into structured, dignified paragraphs.
 
 ================================================================================
 AUTHORITATIVE VERIFIED TRANSCRIPT
@@ -535,11 +605,19 @@ You MUST output valid, parseable JSON conforming strictly to this format:
                 )
                 return
 
-            report_title = parsed_data.get("report_title") or session.get("title") or "DLBC Information Unit Report"
+            known_meta = self._extract_metadata(session)
+            report_title = parsed_data.get("report_title") or known_meta["title"] or "DLBC Information Unit Report"
             report_text = parsed_data.get("report_text") or ""
-            minister = parsed_data.get("minister") or session.get("minister") or "Minister not provided"
-            programme = session.get("metadata", {}).get("programme") or "Sunday Worship Service"
-            service_date = parsed_data.get("service_date") or session.get("date_created", "")[:10]
+
+            # Ground-truth protection for minister
+            parsed_minister = (parsed_data.get("minister") or "").strip()
+            if parsed_minister and parsed_minister.lower() not in ("minister not provided", "not provided", "unknown", "none"):
+                minister = parsed_minister
+            else:
+                minister = known_meta["minister"]
+
+            programme = known_meta["programme"]
+            service_date = parsed_data.get("service_date") or known_meta["service_date"]
 
             val_summary = self.validate_output(report_text)
 

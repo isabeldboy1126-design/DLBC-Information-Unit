@@ -9,6 +9,7 @@ Provides endpoints for:
 5. Restoring past Final Report revisions.
 """
 
+import json
 from typing import Any, Dict, List, Optional
 import urllib.parse
 from pydantic import BaseModel, Field
@@ -22,6 +23,7 @@ from app.database.session_repo import session_repo
 from app.database.proofreading_repo import proofreading_repo
 from app.database.final_report_repo import final_report_repo
 from app.services.document_service import document_service
+from app.services.report_shortener import report_shortener_service
 
 router = APIRouter(prefix="/api/final-report", tags=["Final Report & Document Export (Phase 9)"])
 
@@ -273,3 +275,95 @@ async def activate_final_report_revision(session_id: str, revision_id: str):
     if not activated:
         raise HTTPException(status_code=404, detail=f"Final report revision {revision_id} not found.")
     return {"status": "activated", "active_final_report": activated}
+
+
+class ShortenReportRequest(BaseModel):
+    revision_id: Optional[str] = Field(default=None, description="Optional specific final report revision ID to shorten.")
+
+
+@router.post("/sessions/{session_id}/shorten")
+async def shorten_final_report_endpoint(
+    session_id: str,
+    payload: Optional[ShortenReportRequest] = None,
+):
+    """
+    Produces a concise 40-60% shortened version of the final report adhering strictly to Rules 1-8.
+    This operation is non-destructive: it does not overwrite the active final report.
+    The client can review and explicitly save as a new revision if desired.
+    """
+    session = await session_repo.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found.")
+
+    target_report = None
+    if payload and payload.revision_id:
+        target_report = await final_report_repo.get_final_report_by_id(payload.revision_id)
+    if not target_report:
+        target_report = await final_report_repo.get_active_final_report(session_id)
+
+    if not target_report or not target_report.get("report_text", "").strip():
+        # Fallback to source proofread report if final report has not yet been finalized
+        active_proofread = await proofreading_repo.get_active_proofread_report(session_id)
+        if not active_proofread or not active_proofread.get("proofread_text", "").strip():
+            raise HTTPException(
+                status_code=400,
+                detail="No final report or approved proofread report found to shorten.",
+            )
+        report_title = active_proofread.get("proofread_title") or session.get("title", "Message Report")
+        report_text = active_proofread.get("proofread_text")
+        source_id = active_proofread.get("revision_id")
+        source_rev_num = 1
+    else:
+        report_title = target_report.get("report_title") or session.get("title", "Message Report")
+        report_text = target_report.get("report_text")
+        source_id = target_report.get("id")
+        source_rev_num = target_report.get("revision_number", 1)
+
+    meta = session.get("metadata") or {}
+    if isinstance(meta, str):
+        try:
+            meta = json.loads(meta)
+        except Exception:
+            meta = {}
+    meta_json = session.get("metadata_json")
+    if meta_json and isinstance(meta_json, str):
+        try:
+            parsed_meta_json = json.loads(meta_json)
+            if isinstance(parsed_meta_json, dict):
+                meta = {**parsed_meta_json, **meta}
+        except Exception:
+            pass
+
+    minister = (
+        (target_report.get("minister") if target_report else None)
+        or meta.get("minister")
+        or meta.get("pastor_name")
+        or meta.get("speaker")
+        or session.get("minister_name")
+        or session.get("minister")
+        or "Minister not provided"
+    )
+    programme = (
+        (target_report.get("programme") if target_report else None)
+        or meta.get("programme")
+        or meta.get("eventType")
+        or "Deeper Christian Life Ministry"
+    )
+    service_date = (
+        (target_report.get("service_date") if target_report else None)
+        or meta.get("service_date")
+        or session.get("date_created", "")[:10]
+    )
+
+    result = await report_shortener_service.shorten_report(
+        report_title=report_title,
+        report_text=report_text,
+        minister=minister,
+        programme=programme,
+        service_date=service_date,
+    )
+    result["session_id"] = session_id
+    result["source_report_id"] = source_id
+    result["source_revision_number"] = source_rev_num
+    return result
+
