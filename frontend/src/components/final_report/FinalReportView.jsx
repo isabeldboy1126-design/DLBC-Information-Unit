@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { getApiUrl } from '../../config'
+import { getApiUrl, getAuthHeaders } from '../../config'
 import { SourceReferenceDrawer } from '../editing/SourceReferenceDrawer'
 import { saveFileWithNativeDialog } from '../../services/desktopPlatform'
 import { FinalReportSkeleton } from '../skeletons'
@@ -35,6 +35,43 @@ export function FinalReportView({ session, onBack }) {
 
   const sessionId = session?.session_id
 
+  const parseResponseError = async (res, fallbackMessage) => {
+    let detail = ''
+    try {
+      const body = await res.json()
+      detail = body?.detail || body?.message || ''
+    } catch {
+      // response body was not JSON
+    }
+
+    if (res.status === 404) {
+      if (!detail || detail === 'Not Found') {
+        return 'Backend endpoint unavailable. Please ensure the backend is running the latest deployment.'
+      }
+      if (/session/i.test(detail)) {
+        return `Session not found: ${detail}`
+      }
+      if (/report/i.test(detail)) {
+        return `Report not found: ${detail}`
+      }
+      return `Resource not found: ${detail}`
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      return 'Authentication failure: Please sign in again to access this feature.'
+    }
+
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      return 'AI provider or backend server is temporarily unavailable. Please try again shortly.'
+    }
+
+    if (res.status === 400) {
+      return detail || 'Invalid request for report shortening.'
+    }
+
+    return detail || fallbackMessage
+  }
+
   const fetchFinalReportData = useCallback(async () => {
     if (!sessionId) {
       setIsLoading(false)
@@ -42,7 +79,9 @@ export function FinalReportView({ session, onBack }) {
     }
     try {
       setErrorBanner(null)
-      const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}`))
+      const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}`), {
+        headers: getAuthHeaders(),
+      })
       if (res.ok) {
         const data = await res.json()
         setFinalReportData(data)
@@ -54,11 +93,16 @@ export function FinalReportView({ session, onBack }) {
           setReportText(data.source_proofread_report.proofread_text || '')
         }
       } else {
-        setErrorBanner('Failed to load final report data.')
+        const errorMsg = await parseResponseError(res, 'Failed to load final report data.')
+        setErrorBanner(errorMsg)
       }
     } catch (e) {
       console.error('Error fetching final report:', e)
-      setErrorBanner(e.message || 'Error loading final report')
+      if (e.message && /failed to fetch|networkerror/i.test(e.message)) {
+        setErrorBanner('Network error: Unable to connect to the backend server.')
+      } else {
+        setErrorBanner(e.message || 'Error loading final report')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -74,7 +118,7 @@ export function FinalReportView({ session, onBack }) {
       setIsFinalizing(true)
       const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/finalize`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           report_title: reportTitle.trim() || undefined,
         }),
@@ -84,8 +128,8 @@ export function FinalReportView({ session, onBack }) {
         setSuccessBanner('✓ Final Report finalized successfully! Microsoft Word (.docx) document is ready for download.')
         await fetchFinalReportData()
       } else {
-        const err = await res.json()
-        setErrorBanner(err.detail || 'Failed to finalize report.')
+        const errorMsg = await parseResponseError(res, 'Failed to finalize report.')
+        setErrorBanner(errorMsg)
       }
     } catch (e) {
       setErrorBanner(`Error finalizing report: ${e.message}`)
@@ -105,7 +149,7 @@ export function FinalReportView({ session, onBack }) {
       setIsSavingRevision(true)
       const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/save-revision`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           report_title: reportTitle.trim() || undefined,
           report_text: reportText.trim(),
@@ -118,8 +162,8 @@ export function FinalReportView({ session, onBack }) {
         setTimeout(() => setSuccessBanner(null), 3000)
         await fetchFinalReportData()
       } else {
-        const err = await res.json()
-        setErrorBanner(err.detail || 'Failed to save revision.')
+        const errorMsg = await parseResponseError(res, 'Failed to save revision.')
+        setErrorBanner(errorMsg)
       }
     } catch (e) {
       setErrorBanner(`Error saving revision: ${e.message}`)
@@ -130,16 +174,20 @@ export function FinalReportView({ session, onBack }) {
 
   const handleShortenReport = async () => {
     if (isShortening || !hasReportContent) return
+    const abortController = new AbortController()
+    const timeoutId = setTimeout(() => abortController.abort(), 90000)
+
     try {
       setIsShortening(true)
       setErrorBanner(null)
       const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/shorten`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        signal: abortController.signal,
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.detail || 'Failed to generate shortened report.')
+        const errorMsg = await parseResponseError(res, 'Failed to generate shortened report.')
+        throw new Error(errorMsg)
       }
       const data = await res.json()
       setShortenedData(data)
@@ -147,8 +195,15 @@ export function FinalReportView({ session, onBack }) {
       setShortenTab('shortened')
     } catch (e) {
       console.error('Error shortening report:', e)
-      setErrorBanner(`Shortening failed: ${e.message}`)
+      if (e.name === 'AbortError') {
+        setErrorBanner('Shortening request timed out. The AI model took longer than 90 seconds to respond. Please try again.')
+      } else if (e.message && /failed to fetch|networkerror/i.test(e.message)) {
+        setErrorBanner('Network error: Unable to reach the backend server. Please check your internet connection.')
+      } else {
+        setErrorBanner(`Shortening failed: ${e.message}`)
+      }
     } finally {
+      clearTimeout(timeoutId)
       setIsShortening(false)
     }
   }
@@ -160,7 +215,7 @@ export function FinalReportView({ session, onBack }) {
       setErrorBanner(null)
       const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/save-revision`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           report_title: shortenedData.shortened_title || `${reportTitle} (Concise)`,
           report_text: shortenedData.shortened_text,
@@ -173,8 +228,8 @@ export function FinalReportView({ session, onBack }) {
         setTimeout(() => setSuccessBanner(null), 4500)
         await fetchFinalReportData()
       } else {
-        const err = await res.json().catch(() => ({}))
-        setErrorBanner(err.detail || 'Failed to save shortened revision.')
+        const errorMsg = await parseResponseError(res, 'Failed to save shortened revision.')
+        setErrorBanner(errorMsg)
       }
     } catch (e) {
       setErrorBanner(`Error saving revision: ${e.message}`)
@@ -221,14 +276,18 @@ export function FinalReportView({ session, onBack }) {
     try {
       const res = await fetch(getApiUrl(`/api/final-report/sessions/${sessionId}/revisions/${revId}/activate`), {
         method: 'POST',
+        headers: getAuthHeaders(),
       })
       if (res.ok) {
         setSuccessBanner('✓ Restored earlier Final Report revision.')
         setTimeout(() => setSuccessBanner(null), 3000)
         await fetchFinalReportData()
+      } else {
+        const errorMsg = await parseResponseError(res, 'Failed to activate revision.')
+        setErrorBanner(errorMsg)
       }
     } catch (e) {
-      alert(`Error activating revision: ${e.message}`)
+      setErrorBanner(`Error activating revision: ${e.message}`)
     }
   }
 
