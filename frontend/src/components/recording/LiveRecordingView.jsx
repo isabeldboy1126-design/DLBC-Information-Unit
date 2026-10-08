@@ -25,6 +25,7 @@ export function LiveRecordingView({
   onToggleManualFlag,
 }) {
   const [isStopping, setIsStopping] = useState(false)
+  const [isUserScrolledUp, setIsUserScrolledUp] = useState(false)
   const transcriptContainerRef = useRef(null)
 
   const handleStop = async () => {
@@ -44,12 +45,34 @@ export function LiveRecordingView({
   const interimText = liveTranscript?.interimText || ''
   const transcriptStatus = liveTranscript?.status || 'listening'
 
-  // Auto-scroll container to bottom as new live segments or interim text arrive
+  // Handle user manual scroll events: pause auto-follow when scrolled up
+  const handleScroll = () => {
+    const el = transcriptContainerRef.current
+    if (!el) return
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+    setIsUserScrolledUp(!isAtBottom)
+  }
+
+  // Auto-scroll container to bottom as new live segments or interim text arrive, unless user scrolled up
   useEffect(() => {
-    if (transcriptContainerRef.current) {
+    if (!isUserScrolledUp && transcriptContainerRef.current) {
       transcriptContainerRef.current.scrollTop = transcriptContainerRef.current.scrollHeight
     }
-  }, [segments.length, interimText])
+  }, [segments.length, interimText, isUserScrolledUp])
+
+  const handleJumpToLive = () => {
+    if (transcriptContainerRef.current) {
+      const prefersReducedMotion =
+        typeof window !== 'undefined' &&
+        window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      transcriptContainerRef.current.scrollTo({
+        top: transcriptContainerRef.current.scrollHeight,
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      })
+      setIsUserScrolledUp(false)
+    }
+  }
 
   const formatTimer = (totalSeconds) => {
     const hours = Math.floor(totalSeconds / 3600)
@@ -308,7 +331,11 @@ export function LiveRecordingView({
       {/* 2. REAL-TIME DOMINANT TRANSCRIPT CANVAS (35px)                */}
       {/* ------------------------------------------------------------- */}
       <div className="card live-transcript-canvas-card">
-        <div className="transcript-stream-container" ref={transcriptContainerRef}>
+        <div
+          className="transcript-stream-container"
+          ref={transcriptContainerRef}
+          onScroll={handleScroll}
+        >
           {segments.length === 0 && !interimText ? (
             <div className="transcript-waiting-placeholder">
               <span className="waiting-spinner">⏳</span>
@@ -378,6 +405,18 @@ export function LiveRecordingView({
             </div>
           )}
         </div>
+
+        {/* Floating Return-to-Live / Jump to Live Button */}
+        {isUserScrolledUp && (
+          <button
+            type="button"
+            className="btn-return-to-live"
+            onClick={handleJumpToLive}
+            title="Jump to latest live speech and follow incoming updates"
+          >
+            ⬇ Jump to Live
+          </button>
+        )}
 
         {/* ----------------------------------------------------------- */}
         {/* 3. SUBTLE SECONDARY STATUS FOOTER                           */}

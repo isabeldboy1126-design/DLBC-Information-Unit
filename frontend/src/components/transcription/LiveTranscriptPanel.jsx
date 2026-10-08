@@ -41,9 +41,13 @@ export function LiveTranscriptPanel({
 
   const scrollToBottom = () => {
     if (scrollContainerRef.current) {
+      const prefersReducedMotion =
+        typeof window !== 'undefined' &&
+        window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
       scrollContainerRef.current.scrollTo({
         top: scrollContainerRef.current.scrollHeight,
-        behavior: 'smooth',
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
       })
       setIsUserScrolledUp(false)
     }
@@ -185,15 +189,15 @@ export function LiveTranscriptPanel({
         )}
       </div>
 
-      {/* Floating Return-to-Live Button */}
+      {/* Floating Return-to-Live / Jump to Live Button */}
       {isUserScrolledUp && (
         <button
           type="button"
           className="btn-return-to-live"
           onClick={scrollToBottom}
-          title="Jump to latest live speech"
+          title="Jump to latest live speech and follow incoming updates"
         >
-          ⬇ Return to Live
+          ⬇ Jump to Live
         </button>
       )}
 

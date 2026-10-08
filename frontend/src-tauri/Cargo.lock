@@ -805,7 +805,7 @@ dependencies = [
 
 [[package]]
 name = "dlbc-information-unit"
-version = "1.0.5"
+version = "1.0.7"
 dependencies = [
  "serde",
  "serde_json",

@@ -6321,6 +6321,7 @@ textarea.form-control {
 
 /* 2. Real-time Dominant Transcript Canvas (35px) */
 .live-transcript-canvas-card {
+  position: relative;
   border: 1px solid #e3e8ef;
   border-radius: 10px;
   flex: 1;
