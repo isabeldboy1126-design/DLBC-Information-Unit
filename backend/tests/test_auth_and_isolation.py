@@ -335,10 +335,10 @@ async def test_demo_mode_security_and_gating():
     1. Unauthenticated request without header -> 401 Unauthorized
     2. Valid demo request with X-DLBC-Demo: 1 -> 200 OK with legacy_default_account
     3. Demo mode does not insert fake users or memberships into the database
-    4. Destructive Protection: Demo mode cannot delete sessions -> 403 Forbidden
-    5. Destructive Protection: Demo mode cannot delete recordings -> 403 Forbidden
-    6. Destructive Protection: Demo mode cannot create/modify/delete programmes -> 403 Forbidden
-    7. Destructive Protection: Demo mode cannot modify account settings -> 403 Forbidden
+    4. Demo users CAN create and permanently delete sessions within their own sandbox
+    5. Demo users CANNOT delete sessions belonging to other accounts -> 404 Not Found
+    6. Demo users CAN create and delete custom programmes within their own sandbox
+    7. System canonical programmes cannot be modified or deleted by demo mode -> 403 Forbidden
     8. Destructive Protection: Demo mode cannot mutate authoritative onboarding -> 400 Bad Request
     """
     transport = ASGITransport(app=app)
@@ -366,45 +366,121 @@ async def test_demo_mode_security_and_gating():
             row = await cur.fetchone()
             assert row["cnt"] == 0, "demo_user was incorrectly persisted to app_users"
 
-        # 4. DESTRUCTIVE GUARD: DEMO CANNOT DELETE SESSIONS -> 403 FORBIDDEN
-        res_del_sess = await client.delete("/api/sessions/any_session_id", headers={"X-DLBC-Demo": "1"})
-        assert res_del_sess.status_code == 403, f"Demo session deletion was not blocked: {res_del_sess.status_code}"
-        assert "Session deletion is disabled in Demo mode" in res_del_sess.json()["detail"]
+        # 4. PERMANENT DEMO DELETION: Demo user creates a session and permanently deletes it
+        import uuid
+        demo_test_sess_id = f"demo_sess_{uuid.uuid4().hex[:8]}"
+        res_create_sess = await client.post(
+            "/api/sessions",
+            headers={"X-DLBC-Demo": "1"},
+            json={"title": "Demo Sandbox Test Session", "raw_text": "Demo content for deletion test."},
+        )
+        assert res_create_sess.status_code == 200
+        created_id = res_create_sess.json()["session"]["session_id"]
 
-        # 5. DESTRUCTIVE GUARD: DEMO CANNOT DELETE RECORDINGS -> 403 FORBIDDEN
-        res_del_rec = await client.delete("/api/audio/recordings/any_rec_id", headers={"X-DLBC-Demo": "1"})
-        assert res_del_rec.status_code == 403, f"Demo recording deletion was not blocked: {res_del_rec.status_code}"
-        assert "Recording deletion is disabled in Demo mode" in res_del_rec.json()["detail"]
+        # Deletion in demo account succeeds permanently
+        res_del_demo = await client.delete(f"/api/sessions/{created_id}", headers={"X-DLBC-Demo": "1"})
+        assert res_del_demo.status_code == 200
+        assert res_del_demo.json()["status"] == "deleted"
 
-        # 6. DESTRUCTIVE GUARD: DEMO CANNOT CREATE OR MODIFY PROGRAMMES -> 403 FORBIDDEN
+        # Verifying session is permanently gone
+        res_get_del = await client.get(f"/api/sessions/{created_id}", headers={"X-DLBC-Demo": "1"})
+        assert res_get_del.status_code == 404
+
+        # 5. CROSS-ACCOUNT GUARD: Demo user cannot delete other accounts' sessions
+        res_del_other = await client.delete("/api/sessions/non_existent_or_other_account", headers={"X-DLBC-Demo": "1"})
+        assert res_del_other.status_code == 404
+
+        # 6. DEMO PROGRAMMES: Demo user can create and delete custom programmes in their sandbox
         res_create_prog = await client.post(
             "/api/programmes",
             headers={"X-DLBC-Demo": "1"},
-            json={"name": "Demo Test Programme"},
+            json={"name": "Demo Custom Programme"},
         )
-        assert res_create_prog.status_code == 403, f"Demo programme creation was not blocked: {res_create_prog.status_code}"
-        assert "Modifying programmes is disabled in Demo mode" in res_create_prog.json()["detail"]
+        assert res_create_prog.status_code == 200
+        demo_prog_id = res_create_prog.json()["id"]
 
-        res_update_prog = await client.put(
-            "/api/programmes/prog_1",
+        res_del_prog = await client.delete(f"/api/programmes/{demo_prog_id}?permanent=true", headers={"X-DLBC-Demo": "1"})
+        assert res_del_prog.status_code == 200
+
+        # 7. CANONICAL DEFAULT GUARD: Canonical system programmes cannot be deleted or modified
+        res_progs = await client.get("/api/programmes", headers={"X-DLBC-Demo": "1"})
+        assert res_progs.status_code == 200
+        canonical_progs = [p for p in res_progs.json() if p.get("is_system")]
+        assert len(canonical_progs) > 0
+        canonical_id = canonical_progs[0]["id"]
+
+        res_del_canonical = await client.delete(f"/api/programmes/{canonical_id}", headers={"X-DLBC-Demo": "1"})
+        assert res_del_canonical.status_code == 403
+
+        # 8. DEMO RECORDING LIFECYCLE: Demo user can delete their own recording, but cannot delete church recordings
+        import os
+        from app.config import STORAGE_AUDIO_DIR
+        from app.audio.stream_manager import load_manifest, save_manifest
+
+        demo_rec_id = f"rec_demo_test_{uuid.uuid4().hex[:6]}"
+        demo_rec_path = os.path.join(STORAGE_AUDIO_DIR, f"{demo_rec_id}.wav")
+        os.makedirs(STORAGE_AUDIO_DIR, exist_ok=True)
+        with open(demo_rec_path, "wb") as f:
+            f.write(b"RIFF" + b"\x00" * 40)  # Dummy WAV file
+
+        # Register demo recording in manifest with demo account_id
+        manifest = load_manifest()
+        manifest.insert(0, {
+            "recording_id": demo_rec_id,
+            "filename": f"{demo_rec_id}.wav",
+            "account_id": "legacy_default_account",
+            "duration_seconds": 1.0,
+        })
+        save_manifest(manifest)
+
+        # Demo user deletes their own recording -> 200 OK
+        res_del_rec = await client.delete(f"/api/audio/recordings/{demo_rec_id}", headers={"X-DLBC-Demo": "1"})
+        assert res_del_rec.status_code == 200
+        assert res_del_rec.json()["status"] == "deleted"
+        assert not os.path.exists(demo_rec_path)
+
+        # Demo user cannot delete another church account's recording -> 403 Forbidden
+        church_rec_id = f"rec_church_protected_{uuid.uuid4().hex[:6]}"
+        manifest = load_manifest()
+        manifest.insert(0, {
+            "recording_id": church_rec_id,
+            "filename": f"{church_rec_id}.wav",
+            "account_id": "acc_church_rivers_hq",
+            "duration_seconds": 10.0,
+        })
+        save_manifest(manifest)
+
+        res_del_church_rec = await client.delete(f"/api/audio/recordings/{church_rec_id}", headers={"X-DLBC-Demo": "1"})
+        assert res_del_church_rec.status_code == 403
+
+        # Clean up test manifest entry
+        manifest = [m for m in load_manifest() if m.get("recording_id") != church_rec_id]
+        save_manifest(manifest)
+
+        # 9. DEMO WORKSPACE DOCUMENTS: Demo user can create and delete workspace documents
+        doc_id = f"doc_{uuid.uuid4().hex[:8]}"
+        res_create_doc = await client.put(
+            f"/api/workspace/documents/{doc_id}",
             headers={"X-DLBC-Demo": "1"},
-            json={"name": "New Name"},
+            json={"title": "Demo Draft Document", "content": "Sample sermon draft text.", "status": "Draft"},
         )
-        assert res_update_prog.status_code == 403, f"Demo programme update was not blocked: {res_update_prog.status_code}"
+        assert res_create_doc.status_code == 200
 
-        res_archive_prog = await client.delete("/api/programmes/prog_1", headers={"X-DLBC-Demo": "1"})
-        assert res_archive_prog.status_code == 403, f"Demo programme archive was not blocked: {res_archive_prog.status_code}"
+        res_del_doc = await client.delete(f"/api/workspace/documents/{doc_id}", headers={"X-DLBC-Demo": "1"})
+        assert res_del_doc.status_code == 200
 
-        # 7. DESTRUCTIVE GUARD: DEMO CANNOT MODIFY ACCOUNT SETTINGS -> 403 FORBIDDEN
+        res_get_doc = await client.get(f"/api/workspace/documents/{doc_id}", headers={"X-DLBC-Demo": "1"})
+        assert res_get_doc.status_code == 404
+
+        # 10. DEMO ACCOUNT SETTINGS: Demo user can save settings for their own isolated account
         res_set_setting = await client.post(
             "/api/auth/account-settings",
             headers={"X-DLBC-Demo": "1"},
-            json={"key": "instruction", "value": "demo change"},
+            json={"key": "instruction", "value": "demo instruction"},
         )
-        assert res_set_setting.status_code == 403, f"Demo account setting change was not blocked: {res_set_setting.status_code}"
-        assert "Modifying account settings is disabled in Demo mode" in res_set_setting.json()["detail"]
+        assert res_set_setting.status_code == 200
 
-        # 8. DESTRUCTIVE GUARD: DEMO CANNOT MUTATE AUTHORITATIVE ONBOARDING -> 400 BAD REQUEST
+        # 11. DESTRUCTIVE GUARD: DEMO CANNOT MUTATE AUTHORITATIVE ONBOARDING -> 400 BAD REQUEST
         res_demo_mut = await client.post(
             "/api/auth/onboarding/complete",
             headers={"X-DLBC-Demo": "1"},
@@ -412,6 +488,85 @@ async def test_demo_mode_security_and_gating():
         )
         assert res_demo_mut.status_code == 400, f"Demo onboarding mutation was not blocked: {res_demo_mut.status_code}"
         assert "Demo mode cannot modify authoritative onboarding" in res_demo_mut.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_cross_account_programme_isolation(auth_header_user_a, auth_header_user_b):
+    """
+    Step 2 Verification: Cross-Account Programme and Event Isolation
+    1. User A lists programmes -> sees canonical default church events (is_system = 1)
+    2. User A creates a custom programme -> belongs to Account A
+    3. User A lists programmes -> sees canonical default events + their custom programme
+    4. User B lists programmes -> sees canonical default events, CANNOT see User A's custom programme
+    5. User B attempts to access, edit, or delete User A's custom programme -> 404 Not Found
+    6. User A and User B cannot edit or delete canonical system programmes -> 403 Forbidden
+    7. Unauthenticated GET /api/programmes returns ONLY canonical system programmes
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        # 1. Unauthenticated request only sees canonical system programmes
+        res_unauth = await client.get("/api/programmes")
+        assert res_unauth.status_code == 200
+        unauth_progs = res_unauth.json()
+        assert len(unauth_progs) > 0
+        for p in unauth_progs:
+            assert p["is_system"] is True
+
+        # 2. User A creates a custom programme
+        res_create_a = await client.post(
+            "/api/programmes",
+            headers=auth_header_user_a,
+            json={"name": "Rivers Central Special Convention"},
+        )
+        assert res_create_a.status_code == 200
+        prog_a = res_create_a.json()
+        prog_a_id = prog_a["id"]
+        assert prog_a["is_system"] is False
+
+        # 3. User A sees their custom programme
+        res_list_a = await client.get("/api/programmes", headers=auth_header_user_a)
+        assert res_list_a.status_code == 200
+        a_ids = [p["id"] for p in res_list_a.json()]
+        assert prog_a_id in a_ids
+
+        # 4. User B does NOT see User A's custom programme
+        res_list_b = await client.get("/api/programmes", headers=auth_header_user_b)
+        assert res_list_b.status_code == 200
+        b_ids = [p["id"] for p in res_list_b.json()]
+        assert prog_a_id not in b_ids
+
+        # 5. User B cannot access, modify, or delete User A's custom programme
+        res_get_b = await client.get(f"/api/programmes/{prog_a_id}", headers=auth_header_user_b)
+        assert res_get_b.status_code == 404
+
+        res_put_b = await client.put(
+            f"/api/programmes/{prog_a_id}",
+            headers=auth_header_user_b,
+            json={"name": "Tampered Name"},
+        )
+        assert res_put_b.status_code == 404
+
+        res_del_b = await client.delete(f"/api/programmes/{prog_a_id}", headers=auth_header_user_b)
+        assert res_del_b.status_code == 404
+
+        # 6. Neither User A nor User B can modify or delete a canonical system programme
+        canonical_id = unauth_progs[0]["id"]
+        res_put_canonical = await client.put(
+            f"/api/programmes/{canonical_id}",
+            headers=auth_header_user_a,
+            json={"name": "Renamed System Service"},
+        )
+        assert res_put_canonical.status_code == 403
+
+        res_del_canonical = await client.delete(
+            f"/api/programmes/{canonical_id}",
+            headers=auth_header_user_a,
+        )
+        assert res_del_canonical.status_code == 403
+
+        # Clean up User A's custom programme
+        res_del_a = await client.delete(f"/api/programmes/{prog_a_id}?permanent=true", headers=auth_header_user_a)
+        assert res_del_a.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -448,6 +603,126 @@ async def test_personal_profile_display_name(auth_header_user_a):
         )
         assert demo_patch.status_code == 200
         assert demo_patch.json()["display_name"] == "Demo Operator"
+
+
+@pytest.mark.asyncio
+async def test_read_requests_do_not_mutate_app_users(auth_header_user_a):
+    """
+    Verifies that routine authenticated requests (auth/me, accounts/me, remote/status)
+    execute via the read-only fast path and do not issue UPDATE statements on app_users,
+    preventing row-lock exhaustion on Azure SQL.
+    """
+    from app.database.connection import get_db_connection
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        # Step 1: Initial request provisions user
+        res = await client.get("/api/auth/me", headers=auth_header_user_a)
+        assert res.status_code == 200
+
+        # Step 2: Capture exact user timestamps from database
+        async with get_db_connection() as conn:
+            cursor = await conn.execute(
+                "SELECT updated_at, last_login_at FROM app_users WHERE LOWER(email) = LOWER('user_a@dlbc.org')"
+            )
+            row = await cursor.fetchone()
+            assert row is not None
+            initial_updated_at = row["updated_at"]
+            initial_last_login = row["last_login_at"]
+
+        # Step 3: Send multiple concurrent or sequential read requests (including polling simulation)
+        for _ in range(10):
+            res_auth = await client.get("/api/auth/me", headers=auth_header_user_a)
+            assert res_auth.status_code == 200
+            res_remote = await client.get("/api/remote/status", headers=auth_header_user_a)
+            assert res_remote.status_code == 200
+            res_devices = await client.get("/api/remote/devices", headers=auth_header_user_a)
+            assert res_devices.status_code == 200
+
+        # Step 4: Verify timestamps in database remain untouched (0 writes occurred)
+        async with get_db_connection() as conn:
+            cursor = await conn.execute(
+                "SELECT updated_at, last_login_at FROM app_users WHERE LOWER(email) = LOWER('user_a@dlbc.org')"
+            )
+            row_after = await cursor.fetchone()
+            assert row_after["updated_at"] == initial_updated_at, "app_users.updated_at was modified during read requests"
+            assert row_after["last_login_at"] == initial_last_login, "app_users.last_login_at was modified during read requests"
+
+
+@pytest.mark.asyncio
+async def test_universal_shared_demo_workspace(auth_header_user_a):
+    """
+    Verifies that:
+    1. Anyone entering demo (Device Alpha and Device Beta) enters the same shared workspace.
+    2. Both receive account_id == "legacy_default_account" and see the same existing data.
+    3. Resources created by Device Alpha are immediately visible to Device Beta.
+    4. Deletion in demo deletes the resource from the shared workspace for all devices.
+    5. Real church accounts remain completely isolated from Demo.
+    """
+    transport = ASGITransport(app=app)
+    header_alpha = {"X-DLBC-Demo": "1"}
+    header_beta = {"X-DLBC-Demo": "1"}
+
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        # Step 1: Device Alpha enters demo
+        res_me_a = await client.get("/api/auth/me", headers=header_alpha)
+        assert res_me_a.status_code == 200
+        data_a = res_me_a.json()
+        assert data_a["account_id"] == "legacy_default_account"
+        assert data_a["is_demo"] is True
+
+        # Step 2: Device Beta enters demo
+        res_me_b = await client.get("/api/auth/me", headers=header_beta)
+        assert res_me_b.status_code == 200
+        data_b = res_me_b.json()
+        assert data_b["account_id"] == "legacy_default_account"
+        assert data_b["is_demo"] is True
+
+        # Step 3: Device Alpha creates custom session in shared demo
+        res_new_sess_a = await client.post(
+            "/api/sessions",
+            headers=header_alpha,
+            json={"title": "Shared Demo Worship Service", "raw_text": "Shared sermon content."},
+        )
+        assert res_new_sess_a.status_code == 200
+        shared_sess_id = res_new_sess_a.json()["session"]["session_id"]
+
+        # Step 4: Device Beta IMMEDIATELY sees Device Alpha's session (universal workspace)
+        res_sess_b_check = await client.get("/api/sessions", headers=header_beta)
+        assert res_sess_b_check.status_code == 200
+        b_ids = [s["session_id"] for s in res_sess_b_check.json()["sessions"]]
+        assert shared_sess_id in b_ids, "Device Beta could not see session created in shared demo!"
+
+        # Step 5: Deletion in demo removes resource from the shared workspace
+        res_del_shared = await client.delete(f"/api/sessions/{shared_sess_id}", headers=header_beta)
+        assert res_del_shared.status_code == 200
+        assert res_del_shared.json()["status"] == "deleted"
+
+        # Verify Device Alpha now sees it is gone
+        res_sess_a_check = await client.get("/api/sessions", headers=header_alpha)
+        a_ids = [s["session_id"] for s in res_sess_a_check.json()["sessions"]]
+        assert shared_sess_id not in a_ids
+
+        # Step 6: Real Authenticated Church Account Isolation
+        res_church_sess = await client.post(
+            "/api/sessions",
+            headers=auth_header_user_a,
+            json={"title": "Official Sunday Service", "raw_text": "Authoritative church sermon."},
+        )
+        assert res_church_sess.status_code == 200
+        church_sess_id = res_church_sess.json()["session"]["session_id"]
+
+        # Demo attempts to view or delete real church session -> 404 Not Found
+        res_demo_hack = await client.get(f"/api/sessions/{church_sess_id}", headers=header_alpha)
+        assert res_demo_hack.status_code == 404
+
+        res_demo_del_hack = await client.delete(f"/api/sessions/{church_sess_id}", headers=header_alpha)
+        assert res_demo_del_hack.status_code == 404
+
+        # Church session remains intact
+        res_church_verify = await client.get(f"/api/sessions/{church_sess_id}", headers=auth_header_user_a)
+        assert res_church_verify.status_code == 200
+
 
 
 

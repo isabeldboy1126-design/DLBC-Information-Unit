@@ -42,8 +42,8 @@ export function useSessions() {
     }
   }, [])
 
-  // Load a single session with full details (or lightweight overview)
-  const loadSession = useCallback(async (sessionId, includeSegments = false) => {
+  // Load a single session with full details including granular segments
+  const loadSession = useCallback(async (sessionId, includeSegments = true) => {
     setIsLoading(true)
     setError(null)
     try {
@@ -62,6 +62,23 @@ export function useSessions() {
     } finally {
       setIsLoading(false)
     }
+  }, [])
+
+  // Dedicated loader to fetch transcript segments on-demand if a session was previously loaded lightweight
+  const loadSessionSegments = useCallback(async (sessionId) => {
+    if (!sessionId) return []
+    try {
+      const res = await authFetch(`${API_BASE}/${encodeURIComponent(sessionId)}?include_segments=true`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      if (data?.session) {
+        setActiveSession((prev) => (prev && prev.session_id === sessionId ? { ...prev, ...data.session } : data.session))
+        return data.session.segments || []
+      }
+    } catch (err) {
+      console.warn('[useSessions] Failed to fetch session segments:', err.message || err)
+    }
+    return []
   }, [])
 
   // Update session title
@@ -375,6 +392,7 @@ export function useSessions() {
     },
     fetchSessions,
     loadSession,
+    loadSessionSegments,
     updateSessionTitle,
     updateSessionDetails,
     deleteSession,

@@ -673,6 +673,20 @@ class SessionRepository:
                     del s_dict["flags_json"]
                     del s_dict["words_json"]
                     segments.append(s_dict)
+
+                # Self-healing fallback: if no rows found in session_segments table, check storage/transcripts/
+                if len(segments) == 0:
+                    tr_id = session.get("transcript_id") or (f"tr_{session.get('recording_id')}" if session.get("recording_id") else None)
+                    if tr_id:
+                        tr_file = os.path.join(STORAGE_TRANSCRIPTS_DIR, f"{tr_id}.json")
+                        if os.path.isfile(tr_file):
+                            try:
+                                with open(tr_file, "r", encoding="utf-8") as f:
+                                    disk_tr = json.load(f)
+                                    segments = disk_tr.get("segments", [])
+                            except Exception:
+                                pass
+
                 session["segments"] = segments
             else:
                 session["segments"] = []

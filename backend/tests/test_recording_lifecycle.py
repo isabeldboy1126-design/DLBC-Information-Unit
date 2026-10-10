@@ -225,3 +225,107 @@ async def test_automatic_lifecycle_to_completed_needs_review():
     assert len(v_state["items"]) == 1
     assert v_state["items"][0]["action"] == "pending"
     assert v_state["items"][0]["ai_decision"] == "UNRESOLVED"
+
+
+@pytest.mark.asyncio
+async def test_interruption_recovery_unfinalized_wav():
+    """
+    Verifies that:
+    1. Application startup recovery detects unfinalized Direct-WAV placeholder sessions,
+       calculates pending duration, updates database state, and strictly preserves the
+       audio file on disk UNTOUCHED (safe startup policy).
+    2. Explicit administrative repair (repair_interrupted_wav) creates a .bak backup,
+       patches the header in place, updates the database, and enables normal playback.
+    """
+    from app.audio.wav_writer import create_wav_header
+    from app.database.interruption_recovery import recover_interrupted_sessions, repair_interrupted_wav
+    from app.config import STORAGE_AUDIO_DIR
+
+    await session_repo.init_db()
+    session_id = f"test_unfinalized_{uuid.uuid4().hex[:8]}"
+    recording_id = session_id
+
+    # Create unfinalized Direct-WAV file: 44-byte placeholder (pcm_data_len=0) + 96000 bytes raw PCM (1s at 48kHz mono 16-bit)
+    wav_path = os.path.join(STORAGE_AUDIO_DIR, f"{recording_id}.wav")
+    placeholder = create_wav_header(pcm_data_len=0, sample_rate=48000, num_channels=1, bits_per_sample=16)
+    raw_pcm = b"\x00\x00" * 48000  # 96,000 bytes = 1.00s
+
+    with open(wav_path, "wb") as f:
+        f.write(placeholder)
+        f.write(raw_pcm)
+
+    # Initial state of the unfinalized WAV: wave module sees 0 frames because header says data chunk size is 0
+    with wave.open(wav_path, "rb") as wf:
+        assert wf.getnframes() == 0
+
+    # Create session left in 'recording' status
+    await session_repo.create_session(
+        session_id=session_id,
+        recording_id=recording_id,
+        title="Unfinalized Session Interruption Test",
+        status="recording",
+        metadata={"sample_rate": 48000, "channels": 1},
+    )
+
+    # Step 1: Run startup recovery — must be READ-ONLY on the audio file!
+    await recover_interrupted_sessions()
+
+    # Verify session was updated to interrupted with calculated duration
+    session = await session_repo.get_session(session_id)
+    assert session is not None
+    assert session["status"] == "interrupted"
+    assert session["is_interrupted"] == 1
+    assert session["duration_seconds"] == 1.0
+    assert session["audio_file_size"] == 96044
+    assert "File preserved intact on disk" in (session.get("recovery_notes") or "")
+
+    # Crucial check: verify startup recovery did NOT modify the WAV file on disk
+    with wave.open(wav_path, "rb") as wf:
+        assert wf.getnframes() == 0, "Startup recovery should not mutate the WAV file on disk"
+
+    # Step 2: Run explicit administrative repair
+    repair_result = await repair_interrupted_wav(recording_id, sample_rate=48000, channels=1, create_backup=True)
+    assert repair_result["status"] == "repaired"
+    assert repair_result["duration_seconds"] == 1.0
+    assert repair_result["backup_path"] is not None
+    assert os.path.exists(repair_result["backup_path"])
+
+    # Verify the WAV file on disk now has valid frames in header after explicit repair
+    with wave.open(wav_path, "rb") as wf:
+        assert wf.getnframes() == 48000
+        assert wf.getframerate() == 48000
+
+    # Cleanup test audio files
+    try:
+        os.remove(wav_path)
+        if repair_result.get("backup_path") and os.path.exists(repair_result["backup_path"]):
+            os.remove(repair_result["backup_path"])
+    except Exception:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_recording_init_aborts_cleanly_on_db_timeout():
+    """
+    Verifies that when database session creation fails or times out during init,
+    any allocated audio file on disk is removed and no orphaned session is created.
+    """
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.config import STORAGE_AUDIO_DIR
+
+    # Simulate WebSocket init with failing database
+    with patch("app.database.session_repo.session_repo.create_session", side_effect=TimeoutError("DB Timeout")):
+        client = TestClient(app)
+        with client.websocket_connect("/api/audio/stream") as websocket:
+            websocket.send_json({
+                "type": "init",
+                "sampleRate": 44100,
+                "channels": 1,
+                "deviceName": "Test Mic",
+            })
+            resp = websocket.receive_json()
+            assert resp["status"] == "error"
+            assert "Database initialization failed" in resp["message"]
+
+

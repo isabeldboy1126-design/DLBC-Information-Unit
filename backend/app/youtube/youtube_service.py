@@ -495,11 +495,15 @@ class YouTubeLiveSessionManager:
                     "duration_seconds": duration_sec,
                 },
             )
-            # Stage 6: Automatic post-recording AI verification workflow
-            await session_repo.set_ai_verification_status(session_id, "compiling")
-            asyncio.create_task(
-                verification_decision_engine.verify_session(session_id, auto_resolve=True)
-            )
+            # Stage 6: Automatic post-recording AI verification workflow (if enabled)
+            from app.database.report_processing_repo import report_processing_repo
+            session_unit = await report_processing_repo.resolve_session_unit(session_id)
+            auto_veri = await report_processing_repo.get_unit_setting(session_unit, "auto_verification_enabled", default="true")
+            if str(auto_veri).strip().lower() in ("true", "1", "yes", "on"):
+                await session_repo.set_ai_verification_status(session_id, "compiling")
+                asyncio.create_task(
+                    verification_decision_engine.verify_session(session_id, auto_resolve=True)
+                )
         except Exception as e:
             logger.error(f"Error finalizing session in DB for {session_id}: {e}")
 

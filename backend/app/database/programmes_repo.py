@@ -64,9 +64,32 @@ class ProgrammesRepository:
         await self.seed_default_programmes_if_empty()
 
     async def seed_default_programmes_if_empty(self):
-        """Seeds default programmes and sessions if none exist."""
+        """Seeds default canonical church programmes and sessions if none exist, or marks canonical defaults as is_system=1."""
         async with get_db_connection() as conn:
-            async with conn.execute("SELECT COUNT(*) as count FROM programmes;") as cursor:
+            # First, ensure migration columns exist
+            for col_sql in [
+                "ALTER TABLE programmes ADD COLUMN account_id TEXT",
+                "ALTER TABLE programmes ADD COLUMN is_system INTEGER DEFAULT 0",
+            ]:
+                try:
+                    await conn.execute(col_sql)
+                except Exception:
+                    pass
+
+            # Mark canonical seeded defaults as is_system=1 and account_id='dlbc_system_canonical'
+            canonical_names = [p["name"] for p in DEFAULT_SEEDED_PROGRAMMES]
+            placeholders = ",".join(["?"] * len(canonical_names))
+            await conn.execute(
+                f"""
+                UPDATE programmes
+                SET is_system = 1, account_id = 'dlbc_system_canonical'
+                WHERE name IN ({placeholders}) AND (account_id IS NULL OR account_id = '' OR account_id = 'legacy_default_account' OR account_id = 'dlbc_system_canonical');
+                """,
+                tuple(canonical_names),
+            )
+            await conn.commit()
+
+            async with conn.execute("SELECT COUNT(*) as count FROM programmes WHERE is_system = 1;") as cursor:
                 row = await cursor.fetchone()
                 if row and row["count"] > 0:
                     return
@@ -76,8 +99,8 @@ class ProgrammesRepository:
                 prog_id = f"prog_{uuid.uuid4().hex[:8]}"
                 await conn.execute(
                     """
-                    INSERT INTO programmes (id, name, is_archived, sort_order, created_at, updated_at)
-                    VALUES (?, ?, 0, ?, ?, ?);
+                    INSERT INTO programmes (id, account_id, name, is_system, is_archived, sort_order, created_at, updated_at)
+                    VALUES (?, 'dlbc_system_canonical', ?, 1, 0, ?, ?, ?);
                     """,
                     (prog_id, prog_data["name"], prog_idx, now, now),
                 )
@@ -94,17 +117,27 @@ class ProgrammesRepository:
 
             await conn.commit()
 
-    async def get_all_programmes(self, include_archived: bool = False) -> list[dict]:
-        """Returns all programmes with their attached sessions."""
+    async def get_all_programmes(self, account_id: str | None = None, include_archived: bool = False) -> list[dict]:
+        """Returns all programmes accessible to the account (canonical system defaults + account custom events)."""
         async with get_db_connection() as conn:
-            where_prog = "" if include_archived else "WHERE is_archived = 0"
+            where_clauses = []
+            params = []
+
+            if not include_archived:
+                where_clauses.append("is_archived = 0")
+
+            if account_id:
+                where_clauses.append("(is_system = 1 OR account_id = ?)")
+                params.append(account_id)
+
+            where_prog = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
             query_progs = f"""
-                SELECT id, name, is_archived, sort_order, created_at, updated_at
+                SELECT id, account_id, name, is_system, is_archived, sort_order, created_at, updated_at
                 FROM programmes
                 {where_prog}
-                ORDER BY sort_order ASC, name ASC;
+                ORDER BY is_system DESC, sort_order ASC, name ASC;
             """
-            async with conn.execute(query_progs) as cursor:
+            async with conn.execute(query_progs, tuple(params)) as cursor:
                 prog_rows = await cursor.fetchall()
 
             where_sess = "" if include_archived else "WHERE is_archived = 0"
@@ -135,25 +168,32 @@ class ProgrammesRepository:
 
             result = []
             for p in prog_rows:
+                p_dict = dict(p)
                 result.append({
-                    "id": p["id"],
-                    "name": p["name"],
-                    "is_archived": bool(p["is_archived"]),
-                    "sort_order": p["sort_order"],
-                    "created_at": p["created_at"],
-                    "updated_at": p["updated_at"],
-                    "sessions": sess_by_prog.get(p["id"], []),
+                    "id": p_dict["id"],
+                    "account_id": p_dict.get("account_id"),
+                    "name": p_dict["name"],
+                    "is_system": bool(p_dict.get("is_system", 0)),
+                    "is_archived": bool(p_dict["is_archived"]),
+                    "sort_order": p_dict["sort_order"],
+                    "created_at": p_dict["created_at"],
+                    "updated_at": p_dict["updated_at"],
+                    "sessions": sess_by_prog.get(p_dict["id"], []),
                 })
 
             return result
 
-    async def get_programme_by_id(self, programme_id: str) -> dict | None:
-        """Returns a single programme by ID with its sessions."""
+    async def get_programme_by_id(self, programme_id: str, account_id: str | None = None) -> dict | None:
+        """Returns a single programme by ID with its sessions if accessible to the account."""
         async with get_db_connection() as conn:
-            async with conn.execute(
-                "SELECT id, name, is_archived, sort_order, created_at, updated_at FROM programmes WHERE id = ?;",
-                (programme_id,),
-            ) as cursor:
+            if account_id:
+                query = "SELECT id, account_id, name, is_system, is_archived, sort_order, created_at, updated_at FROM programmes WHERE id = ? AND (is_system = 1 OR account_id = ?);"
+                params = (programme_id, account_id)
+            else:
+                query = "SELECT id, account_id, name, is_system, is_archived, sort_order, created_at, updated_at FROM programmes WHERE id = ?;"
+                params = (programme_id,)
+
+            async with conn.execute(query, params) as cursor:
                 p = await cursor.fetchone()
                 if not p:
                     return None
@@ -164,13 +204,16 @@ class ProgrammesRepository:
             ) as cursor:
                 sess_rows = await cursor.fetchall()
 
+            p_dict = dict(p)
             return {
-                "id": p["id"],
-                "name": p["name"],
-                "is_archived": bool(p["is_archived"]),
-                "sort_order": p["sort_order"],
-                "created_at": p["created_at"],
-                "updated_at": p["updated_at"],
+                "id": p_dict["id"],
+                "account_id": p_dict.get("account_id"),
+                "name": p_dict["name"],
+                "is_system": bool(p_dict.get("is_system", 0)),
+                "is_archived": bool(p_dict["is_archived"]),
+                "sort_order": p_dict["sort_order"],
+                "created_at": p_dict["created_at"],
+                "updated_at": p_dict["updated_at"],
                 "sessions": [
                     {
                         "id": s["id"],
@@ -185,34 +228,40 @@ class ProgrammesRepository:
                 ],
             }
 
-    async def create_programme(self, name: str, sort_order: int = 0) -> dict:
-        """Creates a new programme."""
+    async def create_programme(self, name: str, sort_order: int = 0, account_id: str | None = None) -> dict:
+        """Creates a new programme scoped to an account."""
         prog_id = f"prog_{uuid.uuid4().hex[:8]}"
         now = datetime.now(timezone.utc).isoformat()
         async with get_db_connection() as conn:
             await conn.execute(
                 """
-                INSERT INTO programmes (id, name, is_archived, sort_order, created_at, updated_at)
-                VALUES (?, ?, 0, ?, ?, ?);
+                INSERT INTO programmes (id, account_id, name, is_system, is_archived, sort_order, created_at, updated_at)
+                VALUES (?, ?, ?, 0, 0, ?, ?, ?);
                 """,
-                (prog_id, name.strip(), sort_order, now, now),
+                (prog_id, account_id, name.strip(), sort_order, now, now),
             )
             await conn.commit()
-        return await self.get_programme_by_id(prog_id)
+        return await self.get_programme_by_id(prog_id, account_id=account_id)
 
     async def update_programme(
         self,
         programme_id: str,
+        account_id: str | None = None,
         name: str | None = None,
         is_archived: bool | None = None,
         sort_order: int | None = None,
     ) -> dict | None:
         """Updates a programme's properties and relationally propagates renames."""
-        old_prog = await self.get_programme_by_id(programme_id)
+        old_prog = await self.get_programme_by_id(programme_id, account_id=account_id)
         if not old_prog:
             return None
-        old_name = old_prog.get("name")
+        if old_prog.get("is_system"):
+            # System canonical events cannot be renamed or archived
+            return None
+        if account_id and old_prog.get("account_id") and old_prog.get("account_id") != account_id:
+            return None
 
+        old_name = old_prog.get("name")
         now = datetime.now(timezone.utc).isoformat()
         updates = ["updated_at = ?"]
         params = [now]
@@ -262,16 +311,19 @@ class ProgrammesRepository:
 
             await conn.commit()
 
-        return await self.get_programme_by_id(programme_id)
+        return await self.get_programme_by_id(programme_id, account_id=account_id)
 
-    async def archive_programme(self, programme_id: str, archive: bool = True) -> dict | None:
+    async def archive_programme(self, programme_id: str, account_id: str | None = None, archive: bool = True) -> dict | None:
         """Soft-archives or unarchives a programme."""
-        return await self.update_programme(programme_id, is_archived=archive)
+        return await self.update_programme(programme_id, account_id=account_id, is_archived=archive)
 
     async def create_programme_session(
-        self, programme_id: str, name: str, sort_order: int = 0
+        self, programme_id: str, name: str, sort_order: int = 0, account_id: str | None = None
     ) -> dict | None:
         """Creates a new session/section under a programme."""
+        parent = await self.get_programme_by_id(programme_id, account_id=account_id)
+        if not parent:
+            return None
         sess_id = f"psess_{uuid.uuid4().hex[:8]}"
         now = datetime.now(timezone.utc).isoformat()
         async with get_db_connection() as conn:
@@ -283,7 +335,7 @@ class ProgrammesRepository:
                 (sess_id, programme_id, name.strip(), sort_order, now, now),
             )
             await conn.commit()
-        return await self.get_programme_by_id(programme_id)
+        return await self.get_programme_by_id(programme_id, account_id=account_id)
 
     async def update_programme_session(
         self,
@@ -291,6 +343,7 @@ class ProgrammesRepository:
         name: str | None = None,
         is_archived: bool | None = None,
         sort_order: int | None = None,
+        account_id: str | None = None,
     ) -> dict | None:
         """Updates a session/section item."""
         now = datetime.now(timezone.utc).isoformat()
@@ -311,29 +364,32 @@ class ProgrammesRepository:
         query = f"UPDATE programme_sessions SET {', '.join(updates)} WHERE id = ?;"
 
         async with get_db_connection() as conn:
+            # Check parent ownership
+            cur_p = await conn.execute("SELECT programme_id FROM programme_sessions WHERE id = ?", (session_item_id,))
+            p_row = await cur_p.fetchone()
+            if not p_row:
+                return None
+            parent = await self.get_programme_by_id(p_row[0], account_id=account_id)
+            if not parent:
+                return None
+
             await conn.execute(query, tuple(params))
             await conn.commit()
-
-            # Retrieve programme_id to return full programme
-            async with conn.execute(
-                "SELECT programme_id FROM programme_sessions WHERE id = ?;",
-                (session_item_id,),
-            ) as cursor:
-                row = await cursor.fetchone()
-                if row:
-                    return await self.get_programme_by_id(row["programme_id"])
-        return None
+            return await self.get_programme_by_id(p_row[0], account_id=account_id)
 
     async def archive_programme_session(
-        self, session_item_id: str, archive: bool = True
+        self, session_item_id: str, account_id: str | None = None, archive: bool = True
     ) -> dict | None:
         """Soft-archives or unarchives a session/section."""
-        return await self.update_programme_session(session_item_id, is_archived=archive)
+        return await self.update_programme_session(session_item_id, account_id=account_id, is_archived=archive)
 
     async def reorder_programme_sessions(
-        self, programme_id: str, session_ids: list[str]
+        self, programme_id: str, session_ids: list[str], account_id: str | None = None
     ) -> dict | None:
         """Updates sort_order for a list of session/section IDs under a programme."""
+        parent = await self.get_programme_by_id(programme_id, account_id=account_id)
+        if not parent:
+            return None
         now = datetime.now(timezone.utc).isoformat()
         async with get_db_connection() as conn:
             for idx, s_id in enumerate(session_ids):
@@ -342,19 +398,20 @@ class ProgrammesRepository:
                     (idx, now, s_id, programme_id),
                 )
             await conn.commit()
-        return await self.get_programme_by_id(programme_id)
+        return await self.get_programme_by_id(programme_id, account_id=account_id)
 
     async def delete_programme_permanent(self, programme_id: str, account_id: str | None = None) -> bool:
-        """Permanently deletes a programme and its child programme_sessions."""
+        """Permanently deletes a custom programme and its child programme_sessions. Protects system canonical programmes."""
         async with get_db_connection() as conn:
             if account_id:
                 chk = await conn.execute(
-                    "SELECT id FROM programmes WHERE id = ? AND (account_id = ? OR account_id IS NULL)",
+                    "SELECT id, is_system, account_id FROM programmes WHERE id = ? AND (is_system = 0 OR is_system IS NULL) AND account_id = ?",
                     (programme_id, account_id),
                 )
             else:
-                chk = await conn.execute("SELECT id FROM programmes WHERE id = ?", (programme_id,))
-            if not await chk.fetchone():
+                chk = await conn.execute("SELECT id, is_system, account_id FROM programmes WHERE id = ? AND (is_system = 0 OR is_system IS NULL)", (programme_id,))
+            row = await chk.fetchone()
+            if not row:
                 return False
 
             await conn.execute("DELETE FROM programme_sessions WHERE programme_id = ?", (programme_id,))
@@ -362,12 +419,17 @@ class ProgrammesRepository:
             await conn.commit()
             return True
 
-    async def delete_programme_session_permanent(self, session_item_id: str) -> bool:
+    async def delete_programme_session_permanent(self, session_item_id: str, account_id: str | None = None) -> bool:
         """Permanently deletes a programme session item."""
         async with get_db_connection() as conn:
-            chk = await conn.execute("SELECT id FROM programme_sessions WHERE id = ?", (session_item_id,))
-            if not await chk.fetchone():
+            cur_p = await conn.execute("SELECT programme_id FROM programme_sessions WHERE id = ?", (session_item_id,))
+            p_row = await cur_p.fetchone()
+            if not p_row:
                 return False
+            parent = await self.get_programme_by_id(p_row[0], account_id=account_id)
+            if not parent or parent.get("is_system"):
+                return False
+
             await conn.execute("DELETE FROM programme_sessions WHERE id = ?", (session_item_id,))
             await conn.commit()
             return True

@@ -158,14 +158,26 @@ export function RawTranscriptViewer({
           </p>
         </div>
 
-        <button
-          type="button"
-          className="btn btn--outline btn--small"
-          onClick={handleCopyTranscript}
-          id="btn-copy-raw-transcript"
-        >
-          {copied ? '✓ Copied' : 'Copy Transcript'}
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <a
+            href={getApiUrl(`/api/audio/recordings/${encodeURIComponent(mediaId)}/download`)}
+            className="btn btn--outline btn--small"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+            download
+            id="btn-download-raw-audio"
+            title="Download original WAV master recording"
+          >
+            ⬇ Download Audio
+          </a>
+          <button
+            type="button"
+            className="btn btn--outline btn--small"
+            onClick={handleCopyTranscript}
+            id="btn-copy-raw-transcript"
+          >
+            {copied ? '✓ Copied' : 'Copy Transcript'}
+          </button>
+        </div>
       </div>
 
       {/* 2. Recorded Audio Section */}

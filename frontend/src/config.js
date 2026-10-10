@@ -144,10 +144,12 @@ export function getAuthHeaders(customHeaders = {}) {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
     delete headers['X-DLBC-Demo']
+    delete headers['X-DLBC-Visitor-Id']
     return headers
   }
   if (isDemoModeActive()) {
     headers['X-DLBC-Demo'] = '1'
+    delete headers['X-DLBC-Visitor-Id']
     return headers
   }
   return headers

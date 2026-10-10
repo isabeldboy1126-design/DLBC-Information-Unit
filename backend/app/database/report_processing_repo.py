@@ -285,6 +285,37 @@ class ReportProcessingRepository:
                     ('auto_process_after_verification', 'true', now_iso),
                 )
 
+            # Migrate / Seed independent unit automatic verification settings
+            cur_av = await conn.execute(
+                "SELECT [value] FROM report_processing_settings WHERE [key] = ?",
+                ('auto_verification_enabled',),
+            )
+            row_av = await cur_av.fetchone()
+            global_av_val = str(row_av["value"]) if row_av and row_av["value"] is not None else "true"
+            if not row_av:
+                await conn.execute(
+                    """
+                    INSERT INTO report_processing_settings ([key], [value], updated_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    ('auto_verification_enabled', 'true', now_iso),
+                )
+
+            # Ensure independent unit-specific keys exist: adult, youth, campus
+            for unit_key in ("auto_verification_enabled:adult", "auto_verification_enabled:youth", "auto_verification_enabled:campus"):
+                cur_u = await conn.execute(
+                    "SELECT [key] FROM report_processing_settings WHERE [key] = ?",
+                    (unit_key,),
+                )
+                if not await cur_u.fetchone():
+                    await conn.execute(
+                        """
+                        INSERT INTO report_processing_settings ([key], [value], updated_at)
+                        VALUES (?, ?, ?)
+                        """,
+                        (unit_key, global_av_val, now_iso),
+                    )
+
             # 2. Version 1 Standards
             cur = await conn.execute(
                 "SELECT id FROM report_processing_standards WHERE version = 1"
@@ -934,9 +965,100 @@ class ReportProcessingRepository:
                 return str(row["value"])
             if default is not None:
                 return default
-            if key == "auto_process_after_verification":
+            if key in ("auto_process_after_verification", "auto_verification_enabled") or key.startswith("auto_verification_enabled:"):
                 return "true"
             return ''
+
+    @staticmethod
+    def normalize_unit(unit: Optional[str]) -> str:
+        if not unit:
+            return "adult"
+        u = str(unit).strip().lower()
+        if "youth" in u:
+            return "youth"
+        if "campus" in u:
+            return "campus"
+        return "adult"
+
+    async def get_unit_setting(
+        self,
+        unit: Optional[str],
+        key_prefix: str = "auto_verification_enabled",
+        default: str = "true"
+    ) -> str:
+        """
+        Retrieves setting scoped to a specific church unit ('adult', 'youth', 'campus').
+        Falls back to the legacy global key if unit-specific setting is not explicitly defined.
+        """
+        norm_unit = self.normalize_unit(unit)
+        unit_key = f"{key_prefix}:{norm_unit}"
+        val = await self.get_setting(unit_key, default=None)
+        if val is not None and val != "":
+            return val
+        global_val = await self.get_setting(key_prefix, default=None)
+        if global_val is not None and global_val != "":
+            return global_val
+        return default
+
+    async def set_unit_setting(
+        self,
+        unit: Optional[str],
+        key_prefix: str = "auto_verification_enabled",
+        value: str = "true"
+    ):
+        """Persists a setting scoped strictly to a specific church unit."""
+        norm_unit = self.normalize_unit(unit)
+        unit_key = f"{key_prefix}:{norm_unit}"
+        await self.set_setting(unit_key, value)
+
+    async def resolve_session_unit(self, session_or_id: Any) -> str:
+        """
+        Resolves the unit ('adult', 'youth', 'campus') associated with a session.
+        Checks metadata_json, explicit unit/sector on session, and account sector.
+        """
+        if not session_or_id:
+            return "adult"
+        session = None
+        if isinstance(session_or_id, dict):
+            session = session_or_id
+        elif isinstance(session_or_id, str):
+            session = await session_repo.get_session(session_or_id, include_segments=False)
+
+        if not session:
+            return "adult"
+
+        # 1. Metadata check
+        try:
+            meta_raw = session.get("metadata_json")
+            if meta_raw:
+                meta = json.loads(meta_raw) if isinstance(meta_raw, str) else meta_raw
+                if isinstance(meta, dict):
+                    unit_meta = meta.get("unit") or meta.get("sector")
+                    if unit_meta:
+                        return self.normalize_unit(unit_meta)
+        except Exception:
+            pass
+
+        # 2. Direct session fields
+        if session.get("sector"):
+            return self.normalize_unit(session["sector"])
+        if session.get("unit"):
+            return self.normalize_unit(session["unit"])
+
+        # 3. Account association lookup
+        account_id = session.get("account_id")
+        if account_id:
+            try:
+                from app.database.account_repo import account_repo
+                acct = await account_repo.get_account_by_id(account_id)
+                if acct:
+                    sec = acct.get("sector") or acct.get("custom_sector")
+                    if sec:
+                        return self.normalize_unit(sec)
+            except Exception:
+                pass
+
+        return "adult"
 
     async def set_setting(self, key: str, value: str):
         await self.init_db()
@@ -963,6 +1085,23 @@ class ReportProcessingRepository:
                     """,
                     (key, str(value), now_iso),
                 )
+
+            # If modifying legacy global auto_verification_enabled, sync unit keys
+            if key == "auto_verification_enabled":
+                for u in ("adult", "youth", "campus"):
+                    uk = f"auto_verification_enabled:{u}"
+                    cur_u = await conn.execute("SELECT [key] FROM report_processing_settings WHERE [key] = ?", (uk,))
+                    if await cur_u.fetchone():
+                        await conn.execute(
+                            "UPDATE report_processing_settings SET [value] = ?, updated_at = ? WHERE [key] = ?",
+                            (str(value), now_iso, uk),
+                        )
+                    else:
+                        await conn.execute(
+                            "INSERT INTO report_processing_settings ([key], [value], updated_at) VALUES (?, ?, ?)",
+                            (uk, str(value), now_iso),
+                        )
+
             await conn.commit()
 
     async def get_all_settings(self) -> Dict[str, str]:
@@ -973,6 +1112,13 @@ class ReportProcessingRepository:
             settings = {r["key"]: r["value"] for r in rows}
             if "auto_process_after_verification" not in settings:
                 settings["auto_process_after_verification"] = "true"
+            if "auto_verification_enabled" not in settings:
+                settings["auto_verification_enabled"] = "true"
+            # Ensure independent unit defaults exist in output
+            for u in ("adult", "youth", "campus"):
+                uk = f"auto_verification_enabled:{u}"
+                if uk not in settings:
+                    settings[uk] = settings.get("auto_verification_enabled", "true")
             return settings
 
     # -------------------------------------------------------------------------

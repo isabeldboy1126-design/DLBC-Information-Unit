@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { authFetch } from '../../config'
 import { getCleanSessionName, getSessionHierarchy } from '../sessions/SessionDetailView'
-import { setActiveProcess } from '../common/activeProcessManager'
+import { setActiveProcess, minimizeActiveProcess } from '../common/activeProcessManager'
 
 const PIPELINE_STAGES = [
   { id: 'compiling', label: 'Compiling Recording', subtext: 'Finalizing audio master & formatting' },
@@ -178,7 +178,6 @@ export function AutomaticProcessingView({
       dayNumber: dayNumber || null,
       stageLabel: label,
       isCompleted: pipelineState === 'ready',
-      isMinimized: true,
       jobType: 'automatic_pipeline',
     })
   }, [sessionId, pipelineState, cleanTitle, dayNumber])
@@ -271,7 +270,10 @@ export function AutomaticProcessingView({
             <button
               type="button"
               className="btn btn--outline btn--minimize-processing"
-              onClick={onMinimize}
+              onClick={() => {
+                minimizeActiveProcess()
+                if (onMinimize) onMinimize()
+              }}
               title="Minimize processing to in-app status bar and use other features"
             >
               <span>🗕 Minimize</span>

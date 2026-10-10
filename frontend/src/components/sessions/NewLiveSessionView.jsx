@@ -83,15 +83,29 @@ export function NewLiveSessionView({
 
   const finalSessionTitle = computedDefaultTitle
 
-  // Start live test meter when component mounts
+  // Start live test meter when component mounts or when device selection changes
   useEffect(() => {
-    if (liveAudio.permissionState === 'granted' && !liveAudio.isTesting && !liveAudio.isRecording) {
-      liveAudio.startAudioTest().catch(() => {})
+    let isCancelled = false
+    if (liveAudio.permissionState === 'granted' && !liveAudio.isRecording) {
+      if (liveAudio.isTesting) {
+        liveAudio.stopAudioTest()
+      }
+      const t = setTimeout(() => {
+        if (!isCancelled) {
+          liveAudio.startAudioTest().catch(() => {})
+        }
+      }, 60)
+      return () => {
+        isCancelled = true
+        clearTimeout(t)
+        liveAudio.stopAudioTest()
+      }
     }
     return () => {
+      isCancelled = true
       liveAudio.stopAudioTest()
     }
-  }, [liveAudio.permissionState])
+  }, [liveAudio.permissionState, liveAudio.selectedDeviceId])
 
   const handleStart = () => {
     const finalTitle = finalSessionTitle.trim()

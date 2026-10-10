@@ -37,4 +37,6 @@ for directory in [
     STORAGE_MODELS_DIR,
 ]:
     os.makedirs(directory, exist_ok=True)
-
+# Transcription Engine Mode: 'disabled' (recording-only mode), 'azure_speech', 'faster_whisper', 'google_speech_to_text'
+# Default is 'disabled' to operate safely in Recording-Only mode when cloud quotas are exhausted.
+TRANSCRIPTION_PROVIDER = os.getenv("TRANSCRIPTION_PROVIDER", "disabled").strip().lower()

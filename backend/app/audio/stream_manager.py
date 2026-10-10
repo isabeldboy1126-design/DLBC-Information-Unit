@@ -43,11 +43,13 @@ class AudioStreamSession:
         sample_rate: int = 48000,
         channels: int = 1,
         device_name: str = "Unknown Device",
+        account_id: Optional[str] = None,
     ):
         self.session_id = session_id
         self.sample_rate = sample_rate
         self.channels = channels
         self.device_name = device_name
+        self.account_id = account_id
         self.start_time = time.time()
         self.total_bytes = 0
         self.chunk_count = 0
@@ -121,6 +123,7 @@ class AudioStreamSession:
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self.start_time)),
             "duration_seconds": duration_seconds,
             "file_size": file_size,
+            "account_id": self.account_id,
         }
 
         # Update persistent manifest
@@ -143,6 +146,7 @@ class AudioStreamSession:
             "sample_rate": self.sample_rate,
             "channels": self.channels,
             "is_finalized": self.is_finalized,
+            "account_id": self.account_id,
         }
 
 
@@ -155,6 +159,7 @@ class StreamManager:
         sample_rate: int = 48000,
         channels: int = 1,
         device_name: str = "Default Input",
+        account_id: Optional[str] = None,
     ) -> AudioStreamSession:
         session_id = f"rec_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
         session = AudioStreamSession(
@@ -162,6 +167,7 @@ class StreamManager:
             sample_rate=sample_rate,
             channels=channels,
             device_name=device_name,
+            account_id=account_id,
         )
         self.active_sessions[session_id] = session
         return session

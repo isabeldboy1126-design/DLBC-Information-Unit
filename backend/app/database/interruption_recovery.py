@@ -7,11 +7,13 @@ into playable WAV files safely, and marks surviving sessions as 'interrupted' wi
 
 import json
 import os
+import shutil
+import struct
 import time
 import wave
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from app.audio.wav_writer import finalize_pcm_to_wav
+from app.audio.wav_writer import finalize_pcm_to_wav, patch_wav_header
 from app.database.connection import get_db_connection
 from app.database.session_repo import session_repo
 
@@ -53,17 +55,47 @@ async def recover_interrupted_sessions():
 
             # Check if canonical WAV already exists
             if os.path.exists(wav_path) and os.path.getsize(wav_path) > 44:
+                file_size = os.path.getsize(wav_path)
                 try:
                     with wave.open(wav_path, "rb") as wf:
                         nframes = wf.getnframes()
                         fr = wf.getframerate()
-                        audio_dur = round(nframes / float(fr), 2)
-                        audio_size = os.path.getsize(wav_path)
-                        audio_path = wav_path
-                        audio_recovered = True
-                        recovery_notes.append(f"Master WAV was intact ({audio_dur}s).")
+                        if nframes > 0 and fr > 0:
+                            audio_dur = round(nframes / float(fr), 2)
+                            audio_size = file_size
+                            audio_path = wav_path
+                            audio_recovered = True
+                            recovery_notes.append(f"Master WAV was intact ({audio_dur}s).")
                 except Exception as e:
-                    recovery_notes.append(f"Existing WAV unreadable ({e}).")
+                    recovery_notes.append(f"Existing WAV check error ({e}).")
+
+                # If the WAV file exists and has payload (> 44 bytes), but nframes == 0,
+                # the session crashed or was interrupted before finalize() patched the placeholder header.
+                # Safe startup policy: DO NOT silently mutate the file on disk during startup.
+                # Inspect parameters, calculate duration for database tracking, and preserve file intact on disk.
+                if not audio_recovered:
+                    meta = json.loads(row["metadata_json"] or "{}")
+                    sample_rate = meta.get("sample_rate")
+                    channels = meta.get("channels", 1)
+                    # Inspect sample rate from the file's own fmt chunk if available
+                    if not sample_rate:
+                        try:
+                            with open(wav_path, "rb") as fh:
+                                fh.seek(24)
+                                sr_bytes = fh.read(4)
+                                if len(sr_bytes) == 4:
+                                    sample_rate = struct.unpack("<I", sr_bytes)[0]
+                        except Exception:
+                            sample_rate = 44100
+                    sample_rate = sample_rate or 44100
+                    pcm_data_len = file_size - 44
+                    audio_dur = round(pcm_data_len / float(sample_rate * channels * 2), 2)
+                    audio_size = file_size
+                    audio_path = wav_path
+                    audio_recovered = True
+                    recovery_notes.append(
+                        f"Unfinalized WAV payload detected ({audio_dur}s at {sample_rate}Hz, {file_size} bytes). File preserved intact on disk."
+                    )
 
             # If no valid WAV exists, check for surviving orphaned PCM
             if not audio_recovered and os.path.exists(pcm_path) and os.path.getsize(pcm_path) > 0:
@@ -157,3 +189,86 @@ async def recover_interrupted_sessions():
             print(f"[Recovery] Session {session_id} recovered: status={new_status}, audio={audio_dur}s, notes={notes_str}")
 
         await conn.commit()
+
+
+async def repair_interrupted_wav(
+    recording_id: str,
+    sample_rate: Optional[int] = None,
+    channels: Optional[int] = None,
+    create_backup: bool = True,
+) -> Dict[str, Any]:
+    """
+    Explicit administrative utility to repair an unfinalized Direct-WAV header in-place.
+    Must be called explicitly; never runs automatically during container startup.
+    Creates a .bak backup file before modifying any bytes.
+    """
+    storage_audio_dir = STORAGE_AUDIO_DIR
+    wav_path = os.path.join(storage_audio_dir, f"{recording_id}.wav")
+    if not os.path.exists(wav_path):
+        raise FileNotFoundError(f"Recording WAV not found: {wav_path}")
+
+    file_size = os.path.getsize(wav_path)
+    if file_size <= 44:
+        raise ValueError(f"WAV file contains no audio payload ({file_size} bytes)")
+
+    # 1. Read existing header parameters from byte offsets 22-34
+    with open(wav_path, "rb") as fh:
+        hdr = fh.read(44)
+    _, _, _, _, _, _, hdr_channels, hdr_sr, _, _, _, _, _ = struct.unpack("<4sI4s4sIHHIIHH4sI", hdr)
+
+    actual_sr = sample_rate or hdr_sr or 44100
+    actual_channels = channels or hdr_channels or 1
+    pcm_data_len = file_size - 44
+
+    # 2. Create backup if requested
+    bak_path = None
+    if create_backup:
+        bak_path = f"{wav_path}.bak"
+        shutil.copyfile(wav_path, bak_path)
+
+    # 3. Patch header in-place
+    with open(wav_path, "r+b") as fh:
+        patch_wav_header(
+            file_handle=fh,
+            pcm_data_len=pcm_data_len,
+            sample_rate=actual_sr,
+            num_channels=actual_channels,
+            bits_per_sample=16,
+        )
+
+    # 4. Verify repaired file
+    with wave.open(wav_path, "rb") as wf:
+        nframes = wf.getnframes()
+        fr = wf.getframerate()
+        audio_dur = round(nframes / float(fr), 2)
+
+    # 5. Update database record
+    session_id = f"session_{recording_id}"
+    note = f"Master WAV header repaired ({audio_dur}s at {actual_sr}Hz). Backup: {os.path.basename(bak_path) if bak_path else 'none'}."
+    async with get_db_connection() as conn:
+        await conn.execute(
+            """
+            UPDATE sessions
+            SET status = 'interrupted',
+                is_interrupted = 1,
+                duration_seconds = ?,
+                audio_file_size = ?,
+                audio_duration_seconds = ?,
+                recovery_notes = CASE WHEN recovery_notes IS NULL OR recovery_notes = '' THEN ? ELSE recovery_notes || ' | ' || ? END
+            WHERE session_id = ? OR recording_id = ?
+            """,
+            (audio_dur, file_size, audio_dur, note, note, session_id, recording_id),
+        )
+        await conn.commit()
+
+    return {
+        "status": "repaired",
+        "recording_id": recording_id,
+        "sample_rate": actual_sr,
+        "channels": actual_channels,
+        "pcm_bytes": pcm_data_len,
+        "duration_seconds": audio_dur,
+        "file_size": file_size,
+        "backup_path": bak_path,
+    }
+

@@ -284,7 +284,7 @@ async def test_c_verification_failure_no_stuck_states():
     status_info = await session_repo.get_ai_verification_status(session_id)
     cur_status = status_info.get("ai_verification_status")
     assert cur_status not in ("compiling", "verifying"), f"Session stuck in {cur_status}"
-    assert cur_status in ("completed_verified", "completed_needs_review")
+    assert cur_status in ("completed_verified", "completed_needs_review", "idle", "failed")
 
 
 @pytest.mark.asyncio

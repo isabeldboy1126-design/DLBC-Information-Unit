@@ -310,12 +310,16 @@ class TranscriptionManager:
                     },
                 )
 
-                # Stage 6: Automatic post-upload verification and report generation pipeline
-                from app.verification.decision_engine import verification_decision_engine
-                await session_repo.set_ai_verification_status(s_id, "compiling")
-                asyncio.create_task(
-                    verification_decision_engine.verify_session(s_id, auto_resolve=True)
-                )
+                # Stage 6: Automatic post-upload verification and report generation pipeline (if enabled)
+                from app.database.report_processing_repo import report_processing_repo
+                session_unit = await report_processing_repo.resolve_session_unit(s_id)
+                auto_veri = await report_processing_repo.get_unit_setting(session_unit, "auto_verification_enabled", default="true")
+                if str(auto_veri).strip().lower() in ("true", "1", "yes", "on"):
+                    from app.verification.decision_engine import verification_decision_engine
+                    await session_repo.set_ai_verification_status(s_id, "compiling")
+                    asyncio.create_task(
+                        verification_decision_engine.verify_session(s_id, auto_resolve=True)
+                    )
             except Exception as db_sync_err:
                 print(f"Notice: Phase 2 session sync notice: {db_sync_err}")
 

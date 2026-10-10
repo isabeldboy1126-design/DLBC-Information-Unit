@@ -6173,6 +6173,17 @@ textarea.form-control {
   min-height: 0;
 }
 
+/* Desktop Live Recording Flex Hierarchy */
+.desktop-live-recording-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  gap: 0.85rem;
+  overflow: hidden;
+}
+
 /* 1. Compact Top Recording Control Bar */
 .live-top-recording-bar {
   position: sticky;
@@ -6340,6 +6351,8 @@ textarea.form-control {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  min-height: 0;
+  max-height: 100%;
 }
 
 .transcript-stream-segment {
@@ -6500,6 +6513,61 @@ textarea.form-control {
    Contained Floating Processing Panel & Ambient Background
    (media_1790599569372.png & media_1790599569328.png)
    ========================================================================= */
+
+.session-completion-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  overflow-y: auto;
+  box-sizing: border-box;
+  animation: modalOverlayFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalOverlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.session-completion-modal-overlay .session-completion-page {
+  background: transparent;
+  min-height: auto;
+  padding: 0;
+  overflow: visible;
+  max-width: 530px;
+  width: 100%;
+}
+
+.session-completion-modal-overlay .completion-ambient-bg {
+  display: none;
+}
+
+.modal-expand-btn {
+  background: #f1f5f9;
+  border: none;
+  color: #64748b;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.modal-expand-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
 
 .session-completion-page {
   position: relative;
@@ -24203,4 +24271,97 @@ textarea.form-control {
   margin-top: 1rem;
   margin-bottom: 1.5rem;
   border-radius: 8px;
+}
+
+/* ==========================================================================
+   Automatic Verification Toggle Control (DLBC Blue Active & Neutral Inactive)
+   ========================================================================== */
+.auto-verify-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.18s ease-in-out;
+  user-select: none;
+  border: 1px solid transparent;
+  line-height: 1.25;
+}
+
+.auto-verify-toggle-btn:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.auto-verify-toggle-btn--on {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #1d4ed8 !important;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.25);
+}
+
+.auto-verify-toggle-btn--on:hover:not(:disabled) {
+  background-color: #1d4ed8 !important;
+  border-color: #1e40af !important;
+}
+
+.auto-verify-toggle-btn--off {
+  background-color: #f1f5f9 !important;
+  color: #64748b !important;
+  border-color: #cbd5e1 !important;
+}
+
+.auto-verify-toggle-btn--off:hover:not(:disabled) {
+  background-color: #e2e8f0 !important;
+  color: #475569 !important;
+  border-color: #94a3b8 !important;
+}
+
+[data-theme='dark'] .auto-verify-toggle-btn--off,
+.dark .auto-verify-toggle-btn--off {
+  background-color: #1e293b !important;
+  color: #94a3b8 !important;
+  border-color: #334155 !important;
+}
+
+[data-theme='dark'] .auto-verify-toggle-btn--off:hover:not(:disabled),
+.dark .auto-verify-toggle-btn--off:hover:not(:disabled) {
+  background-color: #334155 !important;
+  color: #e2e8f0 !important;
+  border-color: #475569 !important;
+}
+
+.auto-verify-toggle-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.auto-verify-toggle-indicator--on {
+  background-color: #ffffff;
+  color: #2563eb;
+}
+
+.auto-verify-toggle-indicator--off {
+  background-color: #94a3b8;
+  color: #ffffff;
+}
+
+[data-theme='dark'] .auto-verify-toggle-indicator--off,
+.dark .auto-verify-toggle-indicator--off {
+  background-color: #64748b;
+}
+
+.auto-verify-toggle-btn--compact {
+  padding: 0.26rem 0.65rem;
+  font-size: 0.76rem;
+  gap: 0.35rem;
 }

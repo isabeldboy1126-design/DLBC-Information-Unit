@@ -232,7 +232,9 @@ CREATE INDEX IF NOT EXISTS idx_final_reports_created ON final_reports(created_at
 -- Configurable Programmes & Sessions
 CREATE TABLE IF NOT EXISTS programmes (
     id TEXT PRIMARY KEY,
+    account_id TEXT,
     name TEXT NOT NULL,
+    is_system INTEGER NOT NULL DEFAULT 0,
     is_archived INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
@@ -240,6 +242,8 @@ CREATE TABLE IF NOT EXISTS programmes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_programmes_archived ON programmes(is_archived, sort_order ASC);
+CREATE INDEX IF NOT EXISTS idx_programmes_account ON programmes(account_id, is_archived, sort_order ASC);
+CREATE INDEX IF NOT EXISTS idx_programmes_system ON programmes(is_system, is_archived, sort_order ASC);
 
 CREATE TABLE IF NOT EXISTS programme_sessions (
     id TEXT PRIMARY KEY,
@@ -637,6 +641,7 @@ STAGE7_REPORT_PROCESSING_COLUMNS = [
 AUTH_MIGRATION_COLUMNS = [
     "ALTER TABLE sessions ADD COLUMN account_id TEXT",
     "ALTER TABLE programmes ADD COLUMN account_id TEXT",
+    "ALTER TABLE programmes ADD COLUMN is_system INTEGER DEFAULT 0",
     "ALTER TABLE app_users ADD COLUMN display_name TEXT",
     "ALTER TABLE sessions ADD COLUMN day_number INTEGER",
 ]

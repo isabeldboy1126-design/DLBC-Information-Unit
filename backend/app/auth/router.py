@@ -210,10 +210,5 @@ async def get_account_settings(auth: AuthContext = Depends(require_account)):
 @router.post("/account-settings")
 async def set_account_setting(req: SettingUpdateRequest, auth: AuthContext = Depends(require_account)):
     """Saves an account-scoped setting."""
-    if getattr(auth, "is_demo", False):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Modifying account settings is disabled in Demo mode to protect shared sample data.",
-        )
     await account_repo.set_account_setting(auth.account_id, req.key, req.value)
     return {"status": "saved", "key": req.key}

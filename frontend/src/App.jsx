@@ -149,6 +149,7 @@ function App() {
     return parseRoute(getActiveRoute()).subAction === 'processing'
   })
   const [isRecorderMinimized, setIsRecorderMinimized] = useState(false)
+  const preRecordingViewRef = useRef('dashboard')
   const [showCompletionModal, setShowCompletionModal] = useState(() => {
     return parseRoute(typeof window !== 'undefined' ? window.location.hash : '').view === 'completion'
   })
@@ -529,8 +530,8 @@ function App() {
               return
             }
             if (state.showCompletionModal) {
+              minimizeActiveProcess()
               setShowCompletionModal(false)
-              navigateTo('sessions')
               return
             }
 
@@ -585,10 +586,20 @@ function App() {
     }
   }, [liveAudio.isRecording])
 
+  // If user explicitly navigates to #new_live while recording is active, maximize the active recorder
+  useEffect(() => {
+    if (currentView === 'new_live' && liveAudio.isRecording) {
+      setIsRecorderMinimized(false)
+    }
+  }, [currentView, liveAudio.isRecording])
+
   // Handle Start Recording from NewLiveSessionView
   const handleStartRecording = async (meta) => {
     setSessionMetadata(meta)
     setIsRecorderMinimized(false)
+    if (currentView && currentView !== 'new_live') {
+      preRecordingViewRef.current = currentView
+    }
     const success = await liveAudio.startRecording(meta.title, meta)
     if (success) {
       setIsRecorderMinimized(false)
@@ -612,7 +623,16 @@ function App() {
 
     if (targetId) {
       setCompletedSessionId(targetId)
-      navigateTo(`processing/${targetId}`)
+      setActiveProcess({
+        sessionId: targetId,
+        sessionTitle: sessionMetadata?.title || sessionMetadata?.eventType || 'Live Worship Service',
+        dayNumber: sessionMetadata?.day_number || null,
+        stageLabel: 'Compiling session...',
+        isCompleted: false,
+        isMinimized: false,
+        jobType: 'automatic_pipeline',
+      })
+      setShowCompletionModal(true)
     } else {
       navigateTo('dashboard')
     }
@@ -873,7 +893,8 @@ function App() {
         if (liveAudio.isRecording) {
           setIsRecorderMinimized(false)
         } else {
-          setCurrentView('new_live')
+          preRecordingViewRef.current = currentView !== 'new_live' ? currentView : 'dashboard'
+          navigateTo('new_live')
         }
       }}
     >
@@ -903,54 +924,19 @@ function App() {
           liveTranscript={liveAudio.liveTranscript}
           audioLevel={liveAudio.audioLevel}
           hasAudioSignal={liveAudio.hasAudioSignal}
-          onMinimize={() => setIsRecorderMinimized(true)}
+          connectionHealth={liveAudio.connectionHealth}
+          isStreamingConnected={liveAudio.isStreamingConnected}
+          streamDisconnectError={liveAudio.streamDisconnectError}
+          onMinimize={() => {
+            setIsRecorderMinimized(true)
+            const target =
+              preRecordingViewRef.current && preRecordingViewRef.current !== 'new_live'
+                ? preRecordingViewRef.current
+                : 'dashboard'
+            navigateTo(target)
+          }}
           onStopRecording={handleStopRecording}
           onToggleManualFlag={liveAudio.toggleManualFlag}
-        />
-      ) : showCompletionModal ? (
-        /* ----------------------------------------------------------- */
-        /* VIEW: SESSION COMPLETION MODAL                              */
-        /* ----------------------------------------------------------- */
-        <SessionCompletionView
-          session={
-            sessionsHook.activeSession ||
-            sessionsHook.sessions.find((s) => s.session_id === completedSessionId) ||
-            sessionsHook.sessions[0]
-          }
-          latestRecording={liveAudio.latestRecording}
-          onBeginVerification={() => {
-            const targetSession =
-              sessionsHook.activeSession ||
-              sessionsHook.sessions.find((s) => s.session_id === completedSessionId) ||
-              sessionsHook.sessions[0]
-            if (targetSession) {
-              navigateTo(`session/${targetSession.session_id}/verification`)
-            }
-          }}
-          onGoToReporting={async () => {
-            const targetSession =
-              sessionsHook.activeSession ||
-              sessionsHook.sessions.find((s) => s.session_id === completedSessionId) ||
-              sessionsHook.sessions[0]
-            if (targetSession) {
-              if (targetSession.flag_count === 0 && !targetSession.verified_text) {
-                await sessionsHook.confirmRawAsVerified(targetSession.session_id)
-              }
-              navigateTo(`session/${targetSession.session_id}/report_processing`)
-            }
-          }}
-          onFinishForNow={() => {
-            navigateTo('sessions')
-          }}
-          onViewSessionDetails={() => {
-            const targetSession =
-              sessionsHook.activeSession ||
-              sessionsHook.sessions.find((s) => s.session_id === completedSessionId) ||
-              sessionsHook.sessions[0]
-            if (targetSession) {
-              navigateTo(`session/${targetSession.session_id}`)
-            }
-          }}
         />
       ) : currentView === 'dashboard' ? (
         /* ----------------------------------------------------------- */
@@ -965,6 +951,7 @@ function App() {
             if (liveAudio.isRecording) {
               setIsRecorderMinimized(false)
             } else {
+              preRecordingViewRef.current = 'dashboard'
               navigateTo('new_live')
             }
           }}
@@ -996,19 +983,7 @@ function App() {
         /* ----------------------------------------------------------- */
         /* VIEW 2: NEW LIVE SESSION SETUP                              */
         /* ----------------------------------------------------------- */
-        liveAudio.isRecording ? (
-          <div className="card text-center p-4">
-            <h3>Live Recording in Progress</h3>
-            <p>An active recording is already running in the background.</p>
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={() => setIsRecorderMinimized(false)}
-            >
-              Open Active Recorder
-            </button>
-          </div>
-        ) : (
+        liveAudio.isRecording ? null : (
           <NewLiveSessionView
             liveAudio={liveAudio}
             onStartRecording={handleStartRecording}
@@ -1038,6 +1013,7 @@ function App() {
               if (liveAudio.isRecording) {
                 setIsRecorderMinimized(false)
               } else {
+                preRecordingViewRef.current = 'sessions'
                 navigateTo('new_live')
               }
             }}
@@ -1058,6 +1034,7 @@ function App() {
                   onUpdateDetails={sessionsHook.updateSessionDetails}
                   onDeleteSession={sessionsHook.deleteSession}
                   onSubViewChange={setSessionSubViewInfo}
+                  onLoadSegments={sessionsHook.loadSessionSegments}
                   verificationState={sessionsHook.verificationState}
                   onStartVerification={sessionsHook.startVerification}
                   onLoadVerificationState={sessionsHook.loadVerificationState}
@@ -1165,7 +1142,14 @@ function App() {
         /* ----------------------------------------------------------- */
         <SessionHistoryList
           onOpenSession={(sessionId) => navigateTo(`session/${sessionId}`)}
-          onStartLiveSession={handleStartLiveRecording}
+          onStartLiveSession={() => {
+            if (liveAudio.isRecording) {
+              setIsRecorderMinimized(false)
+            } else {
+              preRecordingViewRef.current = 'events'
+              navigateTo('new_live')
+            }
+          }}
           onOpenTranscribe={() => navigateTo('transcribe')}
           initialFilter="all"
           onBack={handleInAppBack}
@@ -1227,9 +1211,74 @@ function App() {
       />
 
       {/* ------------------------------------------------------------- */}
+      {/* FLOATING PROCESSING WINDOW: Contained foreground modal        */}
+      {/* ------------------------------------------------------------- */}
+      {showCompletionModal && (
+        <SessionCompletionView
+          isOverlay={true}
+          session={
+            sessionsHook.activeSession ||
+            sessionsHook.sessions.find((s) => s.session_id === (completedSessionId || activeProcess?.sessionId)) ||
+            sessionsHook.sessions[0]
+          }
+          latestRecording={liveAudio.latestRecording}
+          onMinimize={() => {
+            minimizeActiveProcess()
+            setShowCompletionModal(false)
+          }}
+          onExpand={() => {
+            setShowCompletionModal(false)
+            const targetId = completedSessionId || activeProcess?.sessionId
+            if (targetId) {
+              navigateTo(`processing/${targetId}`)
+            }
+          }}
+          onViewReport={(sId) => {
+            setShowCompletionModal(false)
+            const targetId = sId || completedSessionId || activeProcess?.sessionId
+            if (targetId) {
+              navigateTo(`session/${targetId}/final_report`)
+            }
+          }}
+          onGoToReporting={() => {
+            setShowCompletionModal(false)
+            const targetId = completedSessionId || activeProcess?.sessionId
+            if (targetId) {
+              navigateTo(`session/${targetId}/final_report`)
+            }
+          }}
+          onBeginVerification={() => {
+            setShowCompletionModal(false)
+            const targetId = completedSessionId || activeProcess?.sessionId
+            if (targetId) {
+              navigateTo(`session/${targetId}/verification`)
+            }
+          }}
+          onFinishForNow={() => {
+            minimizeActiveProcess()
+            setShowCompletionModal(false)
+          }}
+          onViewSessionDetails={() => {
+            setShowCompletionModal(false)
+            const targetId = completedSessionId || activeProcess?.sessionId
+            if (targetId) {
+              navigateTo(`session/${targetId}`)
+            }
+          }}
+          onRetryVerification={() => {
+            setShowCompletionModal(false)
+            const targetId = completedSessionId || activeProcess?.sessionId
+            if (targetId) {
+              navigateTo(`session/${targetId}/verification`)
+            }
+          }}
+        />
+      )}
+
+      {/* ------------------------------------------------------------- */}
       {/* COMPACT IN-APP STATUS INDICATOR: Persistent across views      */}
       {/* ------------------------------------------------------------- */}
-      {activeProcess && activeProcess.isMinimized && currentView !== 'processing' && !verificationProcessing && (
+      {activeProcess && activeProcess.isMinimized && currentView !== 'processing' && !verificationProcessing && !showCompletionModal && (
         <aside className="docked-processing-bar" role="status" aria-live="polite">
           <div className="docked-processing-content">
             <div className="docked-processing-title-row">
@@ -1254,21 +1303,12 @@ function App() {
               type="button"
               className="btn btn--small btn--primary docked-open-btn"
               onClick={() => {
-                expandActiveProcess()
-                if (activeProcess.jobType === 'report_processing') {
-                  if (activeProcess.isCompleted) {
-                    navigateTo(`session/${activeProcess.sessionId}/final_report`)
-                  } else {
-                    navigateTo(`session/${activeProcess.sessionId}/report_processing`)
-                  }
-                } else if (activeProcess.jobType === 'verification') {
-                  if (activeProcess.isCompleted) {
-                    navigateTo(`session/${activeProcess.sessionId}/verification`)
-                  } else {
-                    navigateTo(`session/${activeProcess.sessionId}/verification/processing`)
-                  }
+                if (activeProcess.isCompleted) {
+                  navigateTo(`session/${activeProcess.sessionId}/final_report`)
                 } else {
-                  navigateTo(`processing/${activeProcess.sessionId}`)
+                  setCompletedSessionId(activeProcess.sessionId)
+                  expandActiveProcess()
+                  setShowCompletionModal(true)
                 }
               }}
             >
@@ -1332,6 +1372,9 @@ function App() {
           liveTranscript={liveAudio.liveTranscript}
           audioLevel={liveAudio.audioLevel}
           hasAudioSignal={liveAudio.hasAudioSignal}
+          connectionHealth={liveAudio.connectionHealth}
+          isStreamingConnected={liveAudio.isStreamingConnected}
+          streamDisconnectError={liveAudio.streamDisconnectError}
           onMaximize={() => setIsRecorderMinimized(false)}
           onStopRecording={handleStopRecording}
         />

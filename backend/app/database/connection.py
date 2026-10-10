@@ -135,6 +135,10 @@ class AsyncConnectionAdapter:
             converted_sql = re.sub(r"\bTEXT\b", "NVARCHAR(MAX)", converted_sql, flags=re.IGNORECASE)
             converted_sql = re.sub(r"\bINTEGER\b", "INT", converted_sql, flags=re.IGNORECASE)
 
+        # Adapt SQLite INSERT OR IGNORE syntax for T-SQL (strip OR IGNORE)
+        if "INSERT OR IGNORE" in converted_sql.upper():
+            converted_sql = re.sub(r"\bINSERT\s+OR\s+IGNORE\s+INTO\b", "INSERT INTO", converted_sql, flags=re.IGNORECASE)
+
         # Strip LIMIT for T-SQL queries (top row is fetched by fetchone() or TOP)
         if re.search(r"\bLIMIT\s+\d+\b", converted_sql, flags=re.IGNORECASE):
             converted_sql = re.sub(r"\s+LIMIT\s+\d+\s*$", "", converted_sql, flags=re.IGNORECASE)
@@ -210,8 +214,11 @@ def _get_engine():
 
         _async_engine = create_async_engine(
             db_url,
-            pool_pre_ping=True,
+            pool_size=20,
+            max_overflow=20,
+            pool_timeout=30,
             pool_recycle=300,
+            pool_pre_ping=True,
         )
     return _async_engine
 
@@ -238,7 +245,16 @@ async def get_db_connection():
     if db_url and not db_url.startswith("sqlite"):
         engine = _get_engine()
         async with engine.connect() as conn:
-            yield AsyncConnectionAdapter(conn)
+            adapter = AsyncConnectionAdapter(conn)
+            try:
+                yield adapter
+            finally:
+                # Ensure connection is never returned to the pool with an uncommitted transaction or active locks
+                try:
+                    if conn.in_transaction():
+                        await conn.rollback()
+                except Exception:
+                    pass
         return
 
     # 3. Development Default: Native local SQLite

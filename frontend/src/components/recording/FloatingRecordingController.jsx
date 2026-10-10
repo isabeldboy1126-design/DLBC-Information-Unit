@@ -20,6 +20,9 @@ export function FloatingRecordingController({
   liveTranscript = {},
   audioLevel = 0,
   hasAudioSignal = false,
+  connectionHealth = 'connected',
+  isStreamingConnected = true,
+  streamDisconnectError = null,
   onMaximize,
   onStopRecording,
 }) {
@@ -31,7 +34,11 @@ export function FloatingRecordingController({
 
   // Get the most recent text to display in the mini ticker
   const latestSegment = segments.length > 0 ? segments[segments.length - 1] : null
-  const tickerText = interimText || (latestSegment ? latestSegment.text : 'Listening for sermon speech...')
+  const tickerText = interimText || (latestSegment ? latestSegment.text : (
+    transcriptStatus === 'paused' || transcriptStatus === 'disabled'
+      ? 'Recording audio — live transcription paused'
+      : 'Listening for sermon speech...'
+  ))
 
   const formatTimer = (totalSeconds) => {
     const hours = Math.floor(totalSeconds / 3600)
@@ -45,6 +52,8 @@ export function FloatingRecordingController({
   }
 
   const sessionTitle = sessionMetadata.title || sessionMetadata.eventType || 'Live Worship Service'
+  const isDisconnected = !isStreamingConnected || connectionHealth === 'disconnected'
+  const isReconnecting = connectionHealth === 'reconnecting'
 
   return (
     <aside
@@ -52,15 +61,72 @@ export function FloatingRecordingController({
       aria-label="Active Live Recording"
       role="region"
     >
+      {/* Stream Disconnection Alert Banner */}
+      {isDisconnected && (
+        <div
+          className="floating-recorder-warning-banner"
+          role="alert"
+          style={{
+            background: '#fee2e2',
+            color: '#991b1b',
+            fontSize: '11px',
+            fontWeight: 600,
+            padding: '4px 10px',
+            borderBottom: '1px solid #fecaca',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <span>⚠️</span>
+          <span>{streamDisconnectError || 'Streaming disconnected from server'}</span>
+        </div>
+      )}
+
       {/* Top Header Row: Recording Badge, Timer, Signal, and Action Buttons */}
       <div className="floating-recorder-header">
         <div className="floating-header-left">
-          <div className="floating-rec-badge">
-            <span className="floating-pulse-dot">●</span>
-            <span className="floating-rec-label">LIVE</span>
+          <div
+            className={`floating-rec-badge ${isDisconnected ? 'floating-rec-badge--disconnected' : isReconnecting ? 'floating-rec-badge--reconnecting' : ''}`}
+            style={
+              isDisconnected
+                ? { background: '#fee2e2', borderColor: '#fca5a5' }
+                : isReconnecting
+                ? { background: '#fef3c7', borderColor: '#fde68a' }
+                : undefined
+            }
+          >
+            <span
+              className="floating-pulse-dot"
+              style={
+                isDisconnected
+                  ? { background: '#dc2626', animation: 'none' }
+                  : isReconnecting
+                  ? { background: '#d97706' }
+                  : undefined
+              }
+            >
+              ●
+            </span>
+            <span
+              className="floating-rec-label"
+              style={
+                isDisconnected
+                  ? { color: '#991b1b', fontWeight: 700 }
+                  : isReconnecting
+                  ? { color: '#92400e', fontWeight: 700 }
+                  : undefined
+              }
+            >
+              {isDisconnected ? 'OFFLINE' : isReconnecting ? 'RECONNECTING' : 'LIVE'}
+            </span>
           </div>
 
-          <div className="floating-timer" title="Recording Elapsed Time">
+          <div
+            className="floating-timer"
+            title={isDisconnected ? 'Recording paused due to disconnection' : 'Recording Elapsed Time'}
+            style={isDisconnected ? { color: '#991b1b', opacity: 0.85 } : undefined}
+          >
             {formatTimer(elapsedTime)}
           </div>
 

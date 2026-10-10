@@ -62,6 +62,9 @@ export function LiveTranscriptPanel({
         return <span className="badge badge--primary">🎙️ Receiving Speech...</span>
       case 'reconnecting':
         return <span className="badge badge--warning">⚠️ Reconnecting...</span>
+      case 'paused':
+      case 'disabled':
+        return <span className="badge badge--warning">⏸️ Recording Audio Only</span>
       case 'unavailable':
         return <span className="badge badge--danger">✕ Live Transcription Unavailable</span>
       case 'completed':
@@ -113,10 +116,20 @@ export function LiveTranscriptPanel({
         {liveTranscript.segments.length === 0 && !liveTranscript.interimText ? (
           <div className="live-transcript-empty">
             {isRecording ? (
-              <div className="listening-prompt">
-                <div className="spinner-small" />
-                <p>Listening for speech... Recognized phrases will appear here in real-time.</p>
-              </div>
+              liveTranscript.status === 'paused' || liveTranscript.status === 'disabled' ? (
+                <div className="listening-prompt" style={{ color: '#b45309' }}>
+                  <span style={{ fontSize: '28px', display: 'block', marginBottom: '8px' }}>⏸️</span>
+                  <p><strong>Recording audio — live transcription paused</strong></p>
+                  <p style={{ fontSize: '0.85rem', color: '#6b7280', marginTop: '6px' }}>
+                    Original master audio is streaming directly to disk and being preserved losslessly.
+                  </p>
+                </div>
+              ) : (
+                <div className="listening-prompt">
+                  <div className="spinner-small" />
+                  <p>Listening for speech... Recognized phrases will appear here in real-time.</p>
+                </div>
+              )
             ) : (
               <p className="idle-prompt">
                 🎙️ Start recording to begin live speech recognition with Azure Speech (en-NG).

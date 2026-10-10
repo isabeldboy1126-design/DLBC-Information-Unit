@@ -178,21 +178,30 @@ class DeviceRepository:
                 )
 
             # Automatically set the recording owner as the initial ui_host for subsequent workflows
-            await conn.execute(
-                """
-                INSERT INTO active_workflow_state
-                (account_id, session_id, workflow_type, status, ui_host_device_id, progress_label, items_total, items_resolved, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(account_id) DO UPDATE SET
-                    session_id = excluded.session_id,
-                    workflow_type = excluded.workflow_type,
-                    status = excluded.status,
-                    ui_host_device_id = excluded.ui_host_device_id,
-                    progress_label = excluded.progress_label,
-                    updated_at = excluded.updated_at
-                """,
-                (account_id, session_id, "recording", "recording", owner_device_id, "Live Recording", 0, 0, now),
+            cursor_wf = await conn.execute(
+                "SELECT account_id FROM active_workflow_state WHERE account_id = ?",
+                (account_id,),
             )
+            wf_row = await cursor_wf.fetchone()
+            if wf_row:
+                await conn.execute(
+                    """
+                    UPDATE active_workflow_state
+                    SET session_id = ?, workflow_type = ?, status = ?, ui_host_device_id = ?,
+                        progress_label = ?, items_total = 0, items_resolved = 0, updated_at = ?
+                    WHERE account_id = ?
+                    """,
+                    (session_id, "recording", "recording", owner_device_id, "Live Recording", now, account_id),
+                )
+            else:
+                await conn.execute(
+                    """
+                    INSERT INTO active_workflow_state
+                    (account_id, session_id, workflow_type, status, ui_host_device_id, progress_label, items_total, items_resolved, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (account_id, session_id, "recording", "recording", owner_device_id, "Live Recording", 0, 0, now),
+                )
 
             await conn.commit()
 

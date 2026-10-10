@@ -648,6 +648,13 @@ Return a JSON array of decision objects matching this schema:
 
         segments = session.get("segments", [])
         seg_dict = {s["segment_index"]: s for s in segments}
+        raw_text = (session.get("raw_text") or "").strip()
+
+        # Guard: Do not start verification when a session has no transcript
+        if not segments and not raw_text:
+            logger.info("[%s] No transcript found for session. Skipping AI verification.", session_id)
+            await session_repo.set_ai_verification_status(session_id, "idle", run_id=run_id, expected_run_id=run_id)
+            return {"status": "skipped", "message": "Session has no transcript", "session_id": session_id, "run_id": run_id}
 
         # Step 3: Retrieve pending verification items
         v_state = await session_repo.get_verification_state(session_id)

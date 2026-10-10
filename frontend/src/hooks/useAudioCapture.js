@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getWsUrl, getAuthToken } from '../config'
+import { getWsUrl, getAuthToken, isDemoModeActive } from '../config'
 
 const WS_BASE_URL = getWsUrl('/api/audio/stream')
 
@@ -20,6 +20,11 @@ export function useAudioCapture() {
   const [latestTranscript, setLatestTranscript] = useState(null)
   const [latestSession, setLatestSession] = useState(null)
   const [error, setError] = useState(null)
+
+  // Connection Health & Streaming Diagnostics (Priority 2)
+  const [connectionHealth, setConnectionHealth] = useState('idle') // 'idle' | 'connected' | 'reconnecting' | 'disconnected'
+  const [isStreamingConnected, setIsStreamingConnected] = useState(false)
+  const [streamDisconnectError, setStreamDisconnectError] = useState(null)
 
   // Live Transcription State (Phase 3)
   const [liveTranscript, setLiveTranscript] = useState({
@@ -55,6 +60,12 @@ export function useAudioCapture() {
   const isRecordingRef = useRef(false)
   const isPausedRef = useRef(false)
   const activeSessionIdRef = useRef(null)
+
+  // Heartbeat and Intentional Stop Tracking Refs (Priority 2)
+  const isStoppingRef = useRef(false)
+  const pingIntervalRef = useRef(null)
+  const pongWatchdogRef = useRef(null)
+  const missedPongsRef = useRef(0)
 
   // Screen Wake Lock Management (Prevents OS/display sleep from halting long recordings)
   const requestWakeLock = useCallback(async () => {
@@ -424,11 +435,54 @@ export function useAudioCapture() {
     }
   }, [isRecording, stopMeteringLoop])
 
+  // Heartbeat keepalive & pong watchdog helpers (Priority 2)
+  const stopHeartbeat = useCallback(() => {
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current)
+      pingIntervalRef.current = null
+    }
+    if (pongWatchdogRef.current) {
+      clearTimeout(pongWatchdogRef.current)
+      pongWatchdogRef.current = null
+    }
+    missedPongsRef.current = 0
+  }, [])
+
+  const startHeartbeat = useCallback((wsInstance) => {
+    stopHeartbeat()
+    missedPongsRef.current = 0
+    pingIntervalRef.current = setInterval(() => {
+      if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+        try {
+          wsInstance.send(JSON.stringify({ type: 'ping' }))
+        } catch (e) {
+          console.warn('[useAudioCapture] Heartbeat ping send error:', e)
+        }
+
+        // Set 10-second watchdog timeout for expected pong response
+        if (pongWatchdogRef.current) clearTimeout(pongWatchdogRef.current)
+        pongWatchdogRef.current = setTimeout(() => {
+          missedPongsRef.current += 1
+          if (missedPongsRef.current >= 2) {
+            console.warn('[useAudioCapture] Missed 2 consecutive pongs; connection degraded/lost')
+            setConnectionHealth('disconnected')
+            setIsStreamingConnected(false)
+            setStreamDisconnectError('Server heartbeat response timed out. Streaming interrupted.')
+          }
+        }, 10000)
+      }
+    }, 15000)
+  }, [stopHeartbeat])
+
   // 6. Start Real Recording (Progressive PCM Streaming to FastAPI + Live Azure Transcription + Phase 4 Session)
   const startRecording = useCallback(async (sessionTitle = null, sessionMeta = null, customStream = null) => {
     if (isRecording || isRecordingRef.current || isStartingRef.current) return false
     isStartingRef.current = true
     isRecordingRef.current = true
+    isStoppingRef.current = false
+    setConnectionHealth('connecting')
+    setIsStreamingConnected(false)
+    setStreamDisconnectError(null)
     setIsTesting(false)
     setError(null)
     setLatestRecording(null)
@@ -490,9 +544,14 @@ export function useAudioCapture() {
           clearTimeout(startTimeout)
 
           console.log('WebSocket connected. Initializing live audio capture session...')
+          setConnectionHealth('connected')
+          setIsStreamingConnected(true)
+          setStreamDisconnectError(null)
+          startHeartbeat(ws)
           const actualSampleRate = ctx.sampleRate || settings.sampleRate || 48000
           const label = settings.label || trackSettings?.label || 'Input Device'
           const token = getAuthToken()
+          const isDemo = isDemoModeActive()
 
           ws.send(
             JSON.stringify({
@@ -504,6 +563,7 @@ export function useAudioCapture() {
               metadata: sessionMeta || undefined,
               day_number: sessionMeta?.day_number || undefined,
               token: token || undefined,
+              is_demo: isDemo || undefined,
             })
           )
 
@@ -562,9 +622,27 @@ export function useAudioCapture() {
           try {
             const data = JSON.parse(event.data)
 
+            if (data.type === 'pong') {
+              if (pongWatchdogRef.current) {
+                clearTimeout(pongWatchdogRef.current)
+                pongWatchdogRef.current = null
+              }
+              missedPongsRef.current = 0
+              setConnectionHealth('connected')
+              setIsStreamingConnected(true)
+              return
+            }
+
             if (data.status === 'ready') {
               if (data.sessionId) {
                 activeSessionIdRef.current = data.sessionId
+              }
+              if (data.transcription === 'paused' || data.transcription === 'disabled') {
+                setLiveTranscript((prev) => ({
+                  ...prev,
+                  status: 'paused',
+                  statusMessage: data.message || 'Recording audio — live transcription paused',
+                }))
               }
             } else if (data.type === 'live_transcription_status') {
               setLiveTranscript((prev) => ({
@@ -637,11 +715,34 @@ export function useAudioCapture() {
               audioContextRef.current = null
             }
             resolveStart(false)
+          } else if (isRecordingRef.current && !isStoppingRef.current) {
+            console.warn('[useAudioCapture] Active streaming connection error:', err)
+            setIsStreamingConnected(false)
+            setConnectionHealth('disconnected')
+            setStreamDisconnectError('Audio streaming connection error with server.')
           }
         }
 
         ws.onclose = () => {
+          stopHeartbeat()
           console.log('WebSocket stream closed.')
+          if (isRecordingRef.current && !isStoppingRef.current) {
+            console.warn('[useAudioCapture] Active WebSocket stream closed unexpectedly!')
+            setIsStreamingConnected(false)
+            setConnectionHealth('disconnected')
+            setStreamDisconnectError('Audio streaming disconnected from server. Recording is paused.')
+
+            // Pause elapsed timer to avoid false clock advancement
+            if (timerIntervalRef.current) {
+              clearInterval(timerIntervalRef.current)
+              timerIntervalRef.current = null
+            }
+            const currentSegment = Math.floor((Date.now() - segmentStartTimeRef.current) / 1000)
+            accumulatedDurationRef.current += currentSegment
+            setElapsedTime(accumulatedDurationRef.current)
+            isPausedRef.current = true
+            setIsPaused(true)
+          }
         }
       })
     } catch (err) {
@@ -753,10 +854,20 @@ export function useAudioCapture() {
   // 8. Stop Recording — Stops media tracks, disconnects audio graph, and resolves with finalized session
   const stopRecording = useCallback(() => {
     return new Promise((resolve) => {
+      if (isStoppingRef.current) {
+        console.warn('[useAudioCapture] Stop already in progress, avoiding duplicate finalization')
+        resolve(activeSessionIdRef.current ? { session_id: activeSessionIdRef.current } : null)
+        return
+      }
+      isStoppingRef.current = true
       isRecordingRef.current = false
       isStartingRef.current = false
       isPausedRef.current = false
       setIsPaused(false)
+      stopHeartbeat()
+      setIsStreamingConnected(false)
+      setConnectionHealth('idle')
+      setStreamDisconnectError(null)
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current)
         timerIntervalRef.current = null
@@ -862,10 +973,11 @@ export function useAudioCapture() {
           ws.send(JSON.stringify({ type: 'stop' }))
         } catch (e) {
           clearTimeout(finalizeTimeout)
-          resolve(null)
+          resolve(activeSessionIdRef.current ? { session_id: activeSessionIdRef.current } : null)
         }
       } else {
-        resolve(null)
+        const fallback = activeSessionIdRef.current ? { session_id: activeSessionIdRef.current } : null
+        resolve(fallback)
       }
     })
   }, [releaseWakeLock, stopMeteringLoop])
@@ -926,6 +1038,7 @@ export function useAudioCapture() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      stopHeartbeat()
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current)
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current)
       if (wsRef.current) wsRef.current.close()
@@ -936,7 +1049,7 @@ export function useAudioCapture() {
         audioContextRef.current.close()
       }
     }
-  }, [])
+  }, [stopHeartbeat])
 
   return {
     // Devices & Permissions
@@ -966,6 +1079,12 @@ export function useAudioCapture() {
     latestTranscript,
     latestSession,
     clearLatestRecording,
+
+    // Connection Health & Diagnostics (Priority 2)
+    connectionHealth,
+    isStreamingConnected,
+    streamDisconnectError,
+    clearStreamDisconnectError: () => setStreamDisconnectError(null),
 
     // Live Metering
     audioLevel,

@@ -4,7 +4,9 @@ Manages church accounts, app users, account memberships, and onboarding state.
 Supports both Azure SQL (MSSQL) and SQLite seamlessly.
 """
 
+import json
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -18,6 +20,7 @@ from app.database.models import (
 )
 
 LEGACY_DEFAULT_ACCOUNT_ID = "legacy_default_account"
+DEMO_ACCOUNT_ID = LEGACY_DEFAULT_ACCOUNT_ID
 
 
 def utc_now_iso() -> str:
@@ -88,6 +91,9 @@ def clean_hierarchy_for_terminal_level(data: Dict[str, Any], terminal_level: str
 
 
 class AccountRepository:
+    DEMO_ACCOUNT_ID = DEMO_ACCOUNT_ID
+    LEGACY_DEFAULT_ACCOUNT_ID = LEGACY_DEFAULT_ACCOUNT_ID
+
     def __init__(self):
         self._initialized = False
 
@@ -178,9 +184,19 @@ class AccountRepository:
                     )
             except Exception:
                 pass  # Ignore if duplicate or empty
-
             await conn.commit()
             self._initialized = True
+
+    async def get_or_create_demo_account(self, visitor_id: str = "default") -> Dict[str, Any]:
+        """
+        Retrieves the canonical universal shared Demo account.
+        All devices, laptops, and visitors enter the same shared Demo workspace.
+        """
+        await self.init_db()
+        acct = await self.get_account_by_id(LEGACY_DEFAULT_ACCOUNT_ID)
+        if not acct:
+            raise RuntimeError(f"Universal Demo account '{LEGACY_DEFAULT_ACCOUNT_ID}' not initialized.")
+        return acct
 
     async def get_user_by_supabase_id(self, supabase_user_id: str) -> Optional[Dict[str, Any]]:
         async with get_db_connection() as conn:
@@ -203,6 +219,91 @@ class AccountRepository:
             if not row:
                 return None
             return dict(row)
+
+    async def get_user_and_account_by_supabase_id(
+        self, supabase_user_id: str
+    ) -> Optional[Tuple[Dict[str, Any], Optional[Dict[str, Any]], Optional[str]]]:
+        """
+        Retrieves user, their primary active account, and membership role in a single
+        read-only query. Avoids table locks and repeated write churn.
+        Returns (user_dict, account_dict_or_None, role_or_None) if user exists,
+        or None if user does not exist.
+        """
+        async with get_db_connection() as conn:
+            cursor = await conn.execute(
+                """
+                SELECT 
+                    u.id AS u_id, u.supabase_user_id AS u_sub, u.email AS u_email,
+                    u.display_name AS u_display_name, u.status AS u_status,
+                    u.created_at AS u_created_at, u.updated_at AS u_updated_at,
+                    u.last_login_at AS u_last_login_at,
+                    a.id AS a_id, a.sector AS a_sector, a.custom_sector AS a_custom_sector,
+                    a.church_state AS a_church_state, a.region AS a_region,
+                    a.old_group AS a_old_group, a.group_name AS a_group_name,
+                    a.district AS a_district, a.terminal_level AS a_terminal_level,
+                    a.onboarding_step AS a_onboarding_step,
+                    a.onboarding_completed_at AS a_onboarding_completed_at,
+                    a.status AS a_status, a.created_at AS a_created_at,
+                    a.updated_at AS a_updated_at,
+                    m.role AS m_role
+                FROM app_users u
+                LEFT JOIN account_memberships m ON u.id = m.user_id
+                LEFT JOIN accounts a ON m.account_id = a.id AND a.status = 'active'
+                WHERE u.supabase_user_id = ?
+                ORDER BY a.created_at ASC
+                """,
+                (supabase_user_id,),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return None
+
+            user = {
+                "id": row["u_id"],
+                "supabase_user_id": row["u_sub"],
+                "email": row["u_email"],
+                "display_name": row["u_display_name"],
+                "status": row["u_status"],
+                "created_at": row["u_created_at"],
+                "updated_at": row["u_updated_at"],
+                "last_login_at": row["u_last_login_at"],
+            }
+
+            if row["a_id"]:
+                account = {
+                    "id": row["a_id"],
+                    "sector": row["a_sector"],
+                    "custom_sector": row["a_custom_sector"],
+                    "church_state": row["a_church_state"],
+                    "region": row["a_region"],
+                    "old_group": row["a_old_group"],
+                    "group_name": row["a_group_name"],
+                    "district": row["a_district"],
+                    "terminal_level": row["a_terminal_level"],
+                    "onboarding_step": row["a_onboarding_step"],
+                    "onboarding_completed_at": row["a_onboarding_completed_at"],
+                    "status": row["a_status"],
+                    "created_at": row["a_created_at"],
+                    "updated_at": row["a_updated_at"],
+                }
+                account["account_name"] = derive_account_name(account)
+                account["display_name"] = account["account_name"]
+                role = row["m_role"] or "owner"
+            else:
+                account = None
+                role = None
+
+            return user, account, role
+
+    async def update_last_login(self, user_id: str) -> None:
+        """Throttled update of last_login_at for an existing user."""
+        now = utc_now_iso()
+        async with get_db_connection() as conn:
+            await conn.execute(
+                "UPDATE app_users SET last_login_at = ?, updated_at = ? WHERE id = ?",
+                (now, now, user_id),
+            )
+            await conn.commit()
 
     async def create_or_update_user(self, supabase_user_id: str, email: str) -> Dict[str, Any]:
         now = utc_now_iso()

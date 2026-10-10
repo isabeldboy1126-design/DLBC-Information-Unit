@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { AutomaticVerificationToggle } from '../common/AutomaticVerificationToggle'
 
 /**
  * LiveRecordingView — Active recording monitor matching live-session-recording.png.
@@ -23,10 +24,15 @@ export function LiveRecordingView({
   onMinimize,
   onStopRecording,
   onToggleManualFlag,
+  connectionHealth = 'connected',
+  isStreamingConnected = true,
+  streamDisconnectError = null,
 }) {
   const [isStopping, setIsStopping] = useState(false)
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false)
   const transcriptContainerRef = useRef(null)
+  const isProgrammaticScrollRef = useRef(false)
+  const bottomSentinelRef = useRef(null)
 
   const handleStop = async () => {
     if (isStopping) return
@@ -44,33 +50,46 @@ export function LiveRecordingView({
   const segments = Array.isArray(liveTranscript) ? liveTranscript : (liveTranscript?.segments || [])
   const interimText = liveTranscript?.interimText || ''
   const transcriptStatus = liveTranscript?.status || 'listening'
+  const lastSegmentText = segments.length > 0 ? segments[segments.length - 1]?.text : ''
 
   // Handle user manual scroll events: pause auto-follow when scrolled up
   const handleScroll = () => {
+    if (isProgrammaticScrollRef.current) return
     const el = transcriptContainerRef.current
     if (!el) return
-    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48
     setIsUserScrolledUp(!isAtBottom)
   }
 
   // Auto-scroll container to bottom as new live segments or interim text arrive, unless user scrolled up
   useEffect(() => {
     if (!isUserScrolledUp && transcriptContainerRef.current) {
-      transcriptContainerRef.current.scrollTop = transcriptContainerRef.current.scrollHeight
+      const el = transcriptContainerRef.current
+      isProgrammaticScrollRef.current = true
+      el.scrollTop = el.scrollHeight
+      const frameId = requestAnimationFrame(() => {
+        isProgrammaticScrollRef.current = false
+      })
+      return () => cancelAnimationFrame(frameId)
     }
-  }, [segments.length, interimText, isUserScrolledUp])
+  }, [segments.length, lastSegmentText, interimText, isUserScrolledUp])
 
   const handleJumpToLive = () => {
-    if (transcriptContainerRef.current) {
+    const el = transcriptContainerRef.current
+    if (el) {
       const prefersReducedMotion =
         typeof window !== 'undefined' &&
         window.matchMedia &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      transcriptContainerRef.current.scrollTo({
-        top: transcriptContainerRef.current.scrollHeight,
+      isProgrammaticScrollRef.current = true
+      el.scrollTo({
+        top: el.scrollHeight,
         behavior: prefersReducedMotion ? 'auto' : 'smooth',
       })
       setIsUserScrolledUp(false)
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false
+      }, prefersReducedMotion ? 50 : 350)
     }
   }
 
@@ -152,7 +171,15 @@ export function LiveRecordingView({
         <div className="mobile-timer-section">
           <div className="mobile-digital-clock">{formatTimer(elapsedTime)}</div>
           <div className="mobile-recording-status-indicator">
-            {isPaused ? (
+            {!isStreamingConnected || connectionHealth === 'disconnected' ? (
+              <span className="mobile-status-text mobile-status-text--disconnected" style={{ color: '#dc2626', fontWeight: 600 }}>
+                ⚠️ Stream Disconnected
+              </span>
+            ) : connectionHealth === 'reconnecting' ? (
+              <span className="mobile-status-text mobile-status-text--reconnecting" style={{ color: '#d97706', fontWeight: 600 }}>
+                ● Reconnecting...
+              </span>
+            ) : isPaused ? (
               <span className="mobile-status-text mobile-status-text--paused">⏸ Paused</span>
             ) : (
               <span className="mobile-status-text mobile-status-text--recording">
@@ -182,6 +209,11 @@ export function LiveRecordingView({
               Microphone (Default) <span className="mobile-chevron-icon">›</span>
             </span>
           </div>
+        </div>
+
+        {/* Mobile Automatic Verification Toggle */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
+          <AutomaticVerificationToggle variant="compact" />
         </div>
 
         {/* Bottom Actions */}
@@ -214,8 +246,18 @@ export function LiveRecordingView({
         {/* 1. COMPACT TOP RECORDING CONTROL BAR                          */}
         <div className={`card live-top-recording-bar ${isPaused ? 'live-top-bar--paused' : ''}`}>
         <div className="live-bar-left">
-          {/* Active / Paused Recording Badge */}
-          {isPaused ? (
+          {/* Active / Paused / Disconnected Recording Badge */}
+          {!isStreamingConnected || connectionHealth === 'disconnected' ? (
+            <div className="live-rec-badge-pill" style={{ background: '#fef2f2', borderColor: '#fca5a5' }}>
+              <span className="live-rec-dot" style={{ background: '#dc2626', animation: 'none' }}>●</span>
+              <span className="live-rec-text" style={{ color: '#991b1b', fontWeight: 700 }}>STREAM DISCONNECTED</span>
+            </div>
+          ) : connectionHealth === 'reconnecting' ? (
+            <div className="live-rec-badge-pill" style={{ background: '#fef3c7', borderColor: '#fde68a' }}>
+              <span className="live-rec-dot" style={{ background: '#d97706' }}>●</span>
+              <span className="live-rec-text" style={{ color: '#92400e', fontWeight: 700 }}>RECONNECTING...</span>
+            </div>
+          ) : isPaused ? (
             <div className="live-rec-badge-pill" style={{ background: '#fef3c7', borderColor: '#fde68a' }}>
               <span className="live-rec-dot" style={{ background: '#d97706', animation: 'none' }}>⏸</span>
               <span className="live-rec-text" style={{ color: '#92400e' }}>PAUSED</span>
@@ -273,6 +315,9 @@ export function LiveRecordingView({
 
         {/* Right: Actions */}
         <div className="live-bar-right">
+          {/* Automatic Verification Toggle */}
+          <AutomaticVerificationToggle variant="compact" />
+
           {onMinimize && (
             <button
               type="button"
@@ -328,6 +373,47 @@ export function LiveRecordingView({
       </div>
 
       {/* ------------------------------------------------------------- */}
+      {/* 1B. STREAM DISCONNECT WARNING BANNER                          */}
+      {/* ------------------------------------------------------------- */}
+      {(!isStreamingConnected || connectionHealth === 'disconnected') && (
+        <div
+          className="card live-disconnect-warning-card"
+          role="alert"
+          style={{
+            background: '#fef2f2',
+            border: '1px solid #f87171',
+            padding: '12px 16px',
+            borderRadius: '8px',
+            marginBottom: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '20px' }}>⚠️</span>
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, color: '#991b1b', fontSize: '14px' }}>
+                Audio Streaming Interrupted
+              </p>
+              <p style={{ margin: 0, color: '#b91c1c', fontSize: '13px' }}>
+                {streamDisconnectError || 'Connection to the backend recording server was closed. The timer has been paused.'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn--danger btn--small"
+            onClick={handleStop}
+            disabled={isStopping}
+          >
+            {isStopping ? 'FINALIZING...' : 'SAVE & FINALIZE SESSION'}
+          </button>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
       {/* 2. REAL-TIME DOMINANT TRANSCRIPT CANVAS (35px)                */}
       {/* ------------------------------------------------------------- */}
       <div className="card live-transcript-canvas-card">
@@ -338,12 +424,27 @@ export function LiveRecordingView({
         >
           {segments.length === 0 && !interimText ? (
             <div className="transcript-waiting-placeholder">
-              <span className="waiting-spinner">⏳</span>
-              <p className="waiting-text">
-                {sessionMetadata.source_type === 'youtube_tab'
-                  ? 'Capturing audio from shared YouTube tab... Live transcript will stream here.'
-                  : 'Listening for live audio input... Live transcript will stream here.'}
-              </p>
+              {transcriptStatus === 'paused' || transcriptStatus === 'disabled' ? (
+                <div style={{ textAlign: 'center', padding: '24px 16px' }}>
+                  <span style={{ fontSize: '36px', display: 'block', marginBottom: '12px' }}>⏸️</span>
+                  <p style={{ fontWeight: 700, fontSize: '18px', color: '#b45309', margin: '0 0 8px 0' }}>
+                    Recording audio — live transcription paused
+                  </p>
+                  <p style={{ color: '#4b5563', maxWidth: '520px', margin: '0 auto', fontSize: '14px', lineHeight: 1.6 }}>
+                    Master church audio is streaming continuously and saving directly to disk in lossless WAV format.
+                    Audio VU metering is active. When the sermon concludes, stop the session to preserve and download your recording.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <span className="waiting-spinner">⏳</span>
+                  <p className="waiting-text">
+                    {sessionMetadata.source_type === 'youtube_tab'
+                      ? 'Capturing audio from shared YouTube tab... Live transcript will stream here.'
+                      : 'Listening for live audio input... Live transcript will stream here.'}
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <>
@@ -404,6 +505,9 @@ export function LiveRecordingView({
               <span className="cursor-text">Listening for speech...</span>
             </div>
           )}
+
+          {/* Invisible bottom sentinel for reliable pin-to-bottom */}
+          <div ref={bottomSentinelRef} style={{ height: '1px', flexShrink: 0 }} aria-hidden="true" />
         </div>
 
         {/* Floating Return-to-Live / Jump to Live Button */}

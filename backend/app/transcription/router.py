@@ -195,15 +195,21 @@ async def start_transcription(
     auth: Optional[AuthContext] = Depends(get_optional_account),
 ):
     """Initiates a background transcription job for an uploaded file."""
-    # Find uploaded file in storage/uploads/
+    # Find media file in storage/uploads/ or storage/audio/
     matching_files = [
         f for f in os.listdir(STORAGE_UPLOADS_DIR) if f.startswith(upload_id) and not f.startswith("proc_")
-    ]
-    if not matching_files:
-        raise HTTPException(status_code=404, detail="Uploaded file not found.")
+    ] if os.path.exists(STORAGE_UPLOADS_DIR) else []
 
-    saved_filename = matching_files[0]
-    saved_path = os.path.join(STORAGE_UPLOADS_DIR, saved_filename)
+    if matching_files:
+        saved_filename = matching_files[0]
+        saved_path = os.path.join(STORAGE_UPLOADS_DIR, saved_filename)
+    else:
+        found_media = find_media_file(upload_id)
+        if not found_media or not os.path.exists(found_media):
+            raise HTTPException(status_code=404, detail="Uploaded or recorded audio file not found.")
+        saved_path = found_media
+        saved_filename = os.path.basename(found_media)
+
     proc_wav_path = os.path.join(STORAGE_UPLOADS_DIR, f"proc_{upload_id}.wav")
 
     processing_audio_path = proc_wav_path if os.path.exists(proc_wav_path) else saved_path

@@ -5,6 +5,7 @@ import { VerificationWorkflow } from '../verification/VerificationWorkflow'
 import { FinalReportView } from '../final_report/FinalReportView'
 import { ReportProcessingModal } from '../reporting/ReportProcessingModal'
 import { SessionDetailSkeleton } from './SessionDetailSkeleton'
+import { AutomaticVerificationToggle } from '../common/AutomaticVerificationToggle'
 
 function MicIcon() {
   return (
@@ -294,6 +295,7 @@ export function SessionDetailView({
   onTriggerVerificationProcessing,
   onCloseVerificationProcessing,
   onDeleteSession = null,
+  onLoadSegments = null,
 }) {
   const getDefaultView = () => {
     if (typeof window !== 'undefined') {
@@ -324,6 +326,8 @@ export function SessionDetailView({
   const [activeView, setActiveView] = useState(getDefaultView)
   const [isViewingDetailsPage, setIsViewingDetailsPage] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+
+  const sessionUnit = session?.unit || session?.sector || (session?.metadata_json && typeof session.metadata_json === 'string' ? (()=>{ try { return JSON.parse(session.metadata_json)?.unit } catch(e){return null} })() : session?.metadata_json?.unit) || null
   const [showReportProcessingModal, setShowReportProcessingModal] = useState(() => {
     return initialStage === 'report_processing' || (typeof window !== 'undefined' && window.location.hash.includes('/report_processing'))
   })
@@ -385,6 +389,16 @@ export function SessionDetailView({
       window.removeEventListener('popstate', handleHash)
     }
   }, [session?.session_id, initialStage])
+
+  // Automatically fetch granular transcript segments on-demand when entering raw_transcript view
+  useEffect(() => {
+    if (activeView === 'raw_transcript' && session?.session_id && typeof onLoadSegments === 'function') {
+      const hasSegments = Array.isArray(session.segments) && session.segments.length > 0
+      if (!hasSegments) {
+        onLoadSegments(session.session_id)
+      }
+    }
+  }, [activeView, session?.session_id, session?.segments, onLoadSegments])
 
   // Inform parent AppShell about current subview title and back action
   React.useEffect(() => {
@@ -508,6 +522,9 @@ export function SessionDetailView({
   } else if (activeView === 'verification') {
     subViewContent = (
       <div className="session-subview-container">
+        <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+          <AutomaticVerificationToggle unit={sessionUnit} variant="standard" showDescription={true} />
+        </div>
         <VerificationWorkflow
           session={session}
           verificationState={verificationState}
@@ -725,6 +742,20 @@ export function SessionDetailView({
                 <span className="mobile-chevron">›</span>
               </button>
 
+              <a
+                href={getApiUrl(`/api/sessions/${session.session_id}/audio/download`)}
+                className="mobile-details-action-link"
+                style={{ textDecoration: 'none' }}
+                download
+                id="mobile-details-download-audio"
+              >
+                <div className="mobile-details-link-left">
+                  <span className="mobile-link-icon">⬇</span>
+                  <span>Download Audio</span>
+                </div>
+                <span className="mobile-chevron">›</span>
+              </a>
+
               <button
                 type="button"
                 className="mobile-details-action-link"
@@ -822,6 +853,17 @@ export function SessionDetailView({
                 <span className="mobile-grid-action-label">Play Recording</span>
               </button>
 
+              <a
+                href={getApiUrl(`/api/sessions/${session.session_id}/audio/download`)}
+                className="mobile-grid-action-btn"
+                style={{ textDecoration: 'none' }}
+                download
+                id="mobile-btn-download-audio"
+              >
+                <div className="mobile-grid-action-icon mobile-grid-action-icon--play">⬇</div>
+                <span className="mobile-grid-action-label">Download Audio</span>
+              </a>
+
               <button
                 type="button"
                 className="mobile-grid-action-btn"
@@ -893,15 +935,18 @@ export function SessionDetailView({
               )}
             </h1>
 
-            <button
-              type="button"
-              className="btn-workspace-edit-details"
-              onClick={() => setIsEditModalOpen(true)}
-              title="Edit session details"
-            >
-              <PencilIcon />
-              <span>Edit Details</span>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <AutomaticVerificationToggle unit={sessionUnit} variant="compact" />
+              <button
+                type="button"
+                className="btn-workspace-edit-details"
+                onClick={() => setIsEditModalOpen(true)}
+                title="Edit session details"
+              >
+                <PencilIcon />
+                <span>Edit Details</span>
+              </button>
+            </div>
           </div>
 
           <div className="session-workspace-meta-line">
@@ -934,17 +979,20 @@ export function SessionDetailView({
                   {remaining > 0 ? `${remaining} sections need verification` : `${flagCount} sections need verification`}
                 </span>
               </div>
-              <button
-                type="button"
-                className="btn-verify-cta"
-                onClick={() => {
-                  onStartVerification(session.session_id)
-                  changeStage('verification')
-                }}
-                id="btn-workspace-begin-verify"
-              >
-                Verify →
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <AutomaticVerificationToggle unit={sessionUnit} variant="compact" />
+                <button
+                  type="button"
+                  className="btn-verify-cta"
+                  onClick={() => {
+                    onStartVerification(session.session_id)
+                    changeStage('verification')
+                  }}
+                  id="btn-workspace-begin-verify"
+                >
+                  Verify →
+                </button>
+              </div>
             </div>
           )
         }
@@ -1015,13 +1063,38 @@ export function SessionDetailView({
               <h3 className="artifact-tile-title">Audio Recording</h3>
               <p className="artifact-tile-desc">{durationDisplay}</p>
             </div>
-            <button
-              type="button"
-              className="btn-tile-action btn-tile-action--active"
-              onClick={() => changeStage('raw_transcript')}
-            >
-              ▶ Play Recording
-            </button>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+              <button
+                type="button"
+                className="btn-tile-action btn-tile-action--active"
+                onClick={() => {
+                  const audioUrl = getApiUrl(`/api/sessions/${session.session_id}/audio`)
+                  const a = new Audio(audioUrl)
+                  a.play().catch(() => changeStage('raw_transcript'))
+                }}
+                style={{ flex: 1 }}
+              >
+                ▶ Play
+              </button>
+              <a
+                href={getApiUrl(`/api/sessions/${session.session_id}/audio/download`)}
+                className="btn-tile-action btn-tile-action--active"
+                style={{
+                  flex: 1,
+                  textAlign: 'center',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                }}
+                download
+                title="Download original WAV master recording"
+                id="btn-workspace-download-audio"
+              >
+                ⬇ Download
+              </a>
+            </div>
           </div>
 
           {/* Tile 2: Raw Transcript */}
@@ -1030,19 +1103,39 @@ export function SessionDetailView({
               <div className="artifact-tile-icon-box">
                 <DocumentIcon />
               </div>
-              <span className="badge badge--success-pill">✓ Ready</span>
+              {hasTranscript ? (
+                <span className="badge badge--success-pill">✓ Ready</span>
+              ) : (
+                <span className="badge badge--neutral-pill">● Audio Only</span>
+              )}
             </div>
             <div className="artifact-tile-body">
               <h3 className="artifact-tile-title">Raw Transcript</h3>
-              <p className="artifact-tile-desc">{session.segment_count || 267} segments</p>
+              <p className="artifact-tile-desc">
+                {hasTranscript
+                  ? `${session.segment_count || (session.segments ? session.segments.length : 0)} segments`
+                  : 'Recording-only session'}
+              </p>
             </div>
-            <button
-              type="button"
-              className="btn-tile-action btn-tile-action--active"
-              onClick={() => changeStage('raw_transcript')}
-            >
-              View Raw Transcript
-            </button>
+            {hasTranscript ? (
+              <button
+                type="button"
+                className="btn-tile-action btn-tile-action--active"
+                onClick={() => changeStage('raw_transcript')}
+              >
+                View Raw Transcript
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-tile-action btn-tile-action--locked"
+                disabled
+                title="No transcript generated during recording-only mode"
+              >
+                <LockIcon />
+                <span>Audio preserved (No transcript)</span>
+              </button>
+            )}
           </div>
 
           {/* Tile 3: Verified Transcript */}

@@ -6,6 +6,7 @@ import { ProgrammesSettingsSection } from './ProgrammesSettingsSection'
 import { SettingsIcon } from './SettingsIcon'
 import { APP_VERSION } from '../../utils/version'
 import { isDesktop, checkForAppUpdates, downloadAndInstallUpdate, relaunchApplication, getAppVersion } from '../../services/desktopPlatform'
+import { AutomaticVerificationToggle } from '../common/AutomaticVerificationToggle'
 
 export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
   const { account, user, demoMode, signOut } = useAuth()
@@ -1307,6 +1308,50 @@ export function SettingsView({ onBack, onReplayOnboarding, onTestOnboarding }) {
                 </div>
               </div>
               <div className="settings-card-body">
+                <div style={{ marginBottom: '1.25rem', paddingBottom: '1.25rem', borderBottom: '1px solid var(--border-color, #e2e8f0)' }}>
+                  <div style={{ marginBottom: '1rem' }}>
+                    <span className="settings-auto-process-label" style={{ display: 'block', fontWeight: 600, fontSize: '0.95rem' }}>
+                      Automatic Verification by Unit
+                    </span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #888)', display: 'block', marginTop: '2px' }}>
+                      Configure independent automatic verification preferences for Adult, Youth, and Campus units.
+                    </span>
+                  </div>
+
+                  {/* Adult Unit */}
+                  <div className="settings-auto-process-row" style={{ marginBottom: '0.85rem' }}>
+                    <div className="settings-auto-process-label-group">
+                      <span className="settings-auto-process-label" style={{ fontWeight: 500 }}>Adult Unit</span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted, #888)', display: 'block' }}>
+                        Automatic AI verification for Adult Information Unit sessions.
+                      </span>
+                    </div>
+                    <AutomaticVerificationToggle unit="Adult" variant="standard" />
+                  </div>
+
+                  {/* Youth Unit */}
+                  <div className="settings-auto-process-row" style={{ marginBottom: '0.85rem' }}>
+                    <div className="settings-auto-process-label-group">
+                      <span className="settings-auto-process-label" style={{ fontWeight: 500 }}>Youth Unit</span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted, #888)', display: 'block' }}>
+                        Automatic AI verification for Youth Information Unit sessions.
+                      </span>
+                    </div>
+                    <AutomaticVerificationToggle unit="Youth" variant="standard" />
+                  </div>
+
+                  {/* Campus Unit */}
+                  <div className="settings-auto-process-row">
+                    <div className="settings-auto-process-label-group">
+                      <span className="settings-auto-process-label" style={{ fontWeight: 500 }}>Campus Unit</span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted, #888)', display: 'block' }}>
+                        Automatic AI verification for Campus Information Unit sessions.
+                      </span>
+                    </div>
+                    <AutomaticVerificationToggle unit="Campus" variant="standard" />
+                  </div>
+                </div>
+
                 <div className="settings-auto-process-row">
                   <div className="settings-auto-process-label-group">
                     <span className="settings-auto-process-label">Auto-Process After Verification</span>

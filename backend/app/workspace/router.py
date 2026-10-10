@@ -103,7 +103,7 @@ async def save_workspace_document(
         content=payload.content or "",
         words=payload.words,
         status=payload.status,
-        editor_name=payload.editor_name or auth.user_email,
+        editor_name=payload.editor_name or auth.email,
         is_starred=payload.is_starred,
     )
     return {
